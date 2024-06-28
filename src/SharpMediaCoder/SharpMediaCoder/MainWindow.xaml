@@ -7,6 +7,10 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-        <Image x:Name="image" />
+        <Image x:Name="image" RenderTransformOrigin="0.5,0.5">
+            <Image.RenderTransform>
+                <ScaleTransform ScaleY="-1" />
+            </Image.RenderTransform>
+        </Image>
     </Grid>
 </Window>

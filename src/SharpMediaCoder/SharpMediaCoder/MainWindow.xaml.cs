@@ -1,17 +1,8 @@
 ﻿using SharpMp4;
-using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace SharpMediaCoder
 {
@@ -23,9 +14,8 @@ namespace SharpMediaCoder
         WriteableBitmap _wb;
         
         int pw = 640;
-        int ph = 360;
-
-        byte[] rgbData;
+        int ph = 368;
+        int fps = 24;
 
         public MainWindow()
         {
@@ -36,50 +26,16 @@ namespace SharpMediaCoder
                 ph,
                 96,
                 96,
-                PixelFormats.Bgra32,
+                PixelFormats.Bgr24,
                 null);
-            rgbData = new byte[pw * ph * 4];
             image.Source = _wb;
-        }
-
-        private static unsafe void NV12ToRGBManaged(byte[] YUVData, byte[] RGBData, int width, int height, int heightPad = 8)
-        {
-            fixed (byte* rgbbuffer = RGBData, yuvbuffer = YUVData)
-            {
-                var rgbbuff = rgbbuffer;
-                var yuvbuff = yuvbuffer;
-
-                for (int y = 0; y < height; y++)
-                {
-                    for (var x = 0; x < width; x++)
-                    {
-                        var vIndex = width * (height + heightPad) + ((y >> 1) * width) + (x & ~1);
-                        var yIndex = y * width + x;
-
-                        //// https://msdn.microsoft.com/en-us/library/windows/desktop/dd206750(v=vs.85).aspx
-                        //// https://en.wikipedia.org/wiki/YUV
-                        var c = *(yuvbuff + yIndex) - 16;
-                        var d = *(yuvbuff + vIndex) - 128;
-                        var e = *(yuvbuff + vIndex + 1) - 128;
-                        c = c < 0 ? 0 : c;
-
-                        var r = ((298 * c) + (409 * e) + 128) >> 8;
-                        var g = ((298 * c) - (100 * d) - (208 * e) + 128) >> 8;
-                        var b = ((298 * c) + (516 * d) + 128) >> 8;
-                        *rgbbuff++ = (byte)int.Clamp(b, 0, 255);
-                        *rgbbuff++ = (byte)int.Clamp(g, 0, 255);
-                        *rgbbuff++ = (byte)int.Clamp(r, 0, 255);
-                        *rgbbuff++ = 255;
-                    }
-                }
-            }
         }
 
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             string fileName = "frag_bunny.mp4";
 
-            H264Decoder decoder = new H264Decoder();
+            H264Decoder decoder = new H264Decoder(pw, ph, fps);
 
             using (Stream fs = new BufferedStream(new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read)))
             {
@@ -92,20 +48,18 @@ namespace SharpMediaCoder
                     var videoTrackId = fmp4.FindVideoTrackID().First();
                     var audioTrackId = fmp4.FindAudioTrackID().First();
 
+                    bool keyframe = false;
                     foreach (var au in parsedMDAT[videoTrackId])
                     {
+                        keyframe = true;
                         foreach (var nalu in au)
                         {
-                            byte[] decoded = decoder.Process(nalu);
+                            byte[] decoded = decoder.Process(nalu, keyframe);
+                            keyframe = false;
                             if (decoded != null)
                             {
-                                NV12ToRGBManaged(decoded, rgbData, pw, ph);
-                                _wb.WritePixels(new Int32Rect(0, 0, pw, ph), rgbData, pw * 4, 0);
-                                await Task.Delay(10);
-                            }
-                            else
-                            {
-                                Debug.WriteLine("No frame");
+                                _wb.WritePixels(new Int32Rect(0, 0, pw, ph), decoded, pw * 3, 0);
+                                await Task.Delay((int)(1000d / fps));
                             }
                         }
                     }
