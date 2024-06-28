@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34607.119
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMediaCoder", "SharpMediaCoder\SharpMediaCoder.csproj", "{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{A375E36E-E6FE-46B5-BE4D-34FEB6F48E78}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Debug|x64.ActiveCfg = Debug|x64
+		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Debug|x64.Build.0 = Debug|x64
+		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Release|x64.ActiveCfg = Release|x64
+		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {80EBDC0C-4BBE-4DBD-9E16-5B912CD928FA}
+	EndGlobalSection
+EndGlobal
