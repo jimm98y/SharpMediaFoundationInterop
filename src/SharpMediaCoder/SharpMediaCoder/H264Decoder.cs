@@ -23,20 +23,19 @@ namespace SharpMediaCoder
             Incomplete = 0x1000000,
         }
 
-        private UInt32 _width;
-        private UInt32 _height;
-        private UInt32 _fps;
+        private uint _width;
+        private uint _height;
+        private uint _fps;
 
-        private UInt64 DefaultFrameSize { get { return ((UInt64)_width << 32) + _height; } }
-        const Int64 DefaultPixelAspectRatio = (1L << 32) + 1;
+        private ulong DefaultFrameSize { get { return ((ulong)_width << 32) + _height; } }
 
-        UInt64 _sampleDuration;
+        private ulong _sampleDuration;
         private IMFTransform colorConverter;
-        IMFTransform decoder;
-        MFT_OUTPUT_DATA_BUFFER[] videoData;
-        MFT_OUTPUT_DATA_BUFFER[] colorData;
+        private IMFTransform decoder;
+        private MFT_OUTPUT_DATA_BUFFER[] videoData;
+        private MFT_OUTPUT_DATA_BUFFER[] colorData;
 
-        private byte[] _annexB = new byte[] { 0, 0, 0, 1 };
+        private byte[] _annexB = [0, 0, 0, 1];
         private byte[] _decodedBytes;
 
         public H264Decoder(int width, int height, int fps)
@@ -45,14 +44,14 @@ namespace SharpMediaCoder
             this._height = (uint)height;
             this._fps = (uint)fps;
 
-            _decodedBytes = new byte[width * height * 3 / 2];
+            this._decodedBytes = new byte[width * height * 3 / 2];
 
             Check(PInvoke.MFFrameRateToAverageTimePerFrame(_fps, 1, out _sampleDuration));
-            Startup();
+            Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
 
             decoder = CreateVideoDecoder();
             colorConverter = CreateColorConverter();
-            videoData = CreateOutputDataBuffer((int)Math.Ceiling(_width * _height * 3 / 2d));
+            videoData = CreateOutputDataBuffer((int)(_width * _height * 3 / 2));
             colorData = CreateOutputDataBuffer((int)(_width * _height * 3));
         }
 
@@ -67,27 +66,16 @@ namespace SharpMediaCoder
 
             return false;
         }
-        
-        static void Check(HRESULT result)
+
+        private static void Check(HRESULT result)
         {
-            if (result.Failed) 
+            if (result.Failed)
                 Marshal.ThrowExceptionForHR(result.Value);
         }
 
-        static void Startup()
+        private static IEnumerable<IMFActivate> FindTransforms(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
         {
-            Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
-        }
-
-        static IMFMediaType CreateMediaType()
-        {
-            Check(PInvoke.MFCreateMediaType(out IMFMediaType mediaType));
-            return mediaType;
-        }
-
-        static IEnumerable<IMFActivate> FindTransforms(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
-        {
-            Check(PInvoke.MFTEnumEx(category, flags, input, output, out IMFActivate[] activates, out UInt32 activateCount));
+            Check(PInvoke.MFTEnumEx(category, flags, input, output, out IMFActivate[] activates, out uint activateCount));
 
             if (activateCount > 0)
             {
@@ -98,7 +86,7 @@ namespace SharpMediaCoder
             }
         }
 
-        IMFTransform CreateColorConverter()
+        private IMFTransform CreateColorConverter()
         {
             IMFTransform result = default;
 
@@ -124,14 +112,11 @@ namespace SharpMediaCoder
             {
                 try
                 {
-                    IMFMediaType mediaInput = CreateMediaType();
-
+                    IMFMediaType mediaInput;
+                    Check(PInvoke.MFCreateMediaType(out mediaInput));
                     mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
                     mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
-
-                    result.GetAttributes(out IMFAttributes attributes);
-                    attributes.SetUINT32(PInvoke.MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, 1);
                     result.SetInputType(0, mediaInput, 0);
                 }
                 catch (Exception ex)
@@ -141,12 +126,11 @@ namespace SharpMediaCoder
 
                 try
                 {
-                    IMFMediaType mediaOutput = CreateMediaType();
-
+                    IMFMediaType mediaOutput;
+                    Check(PInvoke.MFCreateMediaType(out mediaOutput));
                     mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_RGB24);
                     mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
-
                     result.SetOutputType(0, mediaOutput, 0);
                 }
                 catch (Exception ex)
@@ -158,7 +142,7 @@ namespace SharpMediaCoder
             return result;
         }
 
-        IMFTransform CreateVideoDecoder()
+        private IMFTransform CreateVideoDecoder()
         {
             IMFTransform result = default;
             var subtype = PInvoke.MFVideoFormat_NV12;
@@ -185,16 +169,12 @@ namespace SharpMediaCoder
             {
                 try
                 {
-                    IMFMediaType mediaInput = CreateMediaType();
-
+                    IMFMediaType mediaInput;
+                    Check(PInvoke.MFCreateMediaType(out mediaInput));
                     mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_H264);
                     mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
                     mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, _fps);
-
-                    result.GetAttributes(out IMFAttributes attributes);
-                    //attributes.SetUINT32(PInvoke.MF_LOW_LATENCY, 1);
-                    attributes.SetUINT32(PInvoke.MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, 1);
                     result.SetInputType(0, mediaInput, 0);
                 }
                 catch (Exception ex)
@@ -204,13 +184,12 @@ namespace SharpMediaCoder
 
                 try
                 {
-                    IMFMediaType mediaOutput = CreateMediaType();
-
+                    IMFMediaType mediaOutput;
+                    Check(PInvoke.MFCreateMediaType(out mediaOutput));
                     mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, subtype);
                     mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
                     mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, _fps);
-                    
                     result.SetOutputType(0, mediaOutput, 0);
                 }
                 catch (Exception ex)
@@ -222,48 +201,44 @@ namespace SharpMediaCoder
             return result;
         }
 
-        unsafe IMFSample CreateSample(Byte[] data, Int64 timestamp)
+        private unsafe IMFSample CreateSample(byte[] data, long timestamp)
         {
-            Check(PInvoke.MFCreateMemoryBuffer((UInt32)data.Length, out IMFMediaBuffer buffer));
+            Check(PInvoke.MFCreateMemoryBuffer((uint)data.Length, out IMFMediaBuffer buffer));
 
             try
             {
-                UInt32* maxLength = default;
-                UInt32* currentLength = default;
-
+                uint* maxLength = default;
+                uint* currentLength = default;
                 buffer.Lock(out byte* target, maxLength, currentLength);
-
                 fixed (byte* source = data)
                 {
-                    Unsafe.CopyBlock(target, source, (UInt32)data.Length);
+                    Unsafe.CopyBlock(target, source, (uint)data.Length);
                 }
             }
             finally
             {
-                buffer.SetCurrentLength((UInt32)data.Length);
+                buffer.SetCurrentLength((uint)data.Length);
                 buffer.Unlock();
             }
 
             Check(PInvoke.MFCreateSample(out IMFSample sample));
 
             sample.AddBuffer(buffer);
-            sample.SetSampleDuration((Int64)_sampleDuration);
+            sample.SetSampleDuration((long)_sampleDuration);
             sample.SetSampleTime(timestamp);
-
             return sample;
         }
 
-        static MFT_OUTPUT_DATA_BUFFER[] CreateOutputDataBuffer(Int32 size = 0)
+        private static MFT_OUTPUT_DATA_BUFFER[] CreateOutputDataBuffer(int size = 0)
         {
             MFT_OUTPUT_DATA_BUFFER[] result = new MFT_OUTPUT_DATA_BUFFER[1];
 
             if (size > 0)
             {
-                Check(PInvoke.MFCreateMemoryBuffer((UInt32)size, out IMFMediaBuffer buffer));
+                Check(PInvoke.MFCreateMemoryBuffer((uint)size, out IMFMediaBuffer buffer));
                 Check(PInvoke.MFCreateSample(out IMFSample sample));
 
                 sample.AddBuffer(buffer);
-
                 result[0].pSample = sample;
             }
             else
@@ -278,7 +253,7 @@ namespace SharpMediaCoder
             return result;
         }
 
-        unsafe bool ProcessVideoSample(uint inputStreamID, IMFTransform decoder, IMFSample sample, MFT_OUTPUT_DATA_BUFFER[] videoData, ref byte[] bytes)
+        private unsafe bool ProcessVideoSample(uint inputStreamID, IMFTransform decoder, IMFSample sample, MFT_OUTPUT_DATA_BUFFER[] videoData, ref byte[] bytes)
         {
             try
             {
@@ -290,9 +265,9 @@ namespace SharpMediaCoder
                 {
                     inputResult = decoder.ProcessInput(inputStreamID, sample, 0);
 
-                    if (inputResult.Value == 0) // MF_E_NOTACCEPTING
+                    if (inputResult.Value == 0)
                     {
-                        do
+                        while (true)
                         {
                             uint decoderOutputStatus;
                             HRESULT outputResult = decoder.ProcessOutput(0, videoData, out decoderOutputStatus);
@@ -318,12 +293,6 @@ namespace SharpMediaCoder
                                 isProcessed = true;
                             }
                         }
-                        while (true);
-                    }
-                    else
-                    {
-                        // -1072875851 MF_E_NOTACCEPTING
-                        Debug.WriteLine($"Error input {inputResult.Value}");
                     }
                 }
 
@@ -332,13 +301,10 @@ namespace SharpMediaCoder
                     videoData[0].pSample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
                     try
                     {
-                        UInt32 maxLength = default;
-                        UInt32 currentLength = default;
-
-                        buffer.Lock(out Byte* data, &maxLength, &currentLength);
-
+                        uint maxLength = default;
+                        uint currentLength = default;
+                        buffer.Lock(out byte* data, &maxLength, &currentLength);
                         Marshal.Copy((IntPtr)data, bytes, 0, (int)currentLength);
-
                         return true;
                     }
                     finally

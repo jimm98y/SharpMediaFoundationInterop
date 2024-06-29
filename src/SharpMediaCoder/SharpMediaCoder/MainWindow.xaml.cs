@@ -1,5 +1,6 @@
 ﻿using SharpMp4;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO;
 using System.Timers;
 using System.Windows;
@@ -14,17 +15,21 @@ namespace SharpMediaCoder
     public partial class MainWindow : Window
     {
         WriteableBitmap _wb;
-        System.Timers.Timer _timer;
+        System.Timers.Timer _timerDecoder;
         H264Decoder _decoder;
-        private ConcurrentQueue<byte[]> _sampleQueue = new ConcurrentQueue<byte[]>();
+        private ConcurrentQueue<IList<byte[]>> _sampleQueue = new ConcurrentQueue<IList<byte[]>>();
+        private ConcurrentQueue<byte[]> _renderQueue = new ConcurrentQueue<byte[]>();
         private object _syncRoot = new object();
         Int32Rect _rect;
 
         int pw = 640;
         int ph = 368;
-        int fps = 23;
+        int fps = 24;
 
         byte[] _decoded;
+        long _time = 0;
+
+        Stopwatch _stopwatch = new Stopwatch();
 
         public MainWindow()
         {
@@ -42,15 +47,41 @@ namespace SharpMediaCoder
             _rect = new Int32Rect(0, 0, pw, ph);
             _decoded = new byte[pw * ph * 3];
 
-            _timer = new System.Timers.Timer();
-            _timer.Elapsed += OnTick;
-            _timer.Interval = 1000d / fps;
-            _timer.Start();
+            _timerDecoder = new System.Timers.Timer();
+            _timerDecoder.Elapsed += OnTickDecoder;
+            _timerDecoder.Interval = 1000d / fps;
+            _timerDecoder.Start();
+            
+            _time = 0;
+            _stopwatch.Start();
+
+            CompositionTarget.Rendering += CompositionTarget_Rendering;
         }
 
-        private void OnTick(object sender, ElapsedEventArgs e)
+        long _lastTime = 0;
+
+        private void CompositionTarget_Rendering(object sender, EventArgs e)
         {
-            var ticks = DateTime.Now.Ticks;
+            long elapsed = _stopwatch.ElapsedMilliseconds;
+
+            if (elapsed - _lastTime >= _timerDecoder.Interval)
+            {
+                //Debug.WriteLine($"Frame: {elapsed - _lastTime}");
+
+                if (_renderQueue.TryDequeue(out byte[] image))
+                {
+                    _wb.WritePixels(_rect, image, pw * 3, 0);
+                    _lastTime = _stopwatch.ElapsedMilliseconds;
+                }
+                else
+                {
+                    Debug.WriteLine("no frame");
+                }
+            }
+        }
+
+        private void OnTickDecoder(object sender, ElapsedEventArgs e)
+        {
             if (_decoder == null)
             {
                 lock (_syncRoot)
@@ -60,37 +91,31 @@ namespace SharpMediaCoder
                 }
             }
 
-            while (_sampleQueue.Count > 0)
+            while (_renderQueue.Count < 10 && _sampleQueue.Count > 0)
             {
-                if (_sampleQueue.TryDequeue(out var nalu))
+                if (_sampleQueue.TryDequeue(out var au))
                 {
-                    if(_decoder.Process(nalu, ticks, ref _decoded))
-                    { 
-                        Dispatcher.Invoke(() =>
+                    foreach (var nalu in au)
+                    {
+                        if (_decoder.Process(nalu, _time, ref _decoded))
                         {
-                            try
-                            {
-                                _wb.Lock();
-                                _wb.WritePixels(_rect, _decoded, pw * 3, 0);
-                                _wb.AddDirtyRect(_rect);
-                                _wb.Unlock();
-                            }
-                            catch(Exception ex) { }
-                        });
-                        break;
+                            _renderQueue.Enqueue(_decoded.ToArray());
+                        }
                     }
+                    _time += (1000 * 10000 / fps);
                 }
             }
 
-            if(_sampleQueue.Count == 0)
+            if (_sampleQueue.Count == 0)
             {
                 lock (_syncRoot)
                 {
                     if (_sampleQueue.Count == 0)
                     {
-                        _timer.Stop();
+                        _timerDecoder.Stop();
                         LoadFileAsync("frag_bunny.mp4").Wait();
-                        _timer.Start();
+                        _time = 0;
+                        _timerDecoder.Start();
                     }
                 }
             }
@@ -111,10 +136,7 @@ namespace SharpMediaCoder
 
                     foreach (var au in parsedMDAT[videoTrackId])
                     {
-                        foreach (var nalu in au)
-                        {
-                            _sampleQueue.Enqueue(nalu);
-                        }
+                        _sampleQueue.Enqueue(au);
                     }
                 }
             }
