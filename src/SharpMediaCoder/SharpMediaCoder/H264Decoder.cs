@@ -37,12 +37,15 @@ namespace SharpMediaCoder
         MFT_OUTPUT_DATA_BUFFER[] colorData;
 
         private byte[] _annexB = new byte[] { 0, 0, 0, 1 };
+        private byte[] _decodedBytes;
 
         public H264Decoder(int width, int height, int fps)
         {
             this._width = (uint)width;
             this._height = (uint)height;
             this._fps = (uint)fps;
+
+            _decodedBytes = new byte[width * height * 3 / 2];
 
             Check(PInvoke.MFFrameRateToAverageTimePerFrame(_fps, 1, out _sampleDuration));
             Startup();
@@ -53,20 +56,16 @@ namespace SharpMediaCoder
             colorData = CreateOutputDataBuffer((int)(_width * _height * 3));
         }
 
-        public byte[] Process(byte[] nalu)
+        public bool Process(byte[] nalu, long ticks, ref byte[] sampleBytes)
         {
-            var ticks = DateTime.Now.Ticks;
             IMFSample sampleToProcess = CreateSample(_annexB.Concat(nalu).ToArray(), ticks);
-            var sampleToDecode = ProcessVideoSample(0, decoder, sampleToProcess, videoData);
-            if (sampleToDecode != null)
+            if (ProcessVideoSample(0, decoder, sampleToProcess, videoData, ref _decodedBytes))
             {
-                var sample = CreateSample(sampleToDecode, ticks);
-                return ProcessVideoSample(0, colorConverter, sample, colorData);
+                var sample = CreateSample(_decodedBytes, ticks);
+                return ProcessVideoSample(0, colorConverter, sample, colorData, ref sampleBytes);
             }
-            else
-            {
-                return null;
-            }
+
+            return false;
         }
         
         static void Check(HRESULT result)
@@ -137,7 +136,7 @@ namespace SharpMediaCoder
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error while creating color converter input media {ex}");
+                    Debug.WriteLine($"Error while creating color converter input media {ex}");
                 }
 
                 try
@@ -152,7 +151,7 @@ namespace SharpMediaCoder
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error while creating color converter output media {ex}");
+                    Debug.WriteLine($"Error while creating color converter output media {ex}");
                 }
             }
 
@@ -200,7 +199,7 @@ namespace SharpMediaCoder
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error while creating video decoder input media {ex}");
+                    Debug.WriteLine($"Error while creating video decoder input media {ex}");
                 }
 
                 try
@@ -216,7 +215,7 @@ namespace SharpMediaCoder
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error while creating video decoder output media {ex}");
+                    Debug.WriteLine($"Error while creating video decoder output media {ex}");
                 }
             }
 
@@ -279,7 +278,7 @@ namespace SharpMediaCoder
             return result;
         }
 
-        unsafe byte[] ProcessVideoSample(uint inputStreamID, IMFTransform decoder, IMFSample sample, MFT_OUTPUT_DATA_BUFFER[] videoData)
+        unsafe bool ProcessVideoSample(uint inputStreamID, IMFTransform decoder, IMFSample sample, MFT_OUTPUT_DATA_BUFFER[] videoData, ref byte[] bytes)
         {
             try
             {
@@ -338,10 +337,9 @@ namespace SharpMediaCoder
 
                         buffer.Lock(out Byte* data, &maxLength, &currentLength);
 
-                        var safearray = new byte[currentLength];
-                        Marshal.Copy((IntPtr)data, safearray, 0, (int)currentLength);
+                        Marshal.Copy((IntPtr)data, bytes, 0, (int)currentLength);
 
-                        return safearray;
+                        return true;
                     }
                     finally
                     {
@@ -359,7 +357,7 @@ namespace SharpMediaCoder
                 Marshal.ReleaseComObject(sample);
             }
 
-            return null;
+            return false;
         }
     }
 }

@@ -18,10 +18,13 @@ namespace SharpMediaCoder
         H264Decoder _decoder;
         private ConcurrentQueue<byte[]> _sampleQueue = new ConcurrentQueue<byte[]>();
         private object _syncRoot = new object();
+        Int32Rect _rect;
 
         int pw = 640;
         int ph = 368;
-        int fps = 24;
+        int fps = 23;
+
+        byte[] _decoded;
 
         public MainWindow()
         {
@@ -36,33 +39,43 @@ namespace SharpMediaCoder
                 null);
             image.Source = _wb;
 
+            _rect = new Int32Rect(0, 0, pw, ph);
+            _decoded = new byte[pw * ph * 3];
+
             _timer = new System.Timers.Timer();
             _timer.Elapsed += OnTick;
             _timer.Interval = 1000d / fps;
             _timer.Start();
         }
 
-        private async void OnTick(object sender, ElapsedEventArgs e)
+        private void OnTick(object sender, ElapsedEventArgs e)
         {
+            var ticks = DateTime.Now.Ticks;
             if (_decoder == null)
             {
-                _decoder = new H264Decoder(pw, ph, fps);
+                lock (_syncRoot)
+                {
+                    if(_decoder == null)
+                        _decoder = new H264Decoder(pw, ph, fps);
+                }
             }
 
             while (_sampleQueue.Count > 0)
             {
                 if (_sampleQueue.TryDequeue(out var nalu))
                 {
-                    var decoded = _decoder.Process(nalu);
-                    if (decoded != null)
-                    {
-                        await Dispatcher.InvokeAsync(() =>
+                    if(_decoder.Process(nalu, ticks, ref _decoded))
+                    { 
+                        Dispatcher.Invoke(() =>
                         {
                             try
                             {
-                                _wb.WritePixels(new Int32Rect(0, 0, pw, ph), decoded, pw * 3, 0);
+                                _wb.Lock();
+                                _wb.WritePixels(_rect, _decoded, pw * 3, 0);
+                                _wb.AddDirtyRect(_rect);
+                                _wb.Unlock();
                             }
-                            catch(Exception e) { }
+                            catch(Exception ex) { }
                         });
                         break;
                     }
