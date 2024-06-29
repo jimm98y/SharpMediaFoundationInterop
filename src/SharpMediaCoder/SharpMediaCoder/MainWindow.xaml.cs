@@ -1,5 +1,7 @@
 ﻿using SharpMp4;
+using System.Collections.Concurrent;
 using System.IO;
+using System.Timers;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -12,7 +14,11 @@ namespace SharpMediaCoder
     public partial class MainWindow : Window
     {
         WriteableBitmap _wb;
-        
+        System.Timers.Timer _timer;
+        H264Decoder _decoder;
+        private ConcurrentQueue<byte[]> _sampleQueue = new ConcurrentQueue<byte[]>();
+        private object _syncRoot = new object();
+
         int pw = 640;
         int ph = 368;
         int fps = 24;
@@ -20,7 +26,7 @@ namespace SharpMediaCoder
         public MainWindow()
         {
             InitializeComponent();
-            this.Loaded += MainWindow_Loaded;
+
             _wb = new WriteableBitmap(
                 pw,
                 ph,
@@ -29,14 +35,56 @@ namespace SharpMediaCoder
                 PixelFormats.Bgr24,
                 null);
             image.Source = _wb;
+
+            _timer = new System.Timers.Timer();
+            _timer.Elapsed += OnTick;
+            _timer.Interval = 1000d / fps;
+            _timer.Start();
         }
 
-        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        private async void OnTick(object sender, ElapsedEventArgs e)
         {
-            string fileName = "frag_bunny.mp4";
+            if (_decoder == null)
+            {
+                _decoder = new H264Decoder(pw, ph, fps);
+            }
 
-            H264Decoder decoder = new H264Decoder(pw, ph, fps);
+            while (_sampleQueue.Count > 0)
+            {
+                if (_sampleQueue.TryDequeue(out var nalu))
+                {
+                    var decoded = _decoder.Process(nalu);
+                    if (decoded != null)
+                    {
+                        await Dispatcher.InvokeAsync(() =>
+                        {
+                            try
+                            {
+                                _wb.WritePixels(new Int32Rect(0, 0, pw, ph), decoded, pw * 3, 0);
+                            }
+                            catch(Exception e) { }
+                        });
+                        break;
+                    }
+                }
+            }
 
+            if(_sampleQueue.Count == 0)
+            {
+                lock (_syncRoot)
+                {
+                    if (_sampleQueue.Count == 0)
+                    {
+                        _timer.Stop();
+                        LoadFileAsync("frag_bunny.mp4").Wait();
+                        _timer.Start();
+                    }
+                }
+            }
+        }
+
+        private async Task LoadFileAsync(string fileName)
+        {
             using (Stream fs = new BufferedStream(new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read)))
             {
                 using (var fmp4 = await FragmentedMp4.ParseAsync(fs))
@@ -48,19 +96,11 @@ namespace SharpMediaCoder
                     var videoTrackId = fmp4.FindVideoTrackID().First();
                     var audioTrackId = fmp4.FindAudioTrackID().First();
 
-                    bool keyframe = false;
                     foreach (var au in parsedMDAT[videoTrackId])
                     {
-                        keyframe = true;
                         foreach (var nalu in au)
                         {
-                            byte[] decoded = decoder.Process(nalu, keyframe);
-                            keyframe = false;
-                            if (decoded != null)
-                            {
-                                _wb.WritePixels(new Int32Rect(0, 0, pw, ph), decoded, pw * 3, 0);
-                                await Task.Delay((int)(1000d / fps));
-                            }
+                            _sampleQueue.Enqueue(nalu);
                         }
                     }
                 }
