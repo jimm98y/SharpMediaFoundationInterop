@@ -1,7 +1,9 @@
 ﻿using SharpMp4;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Timers;
 using System.Windows;
 using System.Windows.Media;
@@ -16,7 +18,8 @@ namespace SharpMediaCoder
     {
         WriteableBitmap _wb;
         System.Timers.Timer _timerDecoder;
-        H264Decoder _decoder;
+        H264Decoder _h264Decoder;
+        NV12toRGB _nv12Decoder;
         private ConcurrentQueue<IList<byte[]>> _sampleQueue = new ConcurrentQueue<IList<byte[]>>();
         private ConcurrentQueue<byte[]> _renderQueue = new ConcurrentQueue<byte[]>();
         private object _syncRoot = new object();
@@ -26,8 +29,10 @@ namespace SharpMediaCoder
         int ph = 368;
         int fps = 24;
 
-        byte[] _decoded;
         long _time = 0;
+        long _lastTime = 0;
+
+        byte[] nv12buffer;
 
         Stopwatch _stopwatch = new Stopwatch();
 
@@ -45,7 +50,8 @@ namespace SharpMediaCoder
             image.Source = _wb;
 
             _rect = new Int32Rect(0, 0, pw, ph);
-            _decoded = new byte[pw * ph * 3];
+
+            nv12buffer = new byte[pw * ph * 3];
 
             _timerDecoder = new System.Timers.Timer();
             _timerDecoder.Elapsed += OnTickDecoder;
@@ -55,51 +61,71 @@ namespace SharpMediaCoder
             _time = 0;
             _stopwatch.Start();
 
+            this.Closing += MainWindow_Closing;
             CompositionTarget.Rendering += CompositionTarget_Rendering;
         }
 
-        long _lastTime = 0;
+        private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            CompositionTarget.Rendering -= CompositionTarget_Rendering;
+        }
+
+        private long _framecount = 0;
 
         private void CompositionTarget_Rendering(object sender, EventArgs e)
         {
+            if (!_timerDecoder.Enabled)
+                return;
+
             long elapsed = _stopwatch.ElapsedMilliseconds;
 
             if (elapsed - _lastTime >= _timerDecoder.Interval)
             {
-                //Debug.WriteLine($"Frame: {elapsed - _lastTime}");
+                if (_renderQueue.TryDequeue(out byte[] decoded))
+                {
+                    _wb.Lock();
+                    Marshal.Copy(decoded, 0, _wb.BackBuffer, pw * ph * 3);
+                    _wb.AddDirtyRect(_rect);
+                    _wb.Unlock();
 
-                if (_renderQueue.TryDequeue(out byte[] image))
-                {
-                    _wb.WritePixels(_rect, image, pw * 3, 0);
-                    _lastTime = _stopwatch.ElapsedMilliseconds;
-                }
-                else
-                {
-                    Debug.WriteLine("no frame");
+                    ArrayPool<byte>.Shared.Return(decoded);
+                    _lastTime = elapsed;
                 }
             }
         }
 
         private void OnTickDecoder(object sender, ElapsedEventArgs e)
         {
-            if (_decoder == null)
+            if (_h264Decoder == null)
             {
                 lock (_syncRoot)
                 {
-                    if(_decoder == null)
-                        _decoder = new H264Decoder(pw, ph, fps);
+                    if (_h264Decoder == null)
+                    {
+                        _h264Decoder = new H264Decoder(pw, ph, fps);
+                        _nv12Decoder = new NV12toRGB(pw, ph, fps);
+                    }
                 }
             }
 
-            while (_renderQueue.Count < 10 && _sampleQueue.Count > 0)
+            while (_renderQueue.Count < 3 && _sampleQueue.Count > 0)
             {
                 if (_sampleQueue.TryDequeue(out var au))
                 {
                     foreach (var nalu in au)
                     {
-                        if (_decoder.Process(nalu, _time, ref _decoded))
+                        if (_h264Decoder.ProcessInput(nalu, _time))
                         {
-                            _renderQueue.Enqueue(_decoded.ToArray());
+                            while (_h264Decoder.ProcessOutput(ref nv12buffer))
+                            {
+                                _nv12Decoder.ProcessInput(nv12buffer, _time);
+                                
+                                byte[] decoded = ArrayPool<byte>.Shared.Rent(pw * ph * 3);
+                                _nv12Decoder.ProcessOutput(ref decoded);
+
+                                _renderQueue.Enqueue(decoded);
+                                _framecount++;
+                            }
                         }
                     }
                     _time += (1000 * 10000 / fps);
@@ -115,6 +141,8 @@ namespace SharpMediaCoder
                         _timerDecoder.Stop();
                         LoadFileAsync("frag_bunny.mp4").Wait();
                         _time = 0;
+                        Debug.WriteLine($"Total framecount: {_framecount}");
+                        _framecount = 0;
                         _timerDecoder.Start();
                     }
                 }
