@@ -123,7 +123,7 @@ namespace SharpMediaCoder
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {
-                dataBuffer[0].pSample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
+                dataBuffer[0].pSample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
                 try
                 {
                     uint maxLength = default;

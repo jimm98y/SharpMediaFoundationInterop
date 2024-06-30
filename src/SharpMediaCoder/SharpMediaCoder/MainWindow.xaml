@@ -6,11 +6,10 @@
         xmlns:local="clr-namespace:SharpMediaCoder"
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
-    <Grid>
-        <Image x:Name="image" RenderTransformOrigin="0.5,0.5">
-            <Image.RenderTransform>
-                <ScaleTransform ScaleY="-1" />
-            </Image.RenderTransform>
-        </Image>
-    </Grid>
+    <Image x:Name="image" RenderTransformOrigin="0.5,0.5">
+        <!-- WriteableBitmap backbuffer is top-down, but decoded image is bottom-up, flip it in WPF -->
+        <Image.RenderTransform>
+            <ScaleTransform ScaleY="-1" />
+        </Image.RenderTransform>
+    </Image>
 </Window>
