@@ -37,7 +37,7 @@ namespace SharpMediaCoder
 
         private IMFTransform Create()
         {
-            IMFTransform result = default;
+            IMFTransform decoder = default;
 
             foreach (IMFActivate activate in MFTUtils.FindTransforms(PInvoke.MFT_CATEGORY_VIDEO_PROCESSOR,
                 MFT_ENUM_FLAG.MFT_ENUM_FLAG_ALL,
@@ -48,7 +48,7 @@ namespace SharpMediaCoder
                 {
                     activate.GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR deviceName, out _);
                     Debug.WriteLine($"Found color converter MFT: {deviceName}");
-                    result = activate.ActivateObject(new Guid("BF94C121-5B05-4E6F-8000-BA598961414D")) as IMFTransform;
+                    decoder = activate.ActivateObject(new Guid("BF94C121-5B05-4E6F-8000-BA598961414D")) as IMFTransform;
                     break;
                 }
                 finally
@@ -57,7 +57,7 @@ namespace SharpMediaCoder
                 }
             }
 
-            if (result != null)
+            if (decoder != null)
             {
                 try
                 {
@@ -66,7 +66,7 @@ namespace SharpMediaCoder
                     mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
                     mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
-                    result.SetInputType(0, mediaInput, 0);
+                    decoder.SetInputType(0, mediaInput, 0);
                 }
                 catch (Exception ex)
                 {
@@ -80,7 +80,7 @@ namespace SharpMediaCoder
                     mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_RGB24);
                     mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
-                    result.SetOutputType(0, mediaOutput, 0);
+                    decoder.SetOutputType(0, mediaOutput, 0);
                 }
                 catch (Exception ex)
                 {
@@ -88,7 +88,7 @@ namespace SharpMediaCoder
                 }
             }
 
-            return result;
+            return decoder;
         }
     }
 }

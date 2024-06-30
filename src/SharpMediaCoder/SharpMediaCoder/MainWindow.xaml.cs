@@ -26,7 +26,7 @@ namespace SharpMediaCoder
         Int32Rect _rect;
 
         int pw = 640;
-        int ph = 368;
+        int ph = 360;
         int fps = 24;
 
         long _time = 0;
@@ -83,10 +83,11 @@ namespace SharpMediaCoder
             {
                 if (_renderQueue.TryDequeue(out byte[] decoded))
                 {
-                    _wb.Lock();
-                    Marshal.Copy(decoded, 0, _wb.BackBuffer, pw * ph * 3);
-                    _wb.AddDirtyRect(_rect);
-                    _wb.Unlock();
+                    //_wb.Lock();
+                    //Marshal.Copy(decoded, 0, _wb.BackBuffer, pw * ph * 3);
+                    //_wb.AddDirtyRect(_rect);
+                    //_wb.Unlock();
+                    _wb.WritePixels(_rect, decoded, _wb.BackBufferStride, 3 * (_h264Decoder.Height - _h264Decoder.OriginalHeight) * _h264Decoder.Width);
 
                     ArrayPool<byte>.Shared.Return(decoded);
                     _lastTime = elapsed;
@@ -103,7 +104,7 @@ namespace SharpMediaCoder
                     if (_h264Decoder == null)
                     {
                         _h264Decoder = new H264Decoder(pw, ph, fps);
-                        _nv12Decoder = new NV12toRGB(pw, ph, fps);
+                        _nv12Decoder = new NV12toRGB(_h264Decoder.Width, _h264Decoder.Height, fps);
                     }
                 }
             }

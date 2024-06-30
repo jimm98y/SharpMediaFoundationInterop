@@ -32,6 +32,7 @@ namespace SharpMediaCoder
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
         private ulong _sampleDuration = 1;
         private uint _fps;
+        private bool _isFirst = true;
 
         protected MFTBase(int fps)
         {
@@ -79,6 +80,14 @@ namespace SharpMediaCoder
 
                 if (result.Value == 0)
                 {
+                    if (_isFirst)
+                    {
+                        this._isFirst = false;
+                        decoder.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
+                        decoder.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, default);
+                        decoder.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_START_OF_STREAM, default);
+                    }
+
                     result = decoder.ProcessInput(streamID, sample, 0);
                     return result.Value == 0;
                 }
@@ -97,7 +106,6 @@ namespace SharpMediaCoder
 
         private unsafe bool Output(uint streamID, IMFTransform decoder, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes)
         {
-            bool isProcessed = false;
             uint decoderOutputStatus;
             HRESULT outputResult = decoder.ProcessOutput(0, dataBuffer, out decoderOutputStatus);
 
@@ -114,15 +122,6 @@ namespace SharpMediaCoder
                 return false;
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
-            {
-                isProcessed = true;
-            }
-            else if (outputResult.Value == unchecked((int)0xc00d36b1))
-            {
-                isProcessed = true;
-            }
-
-            if (isProcessed)
             {
                 dataBuffer[0].pSample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
                 try
