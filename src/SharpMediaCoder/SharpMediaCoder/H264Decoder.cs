@@ -11,6 +11,7 @@ namespace SharpMediaCoder
         private uint _width;
         private uint _height;
         private uint _fps;
+        private bool _isLowLatency = false;
 
         private ulong DefaultFrameSize { get { return ((ulong)_width << 32) + _height; } }
 
@@ -19,11 +20,12 @@ namespace SharpMediaCoder
 
         private byte[] _annexB = [0, 0, 0, 1];
 
-        public H264Decoder(int width, int height, int fps) : base(fps)
+        public H264Decoder(int width, int height, int fps, bool isLowLatency = false) : base(fps)
         {
             this._width = (uint)width;
             this._height = (uint)height;
             this._fps = (uint)fps;
+            this._isLowLatency = isLowLatency;
 
             decoder = Create();
             dataBuffer = MFTUtils.CreateOutputDataBuffer((int)(_width * _height * 3 / 2));
@@ -62,7 +64,7 @@ namespace SharpMediaCoder
                 }
             }
 
-            if (result is not null)
+            if (result != null)
             {
                 try
                 {
@@ -72,6 +74,13 @@ namespace SharpMediaCoder
                     mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_H264);
                     mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
                     mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, _fps);
+
+                    if (_isLowLatency)
+                    {
+                        result.GetAttributes(out IMFAttributes attributes);
+                        attributes.SetUINT32(PInvoke.MF_LOW_LATENCY, 1);
+                    }
+
                     result.SetInputType(0, mediaInput, 0);
                 }
                 catch (Exception ex)
