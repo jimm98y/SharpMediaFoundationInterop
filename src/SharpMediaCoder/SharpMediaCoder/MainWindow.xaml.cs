@@ -83,11 +83,11 @@ namespace SharpMediaCoder
             {
                 if (_renderQueue.TryDequeue(out byte[] decoded))
                 {
-                    //_wb.Lock();
-                    //Marshal.Copy(decoded, 0, _wb.BackBuffer, pw * ph * 3);
-                    //_wb.AddDirtyRect(_rect);
-                    //_wb.Unlock();
-                    _wb.WritePixels(_rect, decoded, _wb.BackBufferStride, 3 * (_h264Decoder.Height - _h264Decoder.OriginalHeight) * _h264Decoder.Width);
+                    _wb.Lock();
+                    Marshal.Copy(decoded, 3 * (_h264Decoder.Height - _h264Decoder.OriginalHeight) * _h264Decoder.Width, _wb.BackBuffer, pw * ph * 3);
+                    _wb.AddDirtyRect(_rect);
+                    _wb.Unlock();
+                    //_wb.WritePixels(_rect, decoded, _wb.BackBufferStride, 3 * (_h264Decoder.Height - _h264Decoder.OriginalHeight) * _h264Decoder.Width);
 
                     ArrayPool<byte>.Shared.Return(decoded);
                     _lastTime = elapsed;
