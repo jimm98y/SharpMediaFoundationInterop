@@ -3,12 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34607.119
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMediaCoder", "SharpMediaCoder\SharpMediaCoder.csproj", "{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharpMediaCoder", "SharpMediaCoder\SharpMediaCoder.csproj", "{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{A375E36E-E6FE-46B5-BE4D-34FEB6F48E78}"
-	ProjectSection(SolutionItems) = preProject
-		.editorconfig = .editorconfig
-	EndProjectSection
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharpMediaFoundation", "SharpMediaFoundation\SharpMediaFoundation.csproj", "{F7EFEAB9-781A-468B-B366-5F226AAB01A7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMediaFoundation.WPF", "SharpMediaFoundation.WPF\SharpMediaFoundation.WPF.csproj", "{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -26,6 +25,22 @@ Global
 		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Release|Any CPU.Build.0 = Release|Any CPU
 		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Release|x64.ActiveCfg = Release|x64
 		{5CDE4D7C-7B6F-40E7-B230-9835C6541DD7}.Release|x64.Build.0 = Release|x64
+		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Debug|x64.Build.0 = Debug|Any CPU
+		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Release|x64.ActiveCfg = Release|Any CPU
+		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Release|x64.Build.0 = Release|Any CPU
+		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Debug|x64.Build.0 = Debug|Any CPU
+		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Release|x64.ActiveCfg = Release|Any CPU
+		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

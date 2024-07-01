@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+	<UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpMp4" Version="0.0.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpMediaFoundation\SharpMediaFoundation.csproj" />
+  </ItemGroup>
+
+	<ItemGroup>
+		<AssemblyAttribute Include="System.Windows.ThemeInfoAttribute">
+			<_Parameter1>System.Windows.ResourceDictionaryLocation.None</_Parameter1>
+			<_Parameter1_IsLiteral>true</_Parameter1_IsLiteral>
+			<_Parameter2>System.Windows.ResourceDictionaryLocation.SourceAssembly</_Parameter2>
+			<_Parameter2_IsLiteral>true</_Parameter2_IsLiteral>
+		</AssemblyAttribute>
+	</ItemGroup>
+</Project>

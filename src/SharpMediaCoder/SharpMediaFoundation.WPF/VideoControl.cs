@@ -1,0 +1,208 @@
+﻿using SharpMp4;
+using System;
+using System.Buffers;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+using System.Timers;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+
+namespace SharpMediaFoundation.WPF
+{
+    [TemplatePart(Name = "PART_image", Type = typeof(Image))]
+    public class VideoControl : Control
+    {
+        public string Path
+        {
+            get { return (string)GetValue(PathProperty); }
+            set { SetValue(PathProperty, value); }
+        }
+
+        public static readonly DependencyProperty PathProperty =
+            DependencyProperty.Register("Path", typeof(string), typeof(VideoControl), new PropertyMetadata("", OnPathPropertyChanged));
+
+        private static void OnPathPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var sender = d as VideoControl;
+            if(sender != null)
+            {
+                sender.StartPlaying((string)e.NewValue);
+            }
+        }
+
+        private Image _image;
+
+        // TODO: get this from the video
+        int pw = 640;
+        int ph = 360;
+        int fps = 24;
+
+        WriteableBitmap _wb;
+        Timer _timerDecoder;
+        H264Decoder _h264Decoder;
+        NV12toRGB _nv12Decoder;
+        private ConcurrentQueue<IList<byte[]>> _sampleQueue = new ConcurrentQueue<IList<byte[]>>();
+        private ConcurrentQueue<byte[]> _renderQueue = new ConcurrentQueue<byte[]>();
+        private object _syncRoot = new object();
+        Int32Rect _rect;
+        long _time = 0;
+        long _lastTime = 0;
+        byte[] _nv12buffer;
+        Stopwatch _stopwatch = new Stopwatch();
+
+        static VideoControl()
+        {
+            DefaultStyleKeyProperty.OverrideMetadata(typeof(VideoControl), new FrameworkPropertyMetadata(typeof(VideoControl)));
+        }
+
+        public VideoControl()
+        {
+            Loaded += VideoControl_Loaded;
+            CompositionTarget.Rendering += CompositionTarget_Rendering;
+
+            _wb = new WriteableBitmap(
+                pw,
+                ph,
+                96,
+                96,
+                PixelFormats.Bgr24,
+                null);
+            _rect = new Int32Rect(0, 0, pw, ph);
+            _nv12buffer = new byte[pw * ph * 3];
+            _timerDecoder = new Timer();
+            _timerDecoder.Elapsed += OnTickDecoder;
+            _timerDecoder.Interval = 1000d / fps;
+            _timerDecoder.Start();
+            _time = 0;
+            _stopwatch.Start();
+        }
+
+        private void VideoControl_Loaded(object sender, RoutedEventArgs e)
+        {
+            Window.GetWindow(this).Closing += (s1, e1) => {
+                CompositionTarget.Rendering -= CompositionTarget_Rendering;
+            }; 
+        }
+
+        public override void OnApplyTemplate()
+        {
+            base.OnApplyTemplate();
+
+            this._image = this.Template.FindName("PART_Image", this) as Image;
+            this._image.RenderTransformOrigin = new Point(0.5, 0.5);
+
+            // decoded video image is upside down (pixel rows are in the bitmap order) => flip it
+            this._image.RenderTransform = new ScaleTransform(1, -1);
+            this._image.Source = _wb;
+        }
+
+
+        private void CompositionTarget_Rendering(object sender, EventArgs e)
+        {
+            if (!_timerDecoder.Enabled)
+                return;
+
+            long elapsed = _stopwatch.ElapsedMilliseconds;
+
+            if (elapsed - _lastTime >= _timerDecoder.Interval)
+            {
+                if (_renderQueue.TryDequeue(out byte[] decoded))
+                {
+                    _wb.Lock();
+                    Marshal.Copy(decoded, 3 * (_h264Decoder.Height - _h264Decoder.OriginalHeight) * _h264Decoder.Width, _wb.BackBuffer, pw * ph * 3);
+                    _wb.AddDirtyRect(_rect);
+                    _wb.Unlock();
+                    //_wb.WritePixels(_rect, decoded, _wb.BackBufferStride, 3 * (_h264Decoder.Height - _h264Decoder.OriginalHeight) * _h264Decoder.Width);
+
+                    ArrayPool<byte>.Shared.Return(decoded);
+                    _lastTime = elapsed;
+                }
+            }
+        }
+
+        private void OnTickDecoder(object sender, ElapsedEventArgs e)
+        {
+            if (_h264Decoder == null || _nv12Decoder == null)
+            {
+                lock (_syncRoot)
+                {
+                    if (_h264Decoder == null)
+                    {
+                        // decoders must be created on the same thread as the samples
+                        _h264Decoder = new H264Decoder(pw, ph, fps);
+                        _nv12Decoder = new NV12toRGB(_h264Decoder.Width, _h264Decoder.Height, fps);
+                    }
+                }
+            }
+
+            const int MIN_BUFFERED_SAMPLES = 3;
+            while (_renderQueue.Count < MIN_BUFFERED_SAMPLES && _sampleQueue.Count > 0)
+            {
+                if (_sampleQueue.TryDequeue(out var au))
+                {
+                    foreach (var nalu in au)
+                    {
+                        if (_h264Decoder.ProcessInput(nalu, _time))
+                        {
+                            while (_h264Decoder.ProcessOutput(ref _nv12buffer))
+                            {
+                                _nv12Decoder.ProcessInput(_nv12buffer, _time);
+
+                                byte[] decoded = ArrayPool<byte>.Shared.Rent(pw * ph * 3);
+                                _nv12Decoder.ProcessOutput(ref decoded);
+
+                                _renderQueue.Enqueue(decoded);
+                            }
+                        }
+                    }
+                    _time += (1000 * 10000 / fps); // 100ns units
+                }
+            }
+        }
+
+        private void StartPlaying(string path)
+        {
+            if (_sampleQueue.Count == 0)
+            {
+                lock (_syncRoot)
+                {
+                    if (_sampleQueue.Count == 0)
+                    {
+                        _timerDecoder.Stop();
+                        LoadFileAsync(path).Wait();
+                        _time = 0;
+                        _timerDecoder.Start();
+                    }
+                }
+            }
+        }
+
+        private async Task LoadFileAsync(string fileName)
+        {
+            using (Stream fs = new BufferedStream(new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read)))
+            {
+                using (var fmp4 = await FragmentedMp4.ParseAsync(fs))
+                {
+                    var videoTrackBox = fmp4.FindVideoTracks().FirstOrDefault();
+                    var audioTrackBox = fmp4.FindAudioTracks().FirstOrDefault();
+                    var parsedMDAT = await fmp4.ParseMdatAsync();
+
+                    var videoTrackId = fmp4.FindVideoTrackID().First();
+                    var audioTrackId = fmp4.FindAudioTrackID().First();
+
+                    foreach (var au in parsedMDAT[videoTrackId])
+                    {
+                        _sampleQueue.Enqueue(au);
+                    }
+                }
+            }
+        }
+    }
+}

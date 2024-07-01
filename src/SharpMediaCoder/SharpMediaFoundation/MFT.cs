@@ -1,11 +1,14 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaCoder
+namespace SharpMediaFoundation
 {
     [Flags]
     public enum MftInputStatusFlags

@@ -1,15 +1,10 @@
-﻿<Window x:Class="SharpMediaCoder.MainWindow"
+﻿<Window x:Class="SharpMediaFoundation.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:SharpMediaCoder"
+        xmlns:ctrl="clr-namespace:SharpMediaFoundation.WPF;assembly=SharpMediaFoundation.WPF"
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
-    <Image x:Name="image" RenderTransformOrigin="0.5,0.5">
-        <!-- WriteableBitmap backbuffer is top-down, but decoded image is bottom-up, flip it in WPF -->
-        <Image.RenderTransform>
-            <ScaleTransform ScaleY="-1" />
-        </Image.RenderTransform>
-    </Image>
+    <ctrl:VideoControl Path="frag_bunny.mp4" />
 </Window>
