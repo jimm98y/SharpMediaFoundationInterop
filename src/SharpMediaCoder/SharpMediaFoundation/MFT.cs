@@ -133,7 +133,8 @@ namespace SharpMediaFoundation
                 {
                     uint maxLength = default;
                     uint currentLength = default;
-                    buffer.Lock(out byte* data, &maxLength, &currentLength);
+                    byte* data = default;
+                    buffer.Lock(&data, out maxLength, out currentLength);
                     Marshal.Copy((IntPtr)data, bytes, 0, (int)currentLength);
                     return true;
                 }
@@ -175,9 +176,10 @@ namespace SharpMediaFoundation
 
             try
             {
-                uint* maxLength = default;
-                uint* currentLength = default;
-                buffer.Lock(out byte* target, maxLength, currentLength);
+                uint maxLength = default;
+                uint currentLength = default;
+                byte* target = default;
+                buffer.Lock(&target, out maxLength, out currentLength);
                 fixed (byte* source = data)
                 {
                     Unsafe.CopyBlock(target, source, (uint)data.Length);
