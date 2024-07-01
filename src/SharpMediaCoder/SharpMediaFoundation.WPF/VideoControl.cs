@@ -87,9 +87,14 @@ namespace SharpMediaFoundation.WPF
 
         private void VideoControl_Loaded(object sender, RoutedEventArgs e)
         {
-            Window.GetWindow(this).Closing += (s1, e1) => {
-                CompositionTarget.Rendering -= CompositionTarget_Rendering;
-            }; 
+            var window = Window.GetWindow(this);
+            if (window != null)
+            {
+                window.Closing += (s1, e1) =>
+                {
+                    CompositionTarget.Rendering -= CompositionTarget_Rendering;
+                };
+            }
         }
 
         public override void OnApplyTemplate()
@@ -190,6 +195,10 @@ namespace SharpMediaFoundation.WPF
                         _time = 0;
                         _timerDecoder.Start();
                     }
+                }
+                catch(Exception ex)
+                {
+                    Debug.WriteLine(ex.Message);
                 }
                 finally
                 {
