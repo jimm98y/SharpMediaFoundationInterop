@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
     <Grid>
-        <Grid.RowDefinitions>
+        <!--<Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="*" />
             <RowDefinition Height="*" />
@@ -22,9 +22,9 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+        </Grid.ColumnDefinitions>-->
         <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="0" Grid.Column="0" />
-        <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="0" Grid.Column="1" />
+        <!--<ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="0" Grid.Column="1" />
         <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="1" Grid.Column="0" />
         <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="1" Grid.Column="1" />
 
@@ -66,7 +66,7 @@
         <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="2" Grid.Column="6" />
         <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="2" Grid.Column="7" />
         <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="3" Grid.Column="6" />
-        <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="3" Grid.Column="7" />
+        <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="3" Grid.Column="7" />-->
     </Grid>
     
 </Window>
