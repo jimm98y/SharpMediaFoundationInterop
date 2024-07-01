@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Windows;
@@ -28,12 +29,12 @@ namespace SharpMediaFoundation.WPF
         public static readonly DependencyProperty PathProperty =
             DependencyProperty.Register("Path", typeof(string), typeof(VideoControl), new PropertyMetadata("", OnPathPropertyChanged));
 
-        private static void OnPathPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        private static async void OnPathPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var sender = d as VideoControl;
             if(sender != null)
             {
-                sender.StartPlaying((string)e.NewValue);
+                await sender.StartPlaying((string)e.NewValue);
             }
         }
 
@@ -45,7 +46,7 @@ namespace SharpMediaFoundation.WPF
         int fps = 24;
 
         WriteableBitmap _wb;
-        Timer _timerDecoder;
+        System.Timers.Timer _timerDecoder;
         H264Decoder _h264Decoder;
         NV12toRGB _nv12Decoder;
         private ConcurrentQueue<IList<byte[]>> _sampleQueue = new ConcurrentQueue<IList<byte[]>>();
@@ -76,7 +77,7 @@ namespace SharpMediaFoundation.WPF
                 null);
             _rect = new Int32Rect(0, 0, pw, ph);
             _nv12buffer = new byte[pw * ph * 3];
-            _timerDecoder = new Timer();
+            _timerDecoder = new System.Timers.Timer();
             _timerDecoder.Elapsed += OnTickDecoder;
             _timerDecoder.Interval = 1000d / fps;
             _timerDecoder.Start();
@@ -167,19 +168,24 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        private void StartPlaying(string path)
+        private async Task StartPlaying(string path)
         {
             if (_sampleQueue.Count == 0)
             {
-                lock (_syncRoot)
+                Monitor.Enter(_syncRoot);
+                try
                 {
                     if (_sampleQueue.Count == 0)
                     {
                         _timerDecoder.Stop();
-                        LoadFileAsync(path).Wait();
+                        await LoadFileAsync(path);
                         _time = 0;
                         _timerDecoder.Start();
                     }
+                }
+                finally
+                {
+                    Monitor.Exit(_syncRoot);
                 }
             }
         }
