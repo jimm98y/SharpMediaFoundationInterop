@@ -32,6 +32,8 @@ namespace SharpMediaFoundation
 
     public abstract class MFTBase
     {
+        public readonly Guid IID_IMFTransform = new Guid("BF94C121-5B05-4E6F-8000-BA598961414D");
+
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
         private ulong _sampleDuration = 1;
         private uint _fps;

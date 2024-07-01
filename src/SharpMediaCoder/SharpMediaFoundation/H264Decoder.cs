@@ -81,7 +81,7 @@ namespace SharpMediaFoundation
                 {
                     activate.GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR deviceName, out _);
                     Debug.WriteLine($"Found video decoder MFT: {deviceName}");
-                    decoder = activate.ActivateObject(new Guid("BF94C121-5B05-4E6F-8000-BA598961414D")) as IMFTransform;
+                    decoder = activate.ActivateObject(IID_IMFTransform) as IMFTransform;
                     break;
                 }
                 finally
