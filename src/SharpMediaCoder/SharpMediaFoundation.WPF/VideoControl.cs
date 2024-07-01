@@ -128,7 +128,7 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        private void OnTickDecoder(object sender, ElapsedEventArgs e)
+        private async void OnTickDecoder(object sender, ElapsedEventArgs e)
         {
             if (_h264Decoder == null || _nv12Decoder == null)
             {
@@ -165,6 +165,14 @@ namespace SharpMediaFoundation.WPF
                     }
                     _time += (1000 * 10000 / fps); // 100ns units
                 }
+            }
+
+            if(_sampleQueue.Count == 0)
+            {
+                await Dispatcher.Invoke(async () =>
+                {
+                    await StartPlaying(Path);
+                });
             }
         }
 
