@@ -26,6 +26,10 @@ namespace SharpMediaFoundation
 
     public interface IDecoder
     {
+        int OriginalWidth { get; }
+        int OriginalHeight { get; }
+        int Width { get; }
+        int Height { get; }
         bool ProcessInput(byte[] data, long ticks);
         bool ProcessOutput(ref byte[] buffer);
     }
@@ -36,13 +40,17 @@ namespace SharpMediaFoundation
 
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
         private ulong _sampleDuration = 1;
-        private uint _fps;
+        private uint _fpsNom;
+        private uint _fpsDenom;
+        protected ulong DefaultFPS { get { return ((ulong)_fpsNom << 32) + _fpsDenom; } }
+
         private bool _isFirst = true;
 
-        protected MFTBase(int fps)
+        protected MFTBase(uint fpsNom, uint fpsDenom)
         {
-            this._fps = (uint)fps;
-            MFTUtils.Check(PInvoke.MFFrameRateToAverageTimePerFrame(_fps, 1, out _sampleDuration));
+            this._fpsNom = fpsNom;
+            this._fpsDenom = fpsDenom;
+            MFTUtils.Check(PInvoke.MFFrameRateToAverageTimePerFrame(_fpsNom, _fpsDenom, out _sampleDuration));
         }
 
         static MFTBase()

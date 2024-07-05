@@ -8,7 +8,7 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation
 {
-    public class H264Decoder : MFTBase, IDecoder
+    public class H265Decoder : MFTBase, IDecoder
     {
         private int _originalWidth;
         private int _originalHeight;
@@ -30,20 +30,13 @@ namespace SharpMediaFoundation
 
         private byte[] _annexB = [0, 0, 0, 1];
 
-        public H264Decoder(int width, int height, uint fpsNom, uint fpsDenom, bool isLowLatency = false) : base(fpsNom, fpsDenom)
+        public H265Decoder(int width, int height, uint fpsNom, uint fpsDenom, bool isLowLatency = false) : base(fpsNom, fpsDenom)
         {
             this._originalWidth = width;
             this._originalHeight = height;
 
-            // make sure the width and height are divisible by 16:
-            /*
-            ec. ITU-T H.264 (04/2017) page 21
-             */
-            int nwidth = ((width + 16 - 1) / 16) * 16;
-            int nheight = ((height + 16 - 1) / 16) * 16;
-
-            this._width = (uint)nwidth;
-            this._height = (uint)nheight;
+            this._width = (uint)width;
+            this._height = (uint)height;
             this._isLowLatency = isLowLatency;
 
             decoder = Create();
@@ -69,10 +62,11 @@ namespace SharpMediaFoundation
         private IMFTransform Create()
         {
             IMFTransform decoder = default;
+            HRESULT result;
 
             foreach (IMFActivate activate in MFTUtils.FindTransforms(PInvoke.MFT_CATEGORY_VIDEO_DECODER,
                 MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT,
-                new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_H264 },
+                new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_HEVC },
                 new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 }))
             {
                 try
@@ -95,7 +89,7 @@ namespace SharpMediaFoundation
                     IMFMediaType mediaInput;
                     MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
                     mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
-                    mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_H264);
+                    mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_HEVC);
                     mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
                     mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, DefaultFPS);
 
@@ -105,7 +99,7 @@ namespace SharpMediaFoundation
                         attributes.SetUINT32(PInvoke.MF_LOW_LATENCY, 1);
                     }
 
-                    decoder.SetInputType(0, mediaInput, 0);
+                    result = decoder.SetInputType(0, mediaInput, 0);
                 }
                 catch (Exception ex)
                 {
@@ -119,7 +113,7 @@ namespace SharpMediaFoundation
                     mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
                     mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
-                    decoder.SetOutputType(0, mediaOutput, 0);
+                    result = decoder.SetOutputType(0, mediaOutput, 0);
                 }
                 catch (Exception ex)
                 {

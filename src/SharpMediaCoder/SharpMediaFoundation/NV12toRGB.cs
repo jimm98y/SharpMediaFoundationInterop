@@ -14,10 +14,18 @@ namespace SharpMediaFoundation
 
         private ulong DefaultFrameSize { get { return ((ulong)_width << 32) + _height; } }
 
+        public int OriginalWidth => (int)_width;
+
+        public int OriginalHeight => (int)_height;
+
+        public int Width => (int)_width;
+
+        public int Height => (int)_height;
+
         private IMFTransform decoder;
         private MFT_OUTPUT_DATA_BUFFER[] dataBuffer;
 
-        public NV12toRGB(int width, int height, int fps) : base(fps)
+        public NV12toRGB(int width, int height, uint fpsNom, uint fpsDenom) : base(fpsNom, fpsDenom)
         {
             this._width = (uint)width;
             this._height = (uint)height;
