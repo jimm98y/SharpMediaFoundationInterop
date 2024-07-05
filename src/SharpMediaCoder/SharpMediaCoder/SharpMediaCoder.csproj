@@ -13,11 +13,10 @@
     <Content Include="frag_bunny.mp4">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="test1.mp4">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
-
-	<ItemGroup>
-		<PackageReference Include="SharpMp4" Version="0.0.6" />
-	</ItemGroup>
 
 	<ItemGroup>
 	  <ProjectReference Include="..\SharpMediaFoundation.WPF\SharpMediaFoundation.WPF.csproj" />

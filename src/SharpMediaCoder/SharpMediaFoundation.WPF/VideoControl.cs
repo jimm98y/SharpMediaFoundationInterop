@@ -46,11 +46,10 @@ namespace SharpMediaFoundation.WPF
 
         private Image _image;
 
-        // TODO: get this from the video
-        int _width = 1920;
-        int _height = 1080;
-        uint _fpsNom = 10000;
-        uint _fpsDenom = 1001;
+        int _width;
+        int _height;
+        uint _fpsNom;
+        uint _fpsDenom;
         VideoCodecType _codec;
 
         WriteableBitmap _wb;
@@ -243,8 +242,8 @@ namespace SharpMediaFoundation.WPF
                         .Children.Single((Mp4Box x) => x is VisualSampleEntryBox) as VisualSampleEntryBox;
                     _width = vsbox.Width;
                     _height = vsbox.Height;
-                    _fpsNom = CalculateTimescale(fmp4, videoTrackBox);
-                    _fpsDenom = CalculateSampleDuration(fmp4, videoTrackBox);
+                    _fpsNom = fmp4.CalculateTimescale(videoTrackBox);
+                    _fpsDenom = fmp4.CalculateSampleDuration(videoTrackBox);
                     if(vsbox.Children.FirstOrDefault(x => x is AvcConfigurationBox) != null)
                     {
                         _codec = VideoCodecType.H264;
@@ -264,37 +263,6 @@ namespace SharpMediaFoundation.WPF
                     }
                 }
             }
-        }
-
-
-
-
-
-        public static uint CalculateTimescale(FragmentedMp4 fmp4, TrakBox track)
-        {
-            return track.GetMdia().GetMdhd().Timescale;
-        }
-
-        public static uint CalculateSampleDuration(FragmentedMp4 fmp4, TrakBox track)
-        {
-            var trafBoxes = fmp4
-                .GetMoof()
-                    .SelectMany(g => g
-                        .GetTraf().Where(y => y.GetTfhd().TrackId == track.GetTkhd().TrackId));
-
-            uint avgSampleDuration;
-            if (trafBoxes.First().GetTfhd().DefaultSampleDuration != 0)
-            {
-                avgSampleDuration = trafBoxes.First().GetTfhd().DefaultSampleDuration;
-            }
-            else
-            {
-                avgSampleDuration = (uint)trafBoxes.SelectMany(d => d.GetTrun()
-                            .SelectMany(e => e.Entries))
-                            .Average(z => z.SampleDuration);
-            }
-
-            return avgSampleDuration;
         }
     }
 }

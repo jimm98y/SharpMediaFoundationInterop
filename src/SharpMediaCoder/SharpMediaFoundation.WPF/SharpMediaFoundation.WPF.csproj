@@ -8,10 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SharpMp4" Version="0.0.6" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\SharpMediaFoundation\SharpMediaFoundation.csproj" />
   </ItemGroup>
 
@@ -22,5 +18,9 @@
 			<_Parameter2>System.Windows.ResourceDictionaryLocation.SourceAssembly</_Parameter2>
 			<_Parameter2_IsLiteral>true</_Parameter2_IsLiteral>
 		</AssemblyAttribute>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="SharpMp4" Version="0.0.7" />
 	</ItemGroup>
 </Project>
