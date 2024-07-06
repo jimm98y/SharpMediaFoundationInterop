@@ -35,8 +35,12 @@ namespace SharpMediaFoundation
             this._originalWidth = width;
             this._originalHeight = height;
 
-            this._width = (uint)width;
-            this._height = (uint)height;
+            // https://video.stackexchange.com/questions/24829/h-265-disadvantages-with-video-dimensions-not-multiple-of-8
+            int nwidth = ((width + 8 - 1) / 8) * 8;
+            int nheight = ((height + 8 - 1) / 8) * 8;
+
+            this._width = (uint)nwidth;
+            this._height = (uint)nheight;
             this._isLowLatency = isLowLatency;
 
             decoder = Create();
