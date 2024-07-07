@@ -31,7 +31,7 @@ namespace SharpMediaFoundation
             this._height = (uint)height;
 
             decoder = Create();
-            dataBuffer = MFTUtils.CreateOutputDataBuffer((int)(_width * _height * 3 / 2));
+            dataBuffer = MFTUtils.CreateOutputDataBuffer(_width * _height * 3 / 2);
         }
 
         public bool ProcessInput(byte[] data, long ticks)
@@ -39,9 +39,9 @@ namespace SharpMediaFoundation
             return ProcessInput(decoder, data, ticks);
         }
 
-        public bool ProcessOutput(ref byte[] buffer)
+        public bool ProcessOutput(ref byte[] buffer, out uint length)
         {
-            return ProcessOutput(decoder, dataBuffer, ref buffer);
+            return ProcessOutput(decoder, dataBuffer, ref buffer, out length);
         }
 
         private IMFTransform Create()

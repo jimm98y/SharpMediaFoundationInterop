@@ -162,20 +162,20 @@ namespace SharpMediaFoundation.WPF
                         {
                             if (_videoDecoder.ProcessInput(nalu, _time))
                             {
-                                while (_videoDecoder.ProcessOutput(ref _nv12buffer))
+                                while (_videoDecoder.ProcessOutput(ref _nv12buffer, out _))
                                 {
                                     if (_videoEncoder.ProcessInput(_nv12buffer, _time))
                                     {
-                                        while (_videoEncoder.ProcessOutput(ref _encodedBuffer))
+                                        while (_videoEncoder.ProcessOutput(ref _encodedBuffer, out uint length))
                                         {
-
+                                            var nnn = AnnexBParser.ParseNalu(_encodedBuffer, length);
                                         }
                                     }
 
                                     _nv12Decoder.ProcessInput(_nv12buffer, _time);
 
                                     byte[] decoded = ArrayPool<byte>.Shared.Rent(_width * _height * 3);
-                                    _nv12Decoder.ProcessOutput(ref decoded);
+                                    _nv12Decoder.ProcessOutput(ref decoded, out _);
 
                                     _renderQueue.Enqueue(decoded);
                                 }

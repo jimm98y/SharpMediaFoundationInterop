@@ -28,8 +28,6 @@ namespace SharpMediaFoundation
         private IMFTransform decoder;
         private MFT_OUTPUT_DATA_BUFFER[] dataBuffer;
 
-        private byte[] _annexB = [0, 0, 0, 1];
-
         public H265Decoder(int width, int height, uint fpsNom, uint fpsDenom, bool isLowLatency = false) : base(fpsNom, fpsDenom)
         {
             this._originalWidth = width;
@@ -44,7 +42,7 @@ namespace SharpMediaFoundation
             this._isLowLatency = isLowLatency;
 
             decoder = Create();
-            dataBuffer = MFTUtils.CreateOutputDataBuffer((int)(_width * _height * 3 / 2));
+            dataBuffer = MFTUtils.CreateOutputDataBuffer(_width * _height * 3 / 2);
         }
 
         public bool ProcessInput(byte[] data, long ticks)
@@ -52,15 +50,15 @@ namespace SharpMediaFoundation
             if (data[0] != 0 || data[1] != 0 || data[2] != 0 || data[3] != 1)
             {
                 // this little maneuver will cost us new allocation
-                data = _annexB.Concat(data).ToArray();
+                data = AnnexBParser.AnnexB.Concat(data).ToArray();
             }
 
             return ProcessInput(decoder, data, ticks);
         }
 
-        public bool ProcessOutput(ref byte[] buffer)
+        public bool ProcessOutput(ref byte[] buffer, out uint length)
         {
-            return ProcessOutput(decoder, dataBuffer, ref buffer);
+            return ProcessOutput(decoder, dataBuffer, ref buffer, out length);
         }
 
         private IMFTransform Create()

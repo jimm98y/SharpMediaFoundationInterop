@@ -31,7 +31,7 @@ namespace SharpMediaFoundation
         int Width { get; }
         int Height { get; }
         bool ProcessInput(byte[] data, long ticks);
-        bool ProcessOutput(ref byte[] buffer);
+        bool ProcessOutput(ref byte[] buffer, out uint length);
     }
 
     public abstract class MFTBase
@@ -43,6 +43,7 @@ namespace SharpMediaFoundation
         private uint _fpsNom;
         private uint _fpsDenom;
         protected ulong DefaultFPS { get { return ((ulong)_fpsNom << 32) + _fpsDenom; } }
+        protected double FPS { get { return (double)_fpsNom / _fpsDenom; } }
 
         private bool _isFirst = true;
 
@@ -72,12 +73,12 @@ namespace SharpMediaFoundation
             }
         }
 
-        protected bool ProcessOutput(IMFTransform decoder, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer)
+        protected bool ProcessOutput(IMFTransform decoder, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length)
         {
             try
             {
                 _semaphore.Wait();
-                return Output(0, decoder, dataBuffer, ref buffer);
+                return Output(0, decoder, dataBuffer, ref buffer, out length);
             }
             finally
             {
@@ -117,7 +118,7 @@ namespace SharpMediaFoundation
             return false;
         }
 
-        private unsafe bool Output(uint streamID, IMFTransform decoder, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes)
+        private unsafe bool Output(uint streamID, IMFTransform decoder, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length)
         {
             uint decoderOutputStatus;
             HRESULT outputResult = decoder.ProcessOutput(0, dataBuffer, out decoderOutputStatus);
@@ -132,7 +133,6 @@ namespace SharpMediaFoundation
             else if (outputResult.Value == unchecked((int)0xc00d6d72))
             {
                 // needs more input
-                return false;
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {
@@ -144,6 +144,7 @@ namespace SharpMediaFoundation
                     byte* data = default;
                     buffer.Lock(&data, &maxLength, &currentLength);
                     Marshal.Copy((IntPtr)data, bytes, 0, (int)currentLength);
+                    length = currentLength;
                     return true;
                 }
                 finally
@@ -153,6 +154,7 @@ namespace SharpMediaFoundation
                 }
             }
 
+            length = 0;
             return false;
         }
     }
@@ -207,13 +209,13 @@ namespace SharpMediaFoundation
             return sample;
         }
 
-        public static MFT_OUTPUT_DATA_BUFFER[] CreateOutputDataBuffer(int size = 0)
+        public static MFT_OUTPUT_DATA_BUFFER[] CreateOutputDataBuffer(uint size = 0)
         {
             MFT_OUTPUT_DATA_BUFFER[] result = new MFT_OUTPUT_DATA_BUFFER[1];
 
             if (size > 0)
             {
-                Check(PInvoke.MFCreateMemoryBuffer((uint)size, out IMFMediaBuffer buffer));
+                Check(PInvoke.MFCreateMemoryBuffer(size, out IMFMediaBuffer buffer));
                 Check(PInvoke.MFCreateSample(out IMFSample sample));
 
                 sample.AddBuffer(buffer);

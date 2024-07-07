@@ -42,7 +42,9 @@ namespace SharpMediaFoundation
             this._height = (uint)nheight;
 
             decoder = Create();
-            dataBuffer = MFTUtils.CreateOutputDataBuffer((int)(_width * _height * 3 / 2));
+
+            decoder.GetOutputStreamInfo(0, out var streamInfo); // without MF_MT_AVG_BITRATE the cbSize will be 0
+            dataBuffer = MFTUtils.CreateOutputDataBuffer(streamInfo.cbSize);
         }
 
         public bool ProcessInput(byte[] data, long ticks)
@@ -50,9 +52,9 @@ namespace SharpMediaFoundation
             return ProcessInput(decoder, data, ticks);
         }
 
-        public bool ProcessOutput(ref byte[] buffer)
+        public bool ProcessOutput(ref byte[] buffer, out uint length)
         {
-            return ProcessOutput(decoder, dataBuffer, ref buffer);
+            return ProcessOutput(decoder, dataBuffer, ref buffer, out length);
         }
 
         private IMFTransform Create()
@@ -97,6 +99,7 @@ namespace SharpMediaFoundation
                     mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
                     mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, DefaultFPS);
                     mediaOutput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, 2);
+                    mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BITRATE, CalculateBitrate(_width, _height, FPS));
                     result = encoder.SetOutputType(0, mediaOutput, 0);
                 }
                 catch (Exception ex)
@@ -121,6 +124,12 @@ namespace SharpMediaFoundation
             }
 
             return encoder;
+        }
+
+        private static uint CalculateBitrate(uint width, uint height, double fps, double bpp = 0.12)
+        {
+            // https://stackoverflow.com/questions/8931200/video-bitrate-and-file-size-calculation
+            return (uint)Math.Ceiling(width * height * fps * bpp * 0.001d);
         }
     }
 }
