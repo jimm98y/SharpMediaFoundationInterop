@@ -24,12 +24,16 @@ namespace SharpMediaFoundation
         Incomplete = 0x1000000,
     }
 
-    public interface IVideoTransform
+    public interface IVideoTransform : IMediaTransform
     {
         uint OriginalWidth { get; }
         uint OriginalHeight { get; }
         uint Width { get; }
         uint Height { get; }
+    }
+
+    public interface IMediaTransform
+    {
         bool ProcessInput(byte[] data, long ticks);
         bool ProcessOutput(ref byte[] buffer, out uint length);
     }
@@ -39,8 +43,6 @@ namespace SharpMediaFoundation
         public readonly Guid IID_IMFTransform = new Guid("BF94C121-5B05-4E6F-8000-BA598961414D");
 
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
-
-        private bool _isFirst = true;
 
         static MFTBase()
         {
@@ -82,14 +84,6 @@ namespace SharpMediaFoundation
 
                 if (result.Value == 0)
                 {
-                    if (_isFirst)
-                    {
-                        this._isFirst = false;
-                        decoder.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
-                        decoder.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, default);
-                        decoder.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_START_OF_STREAM, default);
-                    }
-
                     result = decoder.ProcessInput(streamID, sample, 0);
                     return result.Value == 0;
                 }
