@@ -143,6 +143,27 @@ namespace SharpMediaFoundation
     {
         public static readonly Guid IID_IMFTransform = new Guid("BF94C121-5B05-4E6F-8000-BA598961414D");
 
+        public static IMFTransform CreateTransform(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
+        {
+            IMFTransform transform = default;
+            foreach (IMFActivate activate in FindTransforms(category, flags, input, output))
+            {
+                try
+                {
+                    activate.GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR deviceName, out _);
+                    Debug.WriteLine($"Found video decoder MFT: {deviceName}");
+                    transform = activate.ActivateObject(IID_IMFTransform) as IMFTransform;
+                    break;
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(activate);
+                }
+            }
+
+            return transform;
+        }
+
         public static IEnumerable<IMFActivate> FindTransforms(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
         {
             Check(PInvoke.MFTEnumEx(category, flags, input, output, out IMFActivate[] activates, out uint activateCount));
@@ -220,6 +241,11 @@ namespace SharpMediaFoundation
             ulong sampleDuration;
             Check(PInvoke.MFFrameRateToAverageTimePerFrame(fpsNom, fpsDenom, out sampleDuration));
             return (long)sampleDuration;
+        }
+
+        public static ulong EncodeAttributeValue(uint highValue, uint lowValue)
+        {
+            return ((ulong)highValue << 32) + lowValue;
         }
     }
 }
