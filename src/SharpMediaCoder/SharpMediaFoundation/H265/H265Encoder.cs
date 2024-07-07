@@ -6,7 +6,7 @@ namespace SharpMediaFoundation.H265
 {
     public class H265Encoder : VideoTransformBase
     {
-        const uint H265_RES_MULTIPLE = 8;
+        public const uint H265_RES_MULTIPLE = 8;
 
         public H265Encoder(uint width, uint height, uint fpsNom, uint fpsDenom)
             : base(H265_RES_MULTIPLE, width, height, fpsNom, fpsDenom)

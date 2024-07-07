@@ -6,7 +6,7 @@ namespace SharpMediaFoundation.H264
 {
     public class H264Decoder : VideoTransformBase
     {
-        const uint H264_RES_MULTIPLE = 16;
+        public const uint H264_RES_MULTIPLE = 16;
 
         private bool _isLowLatency = false;
 

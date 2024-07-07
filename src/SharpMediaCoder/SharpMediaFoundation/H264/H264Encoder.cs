@@ -6,7 +6,7 @@ namespace SharpMediaFoundation.H264
 {
     public class H264Encoder : VideoTransformBase
     {
-        const uint H264_RES_MULTIPLE = 16;
+        public const uint H264_RES_MULTIPLE = 16;
 
         public H264Encoder(uint width, uint height, uint fpsNom, uint fpsDenom)
             : base(H264_RES_MULTIPLE, width, height, fpsNom, fpsDenom)

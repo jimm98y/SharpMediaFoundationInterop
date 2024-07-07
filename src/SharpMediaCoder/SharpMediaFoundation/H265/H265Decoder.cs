@@ -6,7 +6,7 @@ namespace SharpMediaFoundation.H265
 {
     public class H265Decoder : VideoTransformBase
     {
-        const uint H265_RES_MULTIPLE = 8;
+        public const uint H265_RES_MULTIPLE = 8;
 
         private bool _isLowLatency = false;
 
