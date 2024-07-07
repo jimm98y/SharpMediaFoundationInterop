@@ -149,7 +149,7 @@ namespace SharpMediaFoundation.WPF
 
                     _nv12Decoder = new NV12toRGB(_videoDecoder.Width, _videoDecoder.Height);
 
-                    _videoEncoder = new H264Encoder(_width, _height, _fpsNom, _fpsDenom);
+                    _videoEncoder = new H265Encoder(_width, _height, _fpsNom, _fpsDenom);
                 }
 
                 const int MIN_BUFFERED_SAMPLES = 3;

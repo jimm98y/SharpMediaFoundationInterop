@@ -9,7 +9,7 @@ namespace SharpMediaFoundation
             double fps = (double)fpsNom / fpsDenom;
 
             // https://stackoverflow.com/questions/8931200/video-bitrate-and-file-size-calculation
-            return (uint)Math.Ceiling(width * height * fps * bpp * 0.001d);
+            return (uint)Math.Ceiling(width * height * fps * bpp);
         }
 
         public static uint RoundToMultipleOf(uint value, uint multiple)

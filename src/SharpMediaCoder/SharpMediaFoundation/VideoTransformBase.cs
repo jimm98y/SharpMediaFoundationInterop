@@ -22,10 +22,6 @@ namespace SharpMediaFoundation
           : this(1, width, height, 1, 1)
         { }
 
-        protected VideoTransformBase(uint resMultiple, uint width, uint height)
-           : this(resMultiple, width, height, 1, 1)
-        {  }
-
         protected VideoTransformBase(uint resMultiple, uint width, uint height, uint fpsNom, uint fpsDenom)
         {
             this.FpsNom = fpsNom;
