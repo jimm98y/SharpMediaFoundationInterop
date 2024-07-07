@@ -1,4 +1,7 @@
-﻿using SharpMp4;
+﻿using SharpMediaFoundation.H264;
+using SharpMediaFoundation.H265;
+using SharpMediaFoundation.NV12;
+using SharpMp4;
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
@@ -46,19 +49,20 @@ namespace SharpMediaFoundation.WPF
 
         private Image _image;
 
-        int _width;
-        int _height;
+        uint _width;
+        uint _height;
         uint _fpsNom;
         uint _fpsDenom;
         VideoCodecType _codec;
 
         WriteableBitmap _wb;
         System.Timers.Timer _timerDecoder;
-        IDecoder _videoDecoder;
+        IVideoTransform _videoDecoder;
+
         NV12toRGB _nv12Decoder;
         private ConcurrentQueue<IList<byte[]>> _sampleQueue = new ConcurrentQueue<IList<byte[]>>();
         private ConcurrentQueue<byte[]> _renderQueue = new ConcurrentQueue<byte[]>();
-        private object _syncRoot = new object();
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
         Int32Rect _rect;
         long _time = 0;
         long _lastTime = 0;
@@ -114,10 +118,9 @@ namespace SharpMediaFoundation.WPF
                 if (_renderQueue.TryDequeue(out byte[] decoded))
                 {
                     _wb.Lock();
-                    Marshal.Copy(decoded, 3 * (_videoDecoder.Height - _videoDecoder.OriginalHeight) * _videoDecoder.Width, _wb.BackBuffer, _width * _height * 3);
+                    Marshal.Copy(decoded, (int)(3 * (_videoDecoder.Height - _videoDecoder.OriginalHeight) * _videoDecoder.Width), _wb.BackBuffer, (int)(_width * _height * 3));
                     _wb.AddDirtyRect(_rect);
                     _wb.Unlock();
-                    //_wb.WritePixels(_rect, decoded, _wb.BackBufferStride, 3 * (_h264Decoder.Height - _h264Decoder.OriginalHeight) * _h264Decoder.Width);
 
                     ArrayPool<byte>.Shared.Return(decoded);
                     _lastTime = elapsed;
@@ -126,8 +129,8 @@ namespace SharpMediaFoundation.WPF
         }
 
         private async void OnTickDecoder(object sender, ElapsedEventArgs e)
-        {            
-            Monitor.Enter(_syncRoot);
+        {
+            await _semaphore.WaitAsync();
 
             try
             { 
@@ -142,7 +145,8 @@ namespace SharpMediaFoundation.WPF
                     {
                         _videoDecoder = new H265Decoder(_width, _height, _fpsNom, _fpsDenom);
                     }
-                    _nv12Decoder = new NV12toRGB(_videoDecoder.Width, _videoDecoder.Height, _fpsNom, _fpsDenom);
+
+                    _nv12Decoder = new NV12toRGB(_videoDecoder.Width, _videoDecoder.Height);
                 }
 
                 const int MIN_BUFFERED_SAMPLES = 3;
@@ -154,12 +158,12 @@ namespace SharpMediaFoundation.WPF
                         {
                             if (_videoDecoder.ProcessInput(nalu, _time))
                             {
-                                while (_videoDecoder.ProcessOutput(ref _nv12buffer))
+                                while (_videoDecoder.ProcessOutput(ref _nv12buffer, out _))
                                 {
                                     _nv12Decoder.ProcessInput(_nv12buffer, _time);
 
-                                    byte[] decoded = ArrayPool<byte>.Shared.Rent(_width * _height * 3);
-                                    _nv12Decoder.ProcessOutput(ref decoded);
+                                    byte[] decoded = ArrayPool<byte>.Shared.Rent((int)(_width * _height * 3));
+                                    _nv12Decoder.ProcessOutput(ref decoded, out _);
 
                                     _renderQueue.Enqueue(decoded);
                                 }
@@ -179,7 +183,7 @@ namespace SharpMediaFoundation.WPF
             }
             finally
             {
-                Monitor.Exit(_syncRoot);
+                _semaphore.Release();
             }            
         }
 
@@ -195,13 +199,13 @@ namespace SharpMediaFoundation.WPF
                     if (_timerDecoder == null)
                     {
                         _wb = new WriteableBitmap(
-                            _width,
-                            _height,
+                            (int)_width,
+                            (int)_height,
                             96,
                             96,
                             PixelFormats.Bgr24,
                             null);
-                        _rect = new Int32Rect(0, 0, _width, _height);
+                        _rect = new Int32Rect(0, 0, (int)_width, (int)_height);
                         _nv12buffer = new byte[_width * _height * 3];
                         _timerDecoder = new System.Timers.Timer();
                         _timerDecoder.Elapsed += OnTickDecoder;
