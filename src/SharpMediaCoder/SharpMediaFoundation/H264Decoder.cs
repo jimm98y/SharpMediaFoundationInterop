@@ -19,14 +19,14 @@ namespace SharpMediaFoundation
         {
             const uint streamId = 0;
 
-            IMFTransform decoder =
+            IMFTransform transform =
                 MFTUtils.CreateTransform(
                     PInvoke.MFT_CATEGORY_VIDEO_DECODER,
                     MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT,
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_H264 },
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 });
 
-            if (decoder != null)
+            if (transform != null)
             {
                 IMFMediaType mediaInput;
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
@@ -36,20 +36,20 @@ namespace SharpMediaFoundation
                 mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFTUtils.EncodeAttributeValue(FpsNom, FpsDenom));
                 if (_isLowLatency)
                 {
-                    decoder.GetAttributes(out IMFAttributes attributes);
+                    transform.GetAttributes(out IMFAttributes attributes);
                     attributes.SetUINT32(PInvoke.MF_LOW_LATENCY, 1);
                 }
-                MFTUtils.Check(decoder.SetInputType(streamId, mediaInput, 0));
+                MFTUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
                 IMFMediaType mediaOutput;
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
                 mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                 mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
                 mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFTUtils.EncodeAttributeValue(Width, Height));
-                MFTUtils.Check(decoder.SetOutputType(streamId, mediaOutput, 0));
+                MFTUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
             }
 
-            return decoder;
+            return transform;
         }      
     }
 }

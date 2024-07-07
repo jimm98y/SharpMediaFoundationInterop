@@ -18,8 +18,12 @@ namespace SharpMediaFoundation
         public uint FpsNom { get; }
         public uint FpsDenom { get; }
 
-        protected VideoTransformBase(uint resMultiple, uint width, uint height) :
-            this(resMultiple, width, height, 1, 1)
+        protected VideoTransformBase(uint width, uint height)
+          : this(1, width, height, 1, 1)
+        { }
+
+        protected VideoTransformBase(uint resMultiple, uint width, uint height)
+           : this(resMultiple, width, height, 1, 1)
         {  }
 
         protected VideoTransformBase(uint resMultiple, uint width, uint height, uint fpsNom, uint fpsDenom)

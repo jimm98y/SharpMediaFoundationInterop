@@ -14,14 +14,14 @@ namespace SharpMediaFoundation
         protected override IMFTransform Create()
         {
             const uint streamId = 0;
-            IMFTransform encoder = 
+            IMFTransform transform = 
                 MFTUtils.CreateTransform(
                     PInvoke.MFT_CATEGORY_VIDEO_ENCODER,
                     MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER,
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 },
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_H264 });
 
-            if (encoder != null)
+            if (transform != null)
             {
                 IMFMediaType mediaOutput;
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
@@ -31,7 +31,7 @@ namespace SharpMediaFoundation
                 mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFTUtils.EncodeAttributeValue(FpsNom, FpsDenom));
                 mediaOutput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, 2);
                 mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BITRATE, MathUtils.CalculateBitrate(Width, Height, FpsNom, FpsDenom));
-                MFTUtils.Check(encoder.SetOutputType(streamId, mediaOutput, 0));
+                MFTUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
                 IMFMediaType mediaInput;
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
@@ -39,10 +39,10 @@ namespace SharpMediaFoundation
                 mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
                 mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFTUtils.EncodeAttributeValue(Width, Height));
                 mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFTUtils.EncodeAttributeValue(FpsNom, FpsDenom));
-                MFTUtils.Check(encoder.SetInputType(streamId, mediaInput, 0));
+                MFTUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
             }
 
-            return encoder;
+            return transform;
         }
     }
 }
