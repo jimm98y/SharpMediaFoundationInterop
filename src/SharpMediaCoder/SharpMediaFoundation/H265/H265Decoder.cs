@@ -19,29 +19,20 @@ namespace SharpMediaFoundation.H265
         {
             const int streamId = 0;
 
-            IMFTransform transform =
-                MFTUtils.CreateTransform(
-                    PInvoke.MFT_CATEGORY_VIDEO_DECODER,
-                    MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG.MFT_ENUM_FLAG_HARDWARE,
-                    new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_HEVC },
-                    new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 });
+            var inputSubtype = PInvoke.MFVideoFormat_HEVC;
+            var outputSubtype = PInvoke.MFVideoFormat_NV12;
+            var input = new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = inputSubtype };
+            var output = new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = outputSubtype };
 
-            if(transform == null)
-            {
-                transform =
-                    MFTUtils.CreateTransform(
-                        PInvoke.MFT_CATEGORY_VIDEO_DECODER,
-                        MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT,
-                        new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_HEVC },
-                        new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 });
-            }
+            IMFTransform transform = MFTUtils.CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG.MFT_ENUM_FLAG_HARDWARE, input, output);
+            if(transform == null) transform = MFTUtils.CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT, input, output);
 
             if (transform != null)
             {
                 IMFMediaType mediaInput;
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
                 mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
-                mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_HEVC);
+                mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, inputSubtype);
                 mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFTUtils.EncodeAttributeValue(Width, Height));
                 mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFTUtils.EncodeAttributeValue(FpsNom, FpsDenom));
                 if (_isLowLatency)
@@ -54,7 +45,7 @@ namespace SharpMediaFoundation.H265
                 IMFMediaType mediaOutput;
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
                 mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
-                mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
+                mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, outputSubtype);
                 mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFTUtils.EncodeAttributeValue(Width, Height));
                 MFTUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
             }
@@ -62,9 +53,9 @@ namespace SharpMediaFoundation.H265
             return transform;
         }
 
-        public override bool ProcessInput(byte[] data, long ticks)
+        public override bool ProcessInput(byte[] data, long timestamp)
         {
-            return base.ProcessInput(AnnexBUtils.PrefixNalu(data), ticks);
+            return base.ProcessInput(AnnexBUtils.PrefixNalu(data), timestamp);
         }
     }
 }

@@ -18,7 +18,7 @@ namespace SharpMediaFoundation
 
     public interface IMediaTransform
     {
-        bool ProcessInput(byte[] data, long ticks);
+        bool ProcessInput(byte[] data, long timestamp);
         bool ProcessOutput(ref byte[] buffer, out uint length);
     }
 
