@@ -1,5 +1,4 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -7,41 +6,12 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation
 {
-    public class RGBtoNV12 : MFTBase, IVideoTransform
+    public class RGBtoNV12 : VideoTransformBase
     {
-        private uint _width;
-        private uint _height;
-        private long _sampleDuration = 1;
+        public RGBtoNV12(uint width, uint height) : base(1, width, height)
+        {  }
 
-        public uint OriginalWidth => _width;
-        public uint OriginalHeight => _height;
-
-        public uint Width => _width;
-        public uint Height => _height;
-
-        private IMFTransform decoder;
-        private MFT_OUTPUT_DATA_BUFFER[] dataBuffer;
-
-        public RGBtoNV12(uint width, uint height)
-        {
-            this._width = width;
-            this._height = height;
-
-            decoder = Create();
-            dataBuffer = MFTUtils.CreateOutputDataBuffer(MathUtils.CalculateNV12BufferSize(_width, _height));
-        }
-
-        public bool ProcessInput(byte[] data, long ticks)
-        {
-            return ProcessInput(decoder, data, _sampleDuration, ticks);
-        }
-
-        public bool ProcessOutput(ref byte[] buffer, out uint length)
-        {
-            return ProcessOutput(decoder, dataBuffer, ref buffer, out length);
-        }
-
-        private IMFTransform Create()
+        protected override IMFTransform Create()
         {
             IMFTransform decoder = default;
             const int streamId = 0;
@@ -55,7 +25,7 @@ namespace SharpMediaFoundation
                 {
                     activate.GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR deviceName, out _);
                     Debug.WriteLine($"Found color converter MFT: {deviceName}");
-                    decoder = activate.ActivateObject(IID_IMFTransform) as IMFTransform;
+                    decoder = activate.ActivateObject(MFTUtils.IID_IMFTransform) as IMFTransform;
                     break;
                 }
                 finally
@@ -70,14 +40,14 @@ namespace SharpMediaFoundation
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
                 mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                 mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_RGB24);
-                mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
+                mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(Width, Height));
                 MFTUtils.Check(decoder.SetInputType(streamId, mediaInput, 0));
 
                 IMFMediaType mediaOutput;
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
                 mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                 mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
-                mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
+                mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(Width, Height));
                 MFTUtils.Check(decoder.SetOutputType(streamId, mediaOutput, 0));
             }
 

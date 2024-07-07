@@ -40,8 +40,6 @@ namespace SharpMediaFoundation
 
     public abstract class MFTBase
     {
-        public readonly Guid IID_IMFTransform = new Guid("BF94C121-5B05-4E6F-8000-BA598961414D");
-
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
 
         static MFTBase()
@@ -143,6 +141,8 @@ namespace SharpMediaFoundation
 
     public static class MFTUtils
     {
+        public static readonly Guid IID_IMFTransform = new Guid("BF94C121-5B05-4E6F-8000-BA598961414D");
+
         public static IEnumerable<IMFActivate> FindTransforms(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
         {
             Check(PInvoke.MFTEnumEx(category, flags, input, output, out IMFActivate[] activates, out uint activateCount));

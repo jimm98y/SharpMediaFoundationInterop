@@ -159,7 +159,7 @@ namespace SharpMediaFoundation.WPF
                     {
                         foreach (var nalu in au)
                         {
-                            if (_videoDecoder.ProcessInput(nalu, _time))
+                            if (_videoDecoder.ProcessInput(AnnexBUtils.PrefixNalu(nalu), _time))
                             {
                                 while (_videoDecoder.ProcessOutput(ref _nv12buffer, out _))
                                 {
@@ -167,7 +167,7 @@ namespace SharpMediaFoundation.WPF
                                     {
                                         while (_videoEncoder.ProcessOutput(ref _encodedBuffer, out uint length))
                                         {
-                                            var nnn = AnnexBParser.ParseNalu(_encodedBuffer, length);
+                                            var nnn = AnnexBUtils.ParseNalu(_encodedBuffer, length);
                                         }
                                     }
 

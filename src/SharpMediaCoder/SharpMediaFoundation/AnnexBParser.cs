@@ -3,9 +3,20 @@ using System.Linq;
 
 namespace SharpMediaFoundation
 {
-    public static class AnnexBParser
+    public static class AnnexBUtils
     {
         public static readonly byte[] AnnexB = [0, 0, 0, 1];
+
+        public static byte[] PrefixNalu(byte[] nalu)
+        {
+            if (nalu[0] != 0 || nalu[1] != 0 || nalu[2] != 0 || nalu[3] != 1)
+            {
+                // this little maneuver will cost us new allocation
+                nalu = AnnexB.Concat(nalu).ToArray();
+            }
+
+            return nalu;
+        }
 
         public static IEnumerable<byte[]> ParseNalu(byte[] bytes, uint length)
         {

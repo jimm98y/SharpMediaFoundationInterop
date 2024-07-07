@@ -1,6 +1,4 @@
-﻿using System;
-using System.Diagnostics;
-using System.Linq;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -8,64 +6,19 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation
 {
-    public class H265Decoder : MFTBase, IVideoTransform
+    public class H265Decoder : VideoTransformBase
     {
         const uint H265_RES_MULTIPLE = 8;
 
-        private uint _originalWidth;
-        private uint _originalHeight;
-        private uint _fpsNom;
-        private uint _fpsDenom;
-
-        private uint _width;
-        private uint _height;
-        private long _sampleDuration = 1;
         private bool _isLowLatency = false;
 
-        public uint OriginalWidth => _originalWidth;
-        public uint OriginalHeight => _originalHeight;
-
-        public uint Width => _width;
-        public uint Height => _height;
-
-        private IMFTransform decoder;
-        private MFT_OUTPUT_DATA_BUFFER[] dataBuffer;
-
-        public H265Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false)
+        public H265Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false) :
+            base(H265_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
         {
-            this._fpsNom = fpsNom;
-            this._fpsDenom = fpsDenom;
-            _sampleDuration = MFTUtils.CalculateSampleDuration(_fpsNom, _fpsDenom);
-
-            this._originalWidth = width;
-            this._originalHeight = height;
-
-            // https://video.stackexchange.com/questions/24829/h-265-disadvantages-with-video-dimensions-not-multiple-of-8
-            this._width = MathUtils.RoundToMultipleOf(width, H265_RES_MULTIPLE);
-            this._height = MathUtils.RoundToMultipleOf(height, H265_RES_MULTIPLE);
             this._isLowLatency = isLowLatency;
-
-            decoder = Create();
-            dataBuffer = MFTUtils.CreateOutputDataBuffer(MathUtils.CalculateNV12BufferSize(_width, _height));
         }
 
-        public bool ProcessInput(byte[] data, long ticks)
-        {
-            if (data[0] != 0 || data[1] != 0 || data[2] != 0 || data[3] != 1)
-            {
-                // this little maneuver will cost us new allocation
-                data = AnnexBParser.AnnexB.Concat(data).ToArray();
-            }
-
-            return ProcessInput(decoder, data, _sampleDuration, ticks);
-        }
-
-        public bool ProcessOutput(ref byte[] buffer, out uint length)
-        {
-            return ProcessOutput(decoder, dataBuffer, ref buffer, out length);
-        }
-
-        private IMFTransform Create()
+        protected override IMFTransform Create()
         {
             IMFTransform decoder = default;
             const int streamId = 0;
@@ -79,7 +32,7 @@ namespace SharpMediaFoundation
                 {
                     activate.GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR deviceName, out _);
                     Debug.WriteLine($"Found video decoder MFT: {deviceName}");
-                    decoder = activate.ActivateObject(IID_IMFTransform) as IMFTransform;
+                    decoder = activate.ActivateObject(MFTUtils.IID_IMFTransform) as IMFTransform;
                     break;
                 }
                 finally
@@ -94,8 +47,8 @@ namespace SharpMediaFoundation
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
                 mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                 mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_HEVC);
-                mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
-                mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MathUtils.EncodeAttributeValue(_fpsNom, _fpsDenom));
+                mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(Width, Height));
+                mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MathUtils.EncodeAttributeValue(FpsNom, FpsDenom));
                 if (_isLowLatency)
                 {
                     decoder.GetAttributes(out IMFAttributes attributes);
@@ -107,7 +60,7 @@ namespace SharpMediaFoundation
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
                 mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                 mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
-                mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
+                mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(Width, Height));
                 MFTUtils.Check(decoder.SetOutputType(streamId, mediaOutput, 0));
             }
 
