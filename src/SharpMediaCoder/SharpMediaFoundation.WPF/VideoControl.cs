@@ -46,8 +46,8 @@ namespace SharpMediaFoundation.WPF
 
         private Image _image;
 
-        int _width;
-        int _height;
+        uint _width;
+        uint _height;
         uint _fpsNom;
         uint _fpsDenom;
         VideoCodecType _codec;
@@ -119,10 +119,9 @@ namespace SharpMediaFoundation.WPF
                 if (_renderQueue.TryDequeue(out byte[] decoded))
                 {
                     _wb.Lock();
-                    Marshal.Copy(decoded, 3 * (_videoDecoder.Height - _videoDecoder.OriginalHeight) * _videoDecoder.Width, _wb.BackBuffer, _width * _height * 3);
+                    Marshal.Copy(decoded, (int)(3 * (_videoDecoder.Height - _videoDecoder.OriginalHeight) * _videoDecoder.Width), _wb.BackBuffer, (int)(_width * _height * 3));
                     _wb.AddDirtyRect(_rect);
                     _wb.Unlock();
-                    //_wb.WritePixels(_rect, decoded, _wb.BackBufferStride, 3 * (_h264Decoder.Height - _h264Decoder.OriginalHeight) * _h264Decoder.Width);
 
                     ArrayPool<byte>.Shared.Return(decoded);
                     _lastTime = elapsed;
@@ -148,7 +147,7 @@ namespace SharpMediaFoundation.WPF
                         _videoDecoder = new H265Decoder(_width, _height, _fpsNom, _fpsDenom);
                     }
 
-                    _nv12Decoder = new NV12toRGB(_videoDecoder.Width, _videoDecoder.Height, _fpsNom, _fpsDenom);
+                    _nv12Decoder = new NV12toRGB(_videoDecoder.Width, _videoDecoder.Height);
 
                     _videoEncoder = new H264Encoder(_width, _height, _fpsNom, _fpsDenom);
                 }
@@ -174,7 +173,7 @@ namespace SharpMediaFoundation.WPF
 
                                     _nv12Decoder.ProcessInput(_nv12buffer, _time);
 
-                                    byte[] decoded = ArrayPool<byte>.Shared.Rent(_width * _height * 3);
+                                    byte[] decoded = ArrayPool<byte>.Shared.Rent((int)(_width * _height * 3));
                                     _nv12Decoder.ProcessOutput(ref decoded, out _);
 
                                     _renderQueue.Enqueue(decoded);
@@ -211,13 +210,13 @@ namespace SharpMediaFoundation.WPF
                     if (_timerDecoder == null)
                     {
                         _wb = new WriteableBitmap(
-                            _width,
-                            _height,
+                            (int)_width,
+                            (int)_height,
                             96,
                             96,
                             PixelFormats.Bgr24,
                             null);
-                        _rect = new Int32Rect(0, 0, _width, _height);
+                        _rect = new Int32Rect(0, 0, (int)_width, (int)_height);
                         _nv12buffer = new byte[_width * _height * 3];
                         _encodedBuffer = new byte[_width * _height * 3 / 2];
                         _timerDecoder = new System.Timers.Timer();

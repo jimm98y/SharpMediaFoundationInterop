@@ -26,10 +26,10 @@ namespace SharpMediaFoundation
 
     public interface IVideoTransform
     {
-        int OriginalWidth { get; }
-        int OriginalHeight { get; }
-        int Width { get; }
-        int Height { get; }
+        uint OriginalWidth { get; }
+        uint OriginalHeight { get; }
+        uint Width { get; }
+        uint Height { get; }
         bool ProcessInput(byte[] data, long ticks);
         bool ProcessOutput(ref byte[] buffer, out uint length);
     }
@@ -39,32 +39,20 @@ namespace SharpMediaFoundation
         public readonly Guid IID_IMFTransform = new Guid("BF94C121-5B05-4E6F-8000-BA598961414D");
 
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
-        private ulong _sampleDuration = 1;
-        private uint _fpsNom;
-        private uint _fpsDenom;
-        protected ulong DefaultFPS { get { return ((ulong)_fpsNom << 32) + _fpsDenom; } }
-        protected double FPS { get { return (double)_fpsNom / _fpsDenom; } }
 
         private bool _isFirst = true;
-
-        protected MFTBase(uint fpsNom, uint fpsDenom)
-        {
-            this._fpsNom = fpsNom;
-            this._fpsDenom = fpsDenom;
-            MFTUtils.Check(PInvoke.MFFrameRateToAverageTimePerFrame(_fpsNom, _fpsDenom, out _sampleDuration));
-        }
 
         static MFTBase()
         {
             MFTUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
         }
 
-        protected bool ProcessInput(IMFTransform decoder, byte[] data, long ticks)
+        protected bool ProcessInput(IMFTransform decoder, byte[] data, long sampleDuration, long timestamp)
         {
             try
             {
                 _semaphore.Wait();
-                var sample = MFTUtils.CreateSample(data, (long)_sampleDuration, ticks);
+                var sample = MFTUtils.CreateSample(data, sampleDuration, timestamp);
                 return Input(0, decoder, sample);
             }
             finally

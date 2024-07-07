@@ -11,24 +11,21 @@ namespace SharpMediaFoundation
     {
         private uint _width;
         private uint _height;
+        private long _sampleDuration = 1;
 
-        private ulong DefaultFrameSize { get { return ((ulong)_width << 32) + _height; } }
+        public uint OriginalWidth => _width;
+        public uint OriginalHeight => _height;
 
-        public int OriginalWidth => (int)_width;
-
-        public int OriginalHeight => (int)_height;
-
-        public int Width => (int)_width;
-
-        public int Height => (int)_height;
+        public uint Width => _width;
+        public uint Height => _height;
 
         private IMFTransform decoder;
         private MFT_OUTPUT_DATA_BUFFER[] dataBuffer;
 
-        public RGBtoNV12(int width, int height, uint fpsNom, uint fpsDenom) : base(fpsNom, fpsDenom)
+        public RGBtoNV12(uint width, uint height)
         {
-            this._width = (uint)width;
-            this._height = (uint)height;
+            this._width = width;
+            this._height = height;
 
             decoder = Create();
             dataBuffer = MFTUtils.CreateOutputDataBuffer(_width * _height * 3 / 2);
@@ -36,7 +33,7 @@ namespace SharpMediaFoundation
 
         public bool ProcessInput(byte[] data, long ticks)
         {
-            return ProcessInput(decoder, data, ticks);
+            return ProcessInput(decoder, data, _sampleDuration, ticks);
         }
 
         public bool ProcessOutput(ref byte[] buffer, out uint length)
@@ -74,7 +71,7 @@ namespace SharpMediaFoundation
                     MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
                     mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_RGB24);
-                    mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
+                    mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
                     decoder.SetInputType(0, mediaInput, 0);
                 }
                 catch (Exception ex)
@@ -88,7 +85,7 @@ namespace SharpMediaFoundation
                     MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
                     mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
-                    mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
+                    mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
                     decoder.SetOutputType(0, mediaOutput, 0);
                 }
                 catch (Exception ex)

@@ -10,35 +10,41 @@ namespace SharpMediaFoundation
 {
     public class H265Decoder : MFTBase, IVideoTransform
     {
-        private int _originalWidth;
-        private int _originalHeight;
+        const uint H265_RES_MULTIPLE = 8;
+
+        private uint _originalWidth;
+        private uint _originalHeight;
+        private uint _fpsNom;
+        private uint _fpsDenom;
 
         private uint _width;
         private uint _height;
+        private long _sampleDuration = 1;
         private bool _isLowLatency = false;
 
-        public int OriginalWidth => _originalWidth;
-        public int OriginalHeight => _originalHeight;
+        public uint OriginalWidth => _originalWidth;
+        public uint OriginalHeight => _originalHeight;
 
-        public int Width => (int)_width;
-        public int Height => (int)_height;
-
-        private ulong DefaultFrameSize { get { return ((ulong)_width << 32) + _height; } }
+        public uint Width => _width;
+        public uint Height => _height;
 
         private IMFTransform decoder;
         private MFT_OUTPUT_DATA_BUFFER[] dataBuffer;
 
-        public H265Decoder(int width, int height, uint fpsNom, uint fpsDenom, bool isLowLatency = false) : base(fpsNom, fpsDenom)
+        public H265Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false)
         {
+            this._fpsNom = fpsNom;
+            this._fpsDenom = fpsDenom;
+            ulong sampleDuration;
+            MFTUtils.Check(PInvoke.MFFrameRateToAverageTimePerFrame(_fpsNom, _fpsDenom, out sampleDuration));
+            _sampleDuration = (long)sampleDuration;
+
             this._originalWidth = width;
             this._originalHeight = height;
 
             // https://video.stackexchange.com/questions/24829/h-265-disadvantages-with-video-dimensions-not-multiple-of-8
-            int nwidth = ((width + 8 - 1) / 8) * 8;
-            int nheight = ((height + 8 - 1) / 8) * 8;
-
-            this._width = (uint)nwidth;
-            this._height = (uint)nheight;
+            this._width = MathUtils.RoundToMultipleOf(width, H265_RES_MULTIPLE);
+            this._height = MathUtils.RoundToMultipleOf(height, H265_RES_MULTIPLE);
             this._isLowLatency = isLowLatency;
 
             decoder = Create();
@@ -53,7 +59,7 @@ namespace SharpMediaFoundation
                 data = AnnexBParser.AnnexB.Concat(data).ToArray();
             }
 
-            return ProcessInput(decoder, data, ticks);
+            return ProcessInput(decoder, data, _sampleDuration, ticks);
         }
 
         public bool ProcessOutput(ref byte[] buffer, out uint length)
@@ -92,8 +98,8 @@ namespace SharpMediaFoundation
                     MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
                     mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_HEVC);
-                    mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
-                    mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, DefaultFPS);
+                    mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
+                    mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MathUtils.EncodeAttributeValue(_fpsNom, _fpsDenom));
 
                     if (_isLowLatency)
                     {
@@ -114,7 +120,7 @@ namespace SharpMediaFoundation
                     MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
                     mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
                     mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
-                    mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, DefaultFrameSize);
+                    mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
                     result = decoder.SetOutputType(0, mediaOutput, 0);
                 }
                 catch (Exception ex)
