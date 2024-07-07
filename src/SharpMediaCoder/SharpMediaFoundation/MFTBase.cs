@@ -9,6 +9,14 @@ namespace SharpMediaFoundation
 {
     public abstract class MFTBase
     {
+        [Flags]
+        public enum MFT_OUTPUT_DATA_BUFFER_FLAGS : uint
+        {
+            None = 0x00,
+            FormatChange = 0x100,
+            Incomplete = 0x1000000,
+        }
+
         static MFTBase()
         {
             MFTUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
@@ -47,19 +55,21 @@ namespace SharpMediaFoundation
 
         private unsafe bool Output(uint streamID, IMFTransform decoder, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length)
         {
+            const int MF_E_TRANSFORM_NEED_MORE_INPUT = unchecked((int)0xc00d6d72);
             uint decoderOutputStatus;
             HRESULT outputResult = decoder.ProcessOutput(0, dataBuffer, out decoderOutputStatus);
 
-            if (dataBuffer[0].dwStatus == (uint)MFT_OUTPUT_DATA_BUFFERFlags.FormatChange)
+            if (dataBuffer[0].dwStatus == (uint)MFT_OUTPUT_DATA_BUFFER_FLAGS.FormatChange)
             {
                 decoder.GetOutputAvailableType(streamID, 0, out IMFMediaType mediaType);
                 decoder.SetOutputType(streamID, mediaType, 0);
                 decoder.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
-                dataBuffer[0].dwStatus = (uint)MFT_OUTPUT_DATA_BUFFERFlags.None;
+                dataBuffer[0].dwStatus = (uint)MFT_OUTPUT_DATA_BUFFER_FLAGS.None;
             }
-            else if (outputResult.Value == unchecked((int)0xc00d6d72))
+            else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {
-                // needs more input
+                length = 0;
+                return false;
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {

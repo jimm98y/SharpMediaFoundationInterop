@@ -1,21 +1,5 @@
-﻿using System;
-
-namespace SharpMediaFoundation
+﻿namespace SharpMediaFoundation
 {
-    [Flags]
-    public enum MftInputStatusFlags
-    {
-        AcceptData = 1
-    }
-
-    [Flags]
-    public enum MFT_OUTPUT_DATA_BUFFERFlags : uint
-    {
-        None = 0x00,
-        FormatChange = 0x100,
-        Incomplete = 0x1000000,
-    }
-
     public interface IMediaTransform
     {
         bool ProcessInput(byte[] data, long timestamp);
