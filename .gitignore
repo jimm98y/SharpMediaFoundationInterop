@@ -396,3 +396,4 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+/src/SharpMediaCoder/SharpMediaCoder/test1.mp4
