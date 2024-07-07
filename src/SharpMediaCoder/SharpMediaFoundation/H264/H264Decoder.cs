@@ -26,6 +26,16 @@ namespace SharpMediaFoundation.H264
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_H264 },
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 });
 
+            if(transform == null)
+            {
+                transform =
+                    MFTUtils.CreateTransform(
+                        PInvoke.MFT_CATEGORY_VIDEO_DECODER,
+                        MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT,
+                        new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_H264 },
+                        new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 });
+            }
+
             if (transform != null)
             {
                 IMFMediaType mediaInput;
