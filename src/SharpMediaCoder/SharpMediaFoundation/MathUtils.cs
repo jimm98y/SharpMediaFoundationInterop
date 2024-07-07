@@ -19,5 +19,15 @@ namespace SharpMediaFoundation
         {
             return ((ulong)highValue << 32) + lowValue;
         }
+
+        public static uint CalculateNV12BufferSize(uint width, uint height)
+        {
+            return width * height * 3 / 2;
+        }
+
+        public static uint CalculateRGB24BufferSize(uint width, uint height)
+        {
+            return width * height * 3;
+        }
     }
 }

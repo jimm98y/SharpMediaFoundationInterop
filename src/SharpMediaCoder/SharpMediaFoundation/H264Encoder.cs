@@ -1,5 +1,4 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -19,7 +18,6 @@ namespace SharpMediaFoundation
         private uint _width;
         private uint _height;
         private long _sampleDuration = 1;
-        private bool _isLowLatency = false;
 
         public uint OriginalWidth => _originalWidth;
         public uint OriginalHeight => _originalHeight;
@@ -34,9 +32,7 @@ namespace SharpMediaFoundation
         {
             this._fpsNom = fpsNom;
             this._fpsDenom = fpsDenom;
-            ulong sampleDuration;
-            MFTUtils.Check(PInvoke.MFFrameRateToAverageTimePerFrame(_fpsNom, _fpsDenom, out sampleDuration));
-            _sampleDuration = (long)sampleDuration;
+            _sampleDuration = MFTUtils.CalculateSampleDuration(_fpsNom, _fpsDenom);
 
             this._originalWidth = width;
             this._originalHeight = height;
@@ -45,9 +41,8 @@ namespace SharpMediaFoundation
             /*
             ec. ITU-T H.264 (04/2017) page 21
              */
-            const uint h264Multiple = 16;
-            this._width = MathUtils.RoundToMultipleOf(width, h264Multiple);
-            this._height = MathUtils.RoundToMultipleOf(height, h264Multiple);
+            this._width = MathUtils.RoundToMultipleOf(width, H264_RES_MULTIPLE);
+            this._height = MathUtils.RoundToMultipleOf(height, H264_RES_MULTIPLE);
 
             decoder = Create();
             decoder.GetOutputStreamInfo(0, out var streamInfo); // without MF_MT_AVG_BITRATE the cbSize will be 0
@@ -67,7 +62,7 @@ namespace SharpMediaFoundation
         private IMFTransform Create()
         {
             IMFTransform encoder = default;
-            HRESULT result;
+            const uint streamId = 0;
 
             /*
             The input media type must have one of the following subtypes:
@@ -97,37 +92,23 @@ namespace SharpMediaFoundation
 
             if (encoder != null)
             {
-                try
-                {
-                    IMFMediaType mediaOutput;
-                    MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
-                    mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
-                    mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_H264);
-                    mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
-                    mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MathUtils.EncodeAttributeValue(_fpsNom, _fpsDenom));
-                    mediaOutput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, 2);
-                    mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BITRATE, MathUtils.CalculateBitrate(_width, _height, (double)_fpsNom / _fpsDenom));
-                    result = encoder.SetOutputType(0, mediaOutput, 0);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Error while creating video encoder output media {ex}");
-                }
+                IMFMediaType mediaOutput;
+                MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
+                mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
+                mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_H264);
+                mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
+                mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MathUtils.EncodeAttributeValue(_fpsNom, _fpsDenom));
+                mediaOutput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, 2);
+                mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BITRATE, MathUtils.CalculateBitrate(_width, _height, (double)_fpsNom / _fpsDenom));
+                MFTUtils.Check(encoder.SetOutputType(streamId, mediaOutput, 0));
 
-                try
-                {
-                    IMFMediaType mediaInput;
-                    MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
-                    mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
-                    mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
-                    mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
-                    mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MathUtils.EncodeAttributeValue(_fpsNom, _fpsDenom));
-                    result = encoder.SetInputType(0, mediaInput, 0);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Error while creating video encoder input media {ex}");
-                }
+                IMFMediaType mediaInput;
+                MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
+                mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
+                mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
+                mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MathUtils.EncodeAttributeValue(_width, _height));
+                mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MathUtils.EncodeAttributeValue(_fpsNom, _fpsDenom));
+                MFTUtils.Check(encoder.SetInputType(streamId, mediaInput, 0));
             }
 
             return encoder;

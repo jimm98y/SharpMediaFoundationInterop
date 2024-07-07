@@ -214,5 +214,12 @@ namespace SharpMediaFoundation
 
             return result;
         }
+
+        public static long CalculateSampleDuration(uint fpsNom, uint fpsDenom)
+        {
+            ulong sampleDuration;
+            Check(PInvoke.MFFrameRateToAverageTimePerFrame(fpsNom, fpsDenom, out sampleDuration));
+            return (long)sampleDuration;
+        }
     }
 }
