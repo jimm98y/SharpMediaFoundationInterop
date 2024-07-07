@@ -50,6 +50,11 @@ namespace SharpMediaFoundation
             }
 
             return transform;
-        }      
+        }
+
+        public override bool ProcessInput(byte[] data, long ticks)
+        {
+            return base.ProcessInput(AnnexBUtils.PrefixNalu(data), ticks);
+        }
     }
 }

@@ -40,7 +40,7 @@ namespace SharpMediaFoundation
 
         protected abstract IMFTransform Create();
 
-        public bool ProcessInput(byte[] data, long ticks)
+        public virtual bool ProcessInput(byte[] data, long ticks)
         {
             return ProcessInput(_decoder, data, _sampleDuration, ticks);
         }

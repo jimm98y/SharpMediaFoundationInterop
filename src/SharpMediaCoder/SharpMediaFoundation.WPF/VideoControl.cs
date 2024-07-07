@@ -62,7 +62,7 @@ namespace SharpMediaFoundation.WPF
         NV12toRGB _nv12Decoder;
         private ConcurrentQueue<IList<byte[]>> _sampleQueue = new ConcurrentQueue<IList<byte[]>>();
         private ConcurrentQueue<byte[]> _renderQueue = new ConcurrentQueue<byte[]>();
-        private object _syncRoot = new object();
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
         Int32Rect _rect;
         long _time = 0;
         long _lastTime = 0;
@@ -130,8 +130,8 @@ namespace SharpMediaFoundation.WPF
         }
 
         private async void OnTickDecoder(object sender, ElapsedEventArgs e)
-        {            
-            Monitor.Enter(_syncRoot);
+        {
+            await _semaphore.WaitAsync();
 
             try
             { 
@@ -159,7 +159,7 @@ namespace SharpMediaFoundation.WPF
                     {
                         foreach (var nalu in au)
                         {
-                            if (_videoDecoder.ProcessInput(AnnexBUtils.PrefixNalu(nalu), _time))
+                            if (_videoDecoder.ProcessInput(nalu, _time))
                             {
                                 while (_videoDecoder.ProcessOutput(ref _nv12buffer, out _))
                                 {
@@ -194,7 +194,7 @@ namespace SharpMediaFoundation.WPF
             }
             finally
             {
-                Monitor.Exit(_syncRoot);
+                _semaphore.Release();
             }            
         }
 
