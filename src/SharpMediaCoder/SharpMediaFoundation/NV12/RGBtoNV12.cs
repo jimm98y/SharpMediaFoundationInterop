@@ -1,29 +1,25 @@
 ﻿using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundation.NV12
 {
-    public class H264Decoder : VideoTransformBase
+    /// <summary>
+    /// Converts RGB to NV12 (YUV).
+    /// </summary>
+    public class RGBtoNV12 : VideoTransformBase
     {
-        const uint H264_RES_MULTIPLE = 16;
+        public RGBtoNV12(uint width, uint height) : base(width, height)
+        { }
 
-        private bool _isLowLatency = false;
-
-        public H264Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false)
-          : base(H264_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
-        {
-            this._isLowLatency = isLowLatency;
-        }
-        
         protected override IMFTransform Create()
         {
-            const uint streamId = 0;
+            const int streamId = 0;
 
             IMFTransform transform =
                 MFTUtils.CreateTransform(
-                    PInvoke.MFT_CATEGORY_VIDEO_DECODER,
-                    MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT,
-                    new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_H264 },
+                    PInvoke.MFT_CATEGORY_VIDEO_PROCESSOR,
+                    MFT_ENUM_FLAG.MFT_ENUM_FLAG_ALL,
+                    new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_RGB24 },
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 });
 
             if (transform != null)
@@ -31,14 +27,8 @@ namespace SharpMediaFoundation
                 IMFMediaType mediaInput;
                 MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
                 mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
-                mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_H264);
+                mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_RGB24);
                 mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFTUtils.EncodeAttributeValue(Width, Height));
-                mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFTUtils.EncodeAttributeValue(FpsNom, FpsDenom));
-                if (_isLowLatency)
-                {
-                    transform.GetAttributes(out IMFAttributes attributes);
-                    attributes.SetUINT32(PInvoke.MF_LOW_LATENCY, 1);
-                }
                 MFTUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
                 IMFMediaType mediaOutput;
@@ -50,11 +40,6 @@ namespace SharpMediaFoundation
             }
 
             return transform;
-        }
-
-        public override bool ProcessInput(byte[] data, long ticks)
-        {
-            return base.ProcessInput(AnnexBUtils.PrefixNalu(data), ticks);
         }
     }
 }

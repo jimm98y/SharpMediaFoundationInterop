@@ -1,7 +1,7 @@
 ﻿using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundation.H265
 {
     public class H265Decoder : VideoTransformBase
     {
@@ -12,7 +12,7 @@ namespace SharpMediaFoundation
         public H265Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false)
             : base(H265_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
         {
-            this._isLowLatency = isLowLatency;
+            _isLowLatency = isLowLatency;
         }
 
         protected override IMFTransform Create()
@@ -22,7 +22,7 @@ namespace SharpMediaFoundation
             IMFTransform transform =
                 MFTUtils.CreateTransform(
                     PInvoke.MFT_CATEGORY_VIDEO_DECODER,
-                    MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT,
+                    MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG.MFT_ENUM_FLAG_HARDWARE,
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_HEVC },
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 });
 

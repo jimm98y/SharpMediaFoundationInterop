@@ -1,7 +1,7 @@
 ﻿using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundation.H265
 {
     public class H265Encoder : VideoTransformBase
     {
@@ -17,7 +17,7 @@ namespace SharpMediaFoundation
             IMFTransform transform =
                 MFTUtils.CreateTransform(
                     PInvoke.MFT_CATEGORY_VIDEO_ENCODER,
-                    MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER,
+                    MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER | MFT_ENUM_FLAG.MFT_ENUM_FLAG_HARDWARE,
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 },
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_HEVC });
 

@@ -1,23 +1,23 @@
 ﻿using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundation.H264
 {
     public class H264Encoder : VideoTransformBase
     {
         const uint H264_RES_MULTIPLE = 16;
 
         public H264Encoder(uint width, uint height, uint fpsNom, uint fpsDenom)
-            : base(H264_RES_MULTIPLE, width, height,fpsNom, fpsDenom)
+            : base(H264_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
         { }
 
         protected override IMFTransform Create()
         {
             const uint streamId = 0;
-            IMFTransform transform = 
+            IMFTransform transform =
                 MFTUtils.CreateTransform(
                     PInvoke.MFT_CATEGORY_VIDEO_ENCODER,
-                    MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER,
+                    MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER | MFT_ENUM_FLAG.MFT_ENUM_FLAG_HARDWARE,
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_NV12 },
                     new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = PInvoke.MFVideoFormat_H264 });
 
