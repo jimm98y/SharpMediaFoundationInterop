@@ -54,7 +54,11 @@ namespace SharpMediaFoundation.WPF
 
         WriteableBitmap _wb;
         System.Timers.Timer _timerDecoder;
-        IDecoder _videoDecoder;
+        IVideoTransform _videoDecoder;
+
+        IVideoTransform _videoEncoder;
+
+
         NV12toRGB _nv12Decoder;
         private ConcurrentQueue<IList<byte[]>> _sampleQueue = new ConcurrentQueue<IList<byte[]>>();
         private ConcurrentQueue<byte[]> _renderQueue = new ConcurrentQueue<byte[]>();
@@ -63,6 +67,7 @@ namespace SharpMediaFoundation.WPF
         long _time = 0;
         long _lastTime = 0;
         byte[] _nv12buffer;
+        byte[] _encodedBuffer;
         Stopwatch _stopwatch = new Stopwatch();
 
         static VideoControl()
@@ -142,7 +147,10 @@ namespace SharpMediaFoundation.WPF
                     {
                         _videoDecoder = new H265Decoder(_width, _height, _fpsNom, _fpsDenom);
                     }
+
                     _nv12Decoder = new NV12toRGB(_videoDecoder.Width, _videoDecoder.Height, _fpsNom, _fpsDenom);
+
+                    _videoEncoder = new H264Encoder(_width, _height, _fpsNom, _fpsDenom);
                 }
 
                 const int MIN_BUFFERED_SAMPLES = 3;
@@ -156,6 +164,14 @@ namespace SharpMediaFoundation.WPF
                             {
                                 while (_videoDecoder.ProcessOutput(ref _nv12buffer))
                                 {
+                                    if (_videoEncoder.ProcessInput(_nv12buffer, _time))
+                                    {
+                                        while (_videoEncoder.ProcessOutput(ref _encodedBuffer))
+                                        {
+
+                                        }
+                                    }
+
                                     _nv12Decoder.ProcessInput(_nv12buffer, _time);
 
                                     byte[] decoded = ArrayPool<byte>.Shared.Rent(_width * _height * 3);
@@ -203,6 +219,7 @@ namespace SharpMediaFoundation.WPF
                             null);
                         _rect = new Int32Rect(0, 0, _width, _height);
                         _nv12buffer = new byte[_width * _height * 3];
+                        _encodedBuffer = new byte[_width * _height * 3 / 2];
                         _timerDecoder = new System.Timers.Timer();
                         _timerDecoder.Elapsed += OnTickDecoder;
                         _timerDecoder.Interval = 1000 * _fpsDenom / _fpsNom;

@@ -7,7 +7,7 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation
 {
-    public class NV12toRGB : MFTBase, IDecoder
+    public class NV12toRGB : MFTBase, IVideoTransform
     {
         private uint _width;
         private uint _height;

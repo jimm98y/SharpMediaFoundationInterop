@@ -8,7 +8,7 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation
 {
-    public class H264Decoder : MFTBase, IDecoder
+    public class H264Decoder : MFTBase, IVideoTransform
     {
         private int _originalWidth;
         private int _originalHeight;

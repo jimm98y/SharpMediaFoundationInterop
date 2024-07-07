@@ -24,7 +24,7 @@ namespace SharpMediaFoundation
         Incomplete = 0x1000000,
     }
 
-    public interface IDecoder
+    public interface IVideoTransform
     {
         int OriginalWidth { get; }
         int OriginalHeight { get; }

@@ -24,8 +24,8 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>-->
-        <ctrl:VideoControl Path="test1.mp4" Grid.Row="0" Grid.Column="0" />
-        <!--<ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="0" Grid.Column="0" />-->
+        <!--<ctrl:VideoControl Path="test1.mp4" Grid.Row="0" Grid.Column="0" />-->
+        <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="0" Grid.Column="0" />
         <!--<ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="0" Grid.Column="1" />
         <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="1" Grid.Column="0" />
         <ctrl:VideoControl Path="frag_bunny.mp4" Grid.Row="1" Grid.Column="1" />
