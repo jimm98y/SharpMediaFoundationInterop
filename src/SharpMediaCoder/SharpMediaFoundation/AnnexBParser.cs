@@ -9,7 +9,7 @@ namespace SharpMediaFoundation
 
         public static byte[] PrefixNalu(byte[] nalu)
         {
-            if (nalu[0] != 0 || nalu[1] != 0 || nalu[2] != 0 || !(nalu[3] == 1 || (nalu[3] == 0 && nalu[4] == 1)))
+            if (nalu.Length < 5 || nalu[0] != 0 || nalu[1] != 0 || nalu[2] != 0 || !(nalu[3] == 1 || (nalu[3] == 0 && nalu[4] == 1)))
             {
                 // this little maneuver will cost us new allocation
                 nalu = AnnexB.Concat(nalu).ToArray();
