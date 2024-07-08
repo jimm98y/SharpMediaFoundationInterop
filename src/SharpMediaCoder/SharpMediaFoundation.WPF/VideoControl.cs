@@ -120,9 +120,14 @@ namespace SharpMediaFoundation.WPF
 
             try
             {
-                var sample = await Source.GetSampleAsync();
-                if (sample != null)
-                    _renderQueue.Enqueue(sample);
+                while (_renderQueue.Count <= 3) // taking just 1 frame seems to leak native memory, TODO: investigate
+                {
+                    byte[] sample = await Source.GetSampleAsync();
+                    if (sample != null)
+                        _renderQueue.Enqueue(sample);
+                    else
+                        break;
+                }
             }
             finally
             {

@@ -47,7 +47,8 @@ namespace SharpMediaFoundation.WPF
                 CreateDecoder(_codec, Info);
             }
 
-            if (_renderQueue.TryDequeue(out var existing))
+            byte[] existing;
+            if (_renderQueue.TryDequeue(out existing))
                 return existing;
 
             while (_renderQueue.Count == 0 && _sampleQueue.TryDequeue(out var au))
