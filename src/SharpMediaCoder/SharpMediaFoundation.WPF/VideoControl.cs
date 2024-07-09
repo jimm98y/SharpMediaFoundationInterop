@@ -125,8 +125,8 @@ namespace SharpMediaFoundation.WPF
                     byte[] sample = await _source.GetSampleAsync();
                     if (sample != null)
                         _renderQueue.Enqueue(sample);
-                    //else
-                    //    break;
+                    else
+                        break;
                 }
             }
             finally
