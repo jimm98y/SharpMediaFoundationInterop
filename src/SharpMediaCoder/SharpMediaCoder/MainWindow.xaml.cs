@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using SharpMediaFoundation.WPF;
+using System.Windows;
 
 namespace SharpMediaFoundation
 {
@@ -7,9 +8,12 @@ namespace SharpMediaFoundation
     /// </summary>
     public partial class MainWindow : Window
     {
+        public VideoControlSource Source { get; set; } = new VideoControlSource("frag_bunny.mp4");
+
         public MainWindow()
         {
             InitializeComponent();
+            this.DataContext = this;
         }
     }
 }

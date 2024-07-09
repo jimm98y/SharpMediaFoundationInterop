@@ -25,25 +25,28 @@ namespace SharpMediaFoundation.WPF
     [TemplatePart(Name = "PART_image", Type = typeof(Image))]
     public class VideoControl : Control
     {
-        //public string Path
-        //{
-        //    get { return (string)GetValue(PathProperty); }
-        //    set { SetValue(PathProperty, value); }
-        //}
+        private VideoControlSource _source = null;
 
-        //public static readonly DependencyProperty PathProperty =
-        //    DependencyProperty.Register("Path", typeof(string), typeof(VideoControl), new PropertyMetadata("", OnPathPropertyChanged));
+        public VideoControlSource Source
+        {
+            get { return (VideoControlSource)GetValue(SourceProperty); }
+            set { SetValue(SourceProperty, value); }
+        }
 
-        //private static async void OnPathPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        //{
-        //    var sender = d as VideoControl;
-        //    if(sender != null)
-        //    {
-        //        await sender.StartPlaying((string)e.NewValue);
-        //    }
-        //}
+        public static readonly DependencyProperty SourceProperty =
+            DependencyProperty.Register("Source", typeof(VideoControlSource), typeof(VideoControl), new PropertyMetadata(null, OnSourceChanged));
 
-        public VideoControlSource Source { get; set; } = new VideoControlSource("frag_bunny.mp4");
+        private static async void OnSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var sender = (VideoControl)d;
+            var source = e.NewValue as VideoControlSource;
+            sender._source = source;
+            if(source != null)
+            {
+                await source.InitializeAsync();
+                sender.StartPlaying();
+            }   
+        }
 
         private Image _image;
         private WriteableBitmap _wb;
@@ -66,7 +69,7 @@ namespace SharpMediaFoundation.WPF
             CompositionTarget.Rendering += CompositionTarget_Rendering;
         }
 
-        private async void VideoControl_Loaded(object sender, RoutedEventArgs e)
+        private void VideoControl_Loaded(object sender, RoutedEventArgs e)
         {
             var window = Window.GetWindow(this);
             if (window != null)
@@ -76,9 +79,6 @@ namespace SharpMediaFoundation.WPF
                     CompositionTarget.Rendering -= CompositionTarget_Rendering;
                 };
             }
-
-            await Source.InitializeAsync();
-            StartPlaying();
         }
 
         public override void OnApplyTemplate()
@@ -104,7 +104,7 @@ namespace SharpMediaFoundation.WPF
                 if (_renderQueue.TryDequeue(out byte[] decoded))
                 {
                     _wb.Lock();
-                    Marshal.Copy(decoded, (int)(3 * (Source.Info.Height - Source.Info.OriginalHeight) * Source.Info.OriginalWidth), _wb.BackBuffer, (int)(Source.Info.OriginalWidth * Source.Info.OriginalHeight * 3));
+                    Marshal.Copy(decoded, (int)(3 * (_source.Info.Height - _source.Info.OriginalHeight) * Source.Info.OriginalWidth), _wb.BackBuffer, (int)(Source.Info.OriginalWidth * Source.Info.OriginalHeight * 3));
                     _wb.AddDirtyRect(_rect);
                     _wb.Unlock();
 
@@ -120,13 +120,13 @@ namespace SharpMediaFoundation.WPF
 
             try
             {
-                while (_renderQueue.Count <= 3) // taking just 1 frame seems to leak native memory, TODO: investigate
+                while (_renderQueue.Count <= 2) // taking just 1 frame seems to leak native memory, TODO: investigate
                 {
-                    byte[] sample = await Source.GetSampleAsync();
+                    byte[] sample = await _source.GetSampleAsync();
                     if (sample != null)
                         _renderQueue.Enqueue(sample);
-                    else
-                        break;
+                    //else
+                    //    break;
                 }
             }
             finally
@@ -141,26 +141,22 @@ namespace SharpMediaFoundation.WPF
             {
                 _timerDecoder?.Stop();
 
-                if (_timerDecoder == null)
+                if (_source != null)
                 {
                     _wb = new WriteableBitmap(
-                        (int)Source.Info.OriginalWidth,
-                        (int)Source.Info.OriginalHeight,
+                        (int)_source.Info.OriginalWidth,
+                        (int)_source.Info.OriginalHeight,
                         96,
                         96,
                         PixelFormats.Bgr24,
                         null);
                     this._image.Source = _wb;
-                    _rect = new Int32Rect(0, 0, (int)Source.Info.OriginalWidth, (int)Source.Info.OriginalHeight);
+                    _rect = new Int32Rect(0, 0, (int)_source.Info.OriginalWidth, (int)_source.Info.OriginalHeight);
                     _timerDecoder = new System.Timers.Timer();
                     _timerDecoder.Elapsed += OnTickDecoder;
-                    _timerDecoder.Interval = 1000 * Source.Info.FpsDenom / Source.Info.FpsNom;
+                    _timerDecoder.Interval = 1000 * _source.Info.FpsDenom / _source.Info.FpsNom;
                     _timerDecoder.Start();
                     _stopwatch.Start();
-                }
-                else
-                {
-                    _timerDecoder.Start();
                 }
             }
             catch (Exception ex)

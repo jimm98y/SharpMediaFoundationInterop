@@ -26,7 +26,7 @@ namespace SharpMediaFoundation.WPF
         private NV12toRGB _nv12Decoder;
         private Queue<IList<byte[]>> _sampleQueue = new Queue<IList<byte[]>>();
         private Queue<byte[]> _renderQueue = new Queue<byte[]>();
-        private byte[] _nv12buffer;
+        private byte[] _nv12Buffer;
         private long _time = 0;
 
         private string _path;
@@ -57,9 +57,9 @@ namespace SharpMediaFoundation.WPF
                 {
                     if (_videoDecoder.ProcessInput(nalu, _time))
                     {
-                        while (_videoDecoder.ProcessOutput(ref _nv12buffer, out _))
+                        while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out _))
                         {
-                            _nv12Decoder.ProcessInput(_nv12buffer, _time);
+                            _nv12Decoder.ProcessInput(_nv12Buffer, _time);
 
                             byte[] decoded = ArrayPool<byte>.Shared.Rent((int)(Info.Width * Info.Height * 3));
                             _nv12Decoder.ProcessOutput(ref decoded, out _);
@@ -99,7 +99,7 @@ namespace SharpMediaFoundation.WPF
             }
 
             _nv12Decoder = new NV12toRGB(info.Width, info.Height);
-            _nv12buffer = new byte[info.Width * info.Height * 3];
+            _nv12Buffer = new byte[info.Width * info.Height * 3];
         }
 
         private async Task<VideoInfo> LoadFileAsync(string fileName)
