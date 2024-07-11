@@ -15,21 +15,21 @@ namespace SharpMediaFoundation.WPF
     [TemplatePart(Name = "PART_image", Type = typeof(Image))]
     public class VideoControl : Control
     {
-        private IVideoControlSource _source = null;
+        private IVideoSource _source = null;
 
-        public IVideoControlSource Source
+        public IVideoSource Source
         {
-            get { return (IVideoControlSource)GetValue(SourceProperty); }
+            get { return (IVideoSource)GetValue(SourceProperty); }
             set { SetValue(SourceProperty, value); }
         }
 
         public static readonly DependencyProperty SourceProperty =
-            DependencyProperty.Register("Source", typeof(IVideoControlSource), typeof(VideoControl), new PropertyMetadata(null, OnSourceChanged));
+            DependencyProperty.Register("Source", typeof(IVideoSource), typeof(VideoControl), new PropertyMetadata(null, OnSourceChanged));
 
         private static async void OnSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var sender = (VideoControl)d;
-            var source = e.NewValue as IVideoControlSource;
+            var source = e.NewValue as IVideoSource;
             sender._source = source;
             if(source != null)
             {

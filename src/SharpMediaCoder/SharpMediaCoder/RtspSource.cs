@@ -6,7 +6,7 @@ using System.Buffers;
 
 namespace SharpMediaFoundation.WPF
 {
-    public class RtspControlSource : IVideoControlSource
+    public class RtspSource : IVideoSource
     {
         public VideoInfo Info { get; set; }
 
@@ -22,7 +22,7 @@ namespace SharpMediaFoundation.WPF
         private string _userName;
         private string _password;
 
-        public RtspControlSource(string uri, string userName = null, string password = null)
+        public RtspSource(string uri, string userName = null, string password = null)
         {
             this._uri = uri ?? throw new ArgumentNullException(nameof(uri));
             this._userName = userName;

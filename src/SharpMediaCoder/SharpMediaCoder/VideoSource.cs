@@ -7,7 +7,7 @@ using System.IO;
 
 namespace SharpMediaFoundation.WPF
 {
-    public class VideoControlSource : IVideoControlSource
+    public class VideoSource : IVideoSource
     {
         public VideoInfo Info { get; set; }
 
@@ -19,7 +19,7 @@ namespace SharpMediaFoundation.WPF
         private long _time = 0;
 
         private string _path;
-        public VideoControlSource(string path)
+        public VideoSource(string path)
         {
             this._path = path ?? throw new ArgumentNullException(nameof(path));
         }

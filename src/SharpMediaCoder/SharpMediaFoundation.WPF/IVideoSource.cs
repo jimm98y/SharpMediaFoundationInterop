@@ -13,7 +13,7 @@ namespace SharpMediaFoundation.WPF
         public uint FpsDenom { get; set; }
     }
 
-    public interface IVideoControlSource
+    public interface IVideoSource
     {
         VideoInfo Info { get; }
         Task InitializeAsync();
