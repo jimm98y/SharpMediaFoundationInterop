@@ -12,34 +12,25 @@ using System.Windows.Media.Imaging;
 
 namespace SharpMediaFoundation.WPF
 {
-    public struct VideoInfo
-    {
-        public uint Width { get; set; }
-        public uint OriginalWidth { get; set; }
-        public uint Height { get; set; }
-        public uint OriginalHeight { get; set; }
-        public uint FpsNom { get; set; }
-        public uint FpsDenom { get; set; }
-    }
 
     [TemplatePart(Name = "PART_image", Type = typeof(Image))]
     public class VideoControl : Control
     {
-        private VideoControlSource _source = null;
+        private IVideoControlSource _source = null;
 
-        public VideoControlSource Source
+        public IVideoControlSource Source
         {
-            get { return (VideoControlSource)GetValue(SourceProperty); }
+            get { return (IVideoControlSource)GetValue(SourceProperty); }
             set { SetValue(SourceProperty, value); }
         }
 
         public static readonly DependencyProperty SourceProperty =
-            DependencyProperty.Register("Source", typeof(VideoControlSource), typeof(VideoControl), new PropertyMetadata(null, OnSourceChanged));
+            DependencyProperty.Register("Source", typeof(IVideoControlSource), typeof(VideoControl), new PropertyMetadata(null, OnSourceChanged));
 
         private static async void OnSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var sender = (VideoControl)d;
-            var source = e.NewValue as VideoControlSource;
+            var source = e.NewValue as IVideoControlSource;
             sender._source = source;
             if(source != null)
             {

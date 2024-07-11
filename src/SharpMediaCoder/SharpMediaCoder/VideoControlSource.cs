@@ -2,16 +2,12 @@
 using SharpMediaFoundation.H265;
 using SharpMediaFoundation.NV12;
 using SharpMp4;
-using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace SharpMediaFoundation.WPF
 {
-    public class VideoControlSource
+    public class VideoControlSource : IVideoControlSource
     {
         public VideoInfo Info { get; set; }
 
