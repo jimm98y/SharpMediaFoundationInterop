@@ -10,13 +10,13 @@ namespace SharpMediaFoundation
             int startIndex = (decodedHeight - originalHeight) * decodedStride;
             int wbStride = originalWidth * 3;
             int wbIndex = flip ? wbStride * (originalHeight - 1) : 0;
-            int wbDelta = flip ? -1 * wbStride : wbStride;
+            int wbFlip = flip ? -1 : 1;
             for (int i = 0; i < originalHeight; i++)
             {
                 Marshal.Copy(
                    decoded,
                    startIndex + i * decodedStride,
-                   backBuffer + wbIndex + i * wbDelta,
+                   backBuffer + wbIndex + i * wbFlip * wbStride,
                    wbStride
                 );
             }
