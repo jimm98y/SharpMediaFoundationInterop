@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -41,16 +40,10 @@ namespace SharpMediaFoundation
                 HRESULT result = decoder.ProcessInput(streamID, sample, 0);
                 return result.Value == 0;
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error while processing input {ex}");
-            }
             finally
             {
                 Marshal.ReleaseComObject(sample);
             }
-
-            return false;
         }
 
         private unsafe bool Output(uint streamID, IMFTransform decoder, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length)
