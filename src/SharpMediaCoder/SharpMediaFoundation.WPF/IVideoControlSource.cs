@@ -4,6 +4,7 @@ namespace SharpMediaFoundation.WPF
 {
     public struct VideoInfo
     {
+        public string VideoCodec { get; set; }
         public uint Width { get; set; }
         public uint OriginalWidth { get; set; }
         public uint Height { get; set; }

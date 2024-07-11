@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <PackageReference Include="SharpMp4" Version="0.0.7" />
+    <PackageReference Include="SharpRTSPClient" Version="0.0.4" />
   </ItemGroup>
 
 	<ItemGroup>

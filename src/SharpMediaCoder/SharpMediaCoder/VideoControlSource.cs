@@ -11,13 +11,6 @@ namespace SharpMediaFoundation.WPF
     {
         public VideoInfo Info { get; set; }
 
-        private enum VideoCodecType
-        {
-            H264,
-            H265
-        }
-
-        private VideoCodecType _codec;
         private IVideoTransform _videoDecoder;
         private NV12toRGB _nv12Decoder;
         private Queue<IList<byte[]>> _sampleQueue = new Queue<IList<byte[]>>();
@@ -40,7 +33,7 @@ namespace SharpMediaFoundation.WPF
         {
             if (_videoDecoder == null || _nv12Decoder == null)
             {
-                CreateDecoder(_codec, Info);
+                CreateDecoder(Info);
             }
 
             byte[] existing;
@@ -78,14 +71,14 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        private void CreateDecoder(VideoCodecType codec, VideoInfo info)
+        private void CreateDecoder(VideoInfo info)
         {
             // decoders must be created on the same thread as the samples
-            if (codec == VideoCodecType.H264)
+            if (info.VideoCodec == "H264")
             {
                 _videoDecoder = new H264Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom);
             }
-            else if (codec == VideoCodecType.H265)
+            else if (info.VideoCodec == "H265")
             {
                 _videoDecoder = new H265Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom);
             }
@@ -123,13 +116,13 @@ namespace SharpMediaFoundation.WPF
                     videoInfo.FpsDenom = fmp4.CalculateSampleDuration(videoTrackBox);
                     if (vsbox.Children.FirstOrDefault(x => x is AvcConfigurationBox) != null)
                     {
-                        _codec = VideoCodecType.H264;
+                        videoInfo.VideoCodec = "H264";
                         videoInfo.Width = MathUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
                         videoInfo.Height = MathUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
                     }
                     else if (vsbox.Children.FirstOrDefault(x => x is HevcConfigurationBox) != null)
                     {
-                        _codec = VideoCodecType.H265;
+                        videoInfo.VideoCodec = "H265";
                         videoInfo.Width = MathUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
                         videoInfo.Height = MathUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
                     }
