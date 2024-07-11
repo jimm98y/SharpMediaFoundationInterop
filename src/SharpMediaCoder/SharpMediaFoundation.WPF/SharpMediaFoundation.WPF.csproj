@@ -19,8 +19,4 @@
 			<_Parameter2_IsLiteral>true</_Parameter2_IsLiteral>
 		</AssemblyAttribute>
 	</ItemGroup>
-
-	<ItemGroup>
-	  <PackageReference Include="SharpMp4" Version="0.0.7" />
-	</ItemGroup>
 </Project>

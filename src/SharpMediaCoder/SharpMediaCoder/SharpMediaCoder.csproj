@@ -18,6 +18,10 @@
     </Content>
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="SharpMp4" Version="0.0.7" />
+  </ItemGroup>
+
 	<ItemGroup>
 	  <ProjectReference Include="..\SharpMediaFoundation.WPF\SharpMediaFoundation.WPF.csproj" />
 	</ItemGroup>
