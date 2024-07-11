@@ -6,8 +6,14 @@
         xmlns:ctrl="clr-namespace:SharpMediaFoundation.WPF;assembly=SharpMediaFoundation.WPF"
         mc:Ignorable="d"
         Title="MainWindow" Height="450" Width="800">
+
     <Grid>
-        <!--<Grid.RowDefinitions>
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="0" />
+    </Grid>
+    
+    
+    <!--<Grid>
+        <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="*" />
             <RowDefinition Height="*" />
@@ -23,10 +29,9 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>-->
-        <!--<ctrl:VideoControl Path="test1.mp4" Grid.Row="0" Grid.Column="0" />-->
-        <ctrl:VideoControl Grid.Row="0" Grid.Column="0" Source="{Binding Source}" />
-        <!--<ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="1" />
+        </Grid.ColumnDefinitions>
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="0" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="1" />
         <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="0" />
         <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="1" />
 
@@ -68,7 +73,7 @@
         <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="6" />
         <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="7" />
         <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="6" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="7" />-->
-    </Grid>
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="7" />
+    </Grid>-->
     
 </Window>
