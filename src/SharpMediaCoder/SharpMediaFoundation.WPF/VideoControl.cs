@@ -2,7 +2,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Timers;
 using System.Windows;
@@ -46,8 +45,8 @@ namespace SharpMediaFoundation.WPF
         private ConcurrentQueue<byte[]> _renderQueue = new ConcurrentQueue<byte[]>();
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
         private Int32Rect _rect;
-        private long _lastTime = 0;
         private Stopwatch _stopwatch = new Stopwatch();
+        private long _lastTime = 0;
 
         static VideoControl()
         {
@@ -77,10 +76,10 @@ namespace SharpMediaFoundation.WPF
             base.OnApplyTemplate();
 
             this._image = this.Template.FindName("PART_Image", this) as Image;
-            this._image.RenderTransformOrigin = new Point(0.5, 0.5);
 
             // decoded video image is upside down (pixel rows are in the bitmap order) => flip it
-            this._image.RenderTransform = new ScaleTransform(1, -1);
+            //this._image.RenderTransform = new ScaleTransform(1, -1);
+            //this._image.RenderTransformOrigin = new Point(0.5, 0.5);
         }
 
         private void CompositionTarget_Rendering(object sender, EventArgs e)
@@ -95,7 +94,14 @@ namespace SharpMediaFoundation.WPF
                 if (_renderQueue.TryDequeue(out byte[] decoded))
                 {
                     _wb.Lock();
-                    Marshal.Copy(decoded, (int)(3 * (_source.Info.Height - _source.Info.OriginalHeight) * Source.Info.OriginalWidth), _wb.BackBuffer, (int)(Source.Info.OriginalWidth * Source.Info.OriginalHeight * 3));
+                    BitmapUtils.CopyBitmap(
+                        decoded, 
+                        _wb.BackBuffer, 
+                        (int)_source.Info.OriginalWidth, 
+                        (int)_source.Info.OriginalHeight, 
+                        (int)_source.Info.Width,
+                        (int)_source.Info.Height,
+                        true);
                     _wb.AddDirtyRect(_rect);
                     _wb.Unlock();
 
@@ -103,7 +109,7 @@ namespace SharpMediaFoundation.WPF
                     _lastTime = elapsed;
                 }
             }
-        }
+        }       
 
         private async void OnTickDecoder(object sender, ElapsedEventArgs e)
         {
@@ -134,18 +140,19 @@ namespace SharpMediaFoundation.WPF
 
                 if (_source != null)
                 {
+                    var info = _source.Info;
                     _wb = new WriteableBitmap(
-                        (int)_source.Info.OriginalWidth,
-                        (int)_source.Info.OriginalHeight,
+                        (int)info.OriginalWidth,
+                        (int)info.OriginalHeight,
                         96,
                         96,
                         PixelFormats.Bgr24,
                         null);
                     this._image.Source = _wb;
-                    _rect = new Int32Rect(0, 0, (int)_source.Info.OriginalWidth, (int)_source.Info.OriginalHeight);
+                    _rect = new Int32Rect(0, 0, (int)info.OriginalWidth, (int)info.OriginalHeight);
                     _timerDecoder = new System.Timers.Timer();
                     _timerDecoder.Elapsed += OnTickDecoder;
-                    _timerDecoder.Interval = 1000 * _source.Info.FpsDenom / _source.Info.FpsNom;
+                    _timerDecoder.Interval = 1000 * info.FpsDenom / info.FpsNom;
                     _timerDecoder.Start();
                     _stopwatch.Start();
                 }
