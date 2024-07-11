@@ -11,7 +11,6 @@ using System.Windows.Media.Imaging;
 
 namespace SharpMediaFoundation.WPF
 {
-
     [TemplatePart(Name = "PART_image", Type = typeof(Image))]
     public class VideoControl : Control
     {
@@ -39,12 +38,12 @@ namespace SharpMediaFoundation.WPF
         }
 
         private Image _image;
-        private WriteableBitmap _wb;
-        private System.Timers.Timer _timerDecoder;
+        private Int32Rect _croppingRect;
+        private WriteableBitmap _canvas;
+        private System.Timers.Timer _timer;
+        private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
 
         private ConcurrentQueue<byte[]> _renderQueue = new ConcurrentQueue<byte[]>();
-        private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
-        private Int32Rect _rect;
         private Stopwatch _stopwatch = new Stopwatch();
         private long _lastTime = 0;
 
@@ -74,36 +73,34 @@ namespace SharpMediaFoundation.WPF
         public override void OnApplyTemplate()
         {
             base.OnApplyTemplate();
-
             this._image = this.Template.FindName("PART_Image", this) as Image;
-
-            // decoded video image is upside down (pixel rows are in the bitmap order) => flip it
-            //this._image.RenderTransform = new ScaleTransform(1, -1);
-            //this._image.RenderTransformOrigin = new Point(0.5, 0.5);
         }
 
         private void CompositionTarget_Rendering(object sender, EventArgs e)
         {
-            if (_timerDecoder == null  || !_timerDecoder.Enabled)
+            if (_timer == null  || !_timer.Enabled)
                 return;
 
             long elapsed = _stopwatch.ElapsedMilliseconds;
 
-            if (elapsed - _lastTime >= _timerDecoder.Interval)
+            if (elapsed - _lastTime >= _timer.Interval)
             {
                 if (_renderQueue.TryDequeue(out byte[] decoded))
                 {
-                    _wb.Lock();
+                    _canvas.Lock();
+
+                    // decoded video image is upside down (pixel rows are in the bitmap order) => flip it
                     BitmapUtils.CopyBitmap(
                         decoded, 
-                        _wb.BackBuffer, 
+                        _canvas.BackBuffer, 
                         (int)_source.Info.OriginalWidth, 
                         (int)_source.Info.OriginalHeight, 
                         (int)_source.Info.Width,
                         (int)_source.Info.Height,
                         true);
-                    _wb.AddDirtyRect(_rect);
-                    _wb.Unlock();
+
+                    _canvas.AddDirtyRect(_croppingRect);
+                    _canvas.Unlock();
 
                     ArrayPool<byte>.Shared.Return(decoded);
                     _lastTime = elapsed;
@@ -136,24 +133,24 @@ namespace SharpMediaFoundation.WPF
         {
             try
             {
-                _timerDecoder?.Stop();
+                _timer?.Stop();
 
                 if (_source != null)
                 {
                     var info = _source.Info;
-                    _wb = new WriteableBitmap(
+                    _canvas = new WriteableBitmap(
                         (int)info.OriginalWidth,
                         (int)info.OriginalHeight,
                         96,
                         96,
                         PixelFormats.Bgr24,
                         null);
-                    this._image.Source = _wb;
-                    _rect = new Int32Rect(0, 0, (int)info.OriginalWidth, (int)info.OriginalHeight);
-                    _timerDecoder = new System.Timers.Timer();
-                    _timerDecoder.Elapsed += OnTickDecoder;
-                    _timerDecoder.Interval = 1000 * info.FpsDenom / info.FpsNom;
-                    _timerDecoder.Start();
+                    this._image.Source = _canvas;
+                    _croppingRect = new Int32Rect(0, 0, (int)info.OriginalWidth, (int)info.OriginalHeight);
+                    _timer = new System.Timers.Timer();
+                    _timer.Elapsed += OnTickDecoder;
+                    _timer.Interval = 1000 * info.FpsDenom / info.FpsNom;
+                    _timer.Start();
                     _stopwatch.Start();
                 }
             }
