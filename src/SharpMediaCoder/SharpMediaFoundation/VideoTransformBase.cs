@@ -8,6 +8,7 @@ namespace SharpMediaFoundation
         protected long _sampleDuration = 1;
         private IMFTransform _decoder;
         private MFT_OUTPUT_DATA_BUFFER[] _dataBuffer;
+        private bool _disposedValue;
 
         public uint OriginalWidth { get; }
         public uint OriginalHeight { get; } 
@@ -48,6 +49,25 @@ namespace SharpMediaFoundation
         public bool ProcessOutput(ref byte[] buffer, out uint length)
         {
             return ProcessOutput(_decoder, _dataBuffer, ref buffer, out length);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    MFTUtils.DestroyTransform(_decoder);
+                }
+
+                _disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            System.GC.SuppressFinalize(this);
         }
     }
 }

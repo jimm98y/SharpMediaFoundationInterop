@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 
 namespace SharpMediaFoundation.WPF
 {
@@ -13,7 +14,7 @@ namespace SharpMediaFoundation.WPF
         public uint FpsDenom { get; set; }
     }
 
-    public interface IVideoSource
+    public interface IVideoSource : IDisposable
     {
         VideoInfo Info { get; }
         Task InitializeAsync();

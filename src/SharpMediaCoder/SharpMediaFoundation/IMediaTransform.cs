@@ -1,6 +1,8 @@
-﻿namespace SharpMediaFoundation
+﻿using System;
+
+namespace SharpMediaFoundation
 {
-    public interface IMediaTransform
+    public interface IMediaTransform : IDisposable
     {
         bool ProcessInput(byte[] data, long timestamp);
         bool ProcessOutput(ref byte[] buffer, out uint length);
