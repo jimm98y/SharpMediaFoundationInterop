@@ -19,6 +19,8 @@ namespace SharpMediaFoundation
         public uint FpsNom { get; }
         public uint FpsDenom { get; }
 
+        public uint OutputSize { get; }
+
         protected VideoTransformBase(uint width, uint height)
           : this(1, width, height, 1, 1)
         { }
@@ -37,6 +39,7 @@ namespace SharpMediaFoundation
             _decoder = Create();
             _decoder.GetOutputStreamInfo(0, out var streamInfo); 
             _dataBuffer = MFTUtils.CreateOutputDataBuffer(streamInfo.cbSize);
+            this.OutputSize = streamInfo.cbSize;
         }
 
         protected abstract IMFTransform Create();
