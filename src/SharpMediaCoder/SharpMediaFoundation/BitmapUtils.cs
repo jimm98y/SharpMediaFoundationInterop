@@ -5,39 +5,108 @@ namespace SharpMediaFoundation
 {
     public static class BitmapUtils
     {
-        public static void CopyBitmap(byte[] source, nint dest, int originalWidth, int originalHeight, int decodedWidth, int decodedHeight, bool flip = true)
+        public static void CopyBitmap(byte[] source, int sourceWidth, int sourceHeight, nint target, int targetWidth, int targetHeight, bool flip = true)
         {
-            int decodedStride = decodedWidth * 3;
-            int startIndex = (decodedHeight - originalHeight) * decodedStride;
-            int wbStride = originalWidth * 3;
-            int wbIndex = flip ? wbStride * (originalHeight - 1) : 0;
-            int wbFlip = flip ? -1 : 1;
-            for (int i = 0; i < originalHeight; i++)
+            CopyPixels(source, 0, sourceWidth, sourceHeight, target, 0, targetWidth, targetHeight, 3, flip, true);
+        }
+
+        public static void CopyBitmap(byte[] source, int sourceWidth, int sourceHeight, byte[] target, int targetWidth, int targetHeight, bool flip = false)
+        {
+            CopyPixels(source, 0, sourceWidth, sourceHeight, target, 0, targetWidth, targetHeight, 3, flip, true);
+        }
+
+        public static void CopyNV12Bitmap(byte[] source, int sourceWidth, int sourceHeight, byte[] target, int targetWidth, int targetHeight, bool flip = false)
+        {
+            // NV12 layout:
+            /*
+            Y0 Y1 Y2 Y3
+            ...
+            U0 V0 U1 V1
+            ...
+            */
+            // copy luma (y)
+            CopyPixels(
+                source,
+                0, 
+                sourceWidth, 
+                sourceHeight,
+                target, 
+                0, 
+                targetWidth,
+                targetHeight,
+                1, 
+                flip,
+                false);
+            // copy chroma (u, v)
+            CopyPixels(
+                source, 
+                sourceWidth * sourceHeight, 
+                sourceWidth / 2, 
+                sourceHeight / 2, 
+                target, 
+                targetWidth * targetHeight, 
+                targetWidth / 2, 
+                targetHeight / 2, 
+                2, 
+                flip,
+                false);
+        }
+
+        private static void CopyPixels(
+            byte[] source,
+            int sourceOffset,
+            int sourceWidth,
+            int sourceHeight,
+            nint target,
+            int targetOffset,
+            int targetWidth,
+            int targetHeight,
+            int bytesPerPixel = 1,
+            bool flip = false,
+            bool skipTop = true)
+        {
+            int sourceStride = sourceWidth * bytesPerPixel;
+            int sourceStartIndex = skipTop ? (sourceHeight - targetHeight) * sourceStride : 0;
+            int targetStride = targetWidth * bytesPerPixel;
+            int targetStartIndex = flip ? targetStride * (targetHeight - 1) : 0;
+            int targetFlip = flip ? -1 : 1;
+            for (int i = 0; i < targetHeight; i++)
             {
                 Marshal.Copy(
                    source,
-                   startIndex + i * decodedStride,
-                   dest + wbIndex + i * wbFlip * wbStride,
-                   wbStride
+                   sourceOffset + sourceStartIndex + i * sourceStride,
+                   target + targetOffset + targetStartIndex + i * targetFlip * targetStride,
+                   targetStride
                 );
             }
         }
 
-        public static void CopyBitmap(byte[] source, byte[] dest, int originalWidth, int originalHeight, int decodedWidth, int decodedHeight, bool flip = true)
+        private static void CopyPixels(
+            byte[] source,
+            int sourceOffset,
+            int sourceWidth,
+            int sourceHeight,
+            byte[] target,
+            int targetOffset,
+            int targetWidth,
+            int targetHeight,
+            int bytesPerPixel = 1,
+            bool flip = false,
+            bool skipTop = true)
         {
-            int decodedStride = decodedWidth * 3;
-            int startIndex = (decodedHeight - originalHeight) * decodedStride;
-            int wbStride = originalWidth * 3;
-            int wbIndex = flip ? wbStride * (originalHeight - 1) : 0;
-            int wbFlip = flip ? -1 : 1;
-            for (int i = 0; i < originalHeight; i++)
+            int sourceStride = sourceWidth * bytesPerPixel;
+            int sourceStartIndex = skipTop ? (sourceHeight - targetHeight) * sourceStride : 0;
+            int targetStride = targetWidth * bytesPerPixel;
+            int targetStartIndex = flip ? targetStride * (targetHeight - 1) : 0;
+            int targetFlip = flip ? -1 : 1;
+            for (int i = 0; i < targetHeight; i++)
             {
                 Buffer.BlockCopy(
                    source,
-                   startIndex + i * decodedStride,
-                   dest,
-                   wbIndex + i * wbFlip * wbStride,
-                   wbStride
+                   sourceOffset + sourceStartIndex + i * sourceStride,
+                   target,
+                   targetOffset + targetStartIndex + i * targetFlip * targetStride,
+                   targetStride
                 );
             }
         }
