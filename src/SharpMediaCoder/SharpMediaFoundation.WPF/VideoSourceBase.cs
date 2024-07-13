@@ -18,6 +18,7 @@ namespace SharpMediaFoundation.WPF
         protected Queue<byte[]> _renderQueue = new Queue<byte[]>();
         protected byte[] _nv12Buffer;
         protected long _time = 0;
+        protected bool _isLowLatency = false;
         private bool _disposedValue;
 
         public abstract Task InitializeAsync();
@@ -45,7 +46,7 @@ namespace SharpMediaFoundation.WPF
                         {
                             _nv12Decoder.ProcessInput(_nv12Buffer, _time);
 
-                            byte[] decoded = ArrayPool<byte>.Shared.Rent((int)(Info.Width * Info.Height * 3));
+                            byte[] decoded = ArrayPool<byte>.Shared.Rent((int)_nv12Decoder.OutputSize);
                             _nv12Decoder.ProcessOutput(ref decoded, out _);
 
                             _renderQueue.Enqueue(decoded);
@@ -71,11 +72,11 @@ namespace SharpMediaFoundation.WPF
             // decoders must be created on the same thread as the samples
             if (info.VideoCodec == "H264")
             {
-                _videoDecoder = new H264Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom);
+                _videoDecoder = new H264Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
             }
             else if (info.VideoCodec == "H265")
             {
-                _videoDecoder = new H265Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom);
+                _videoDecoder = new H265Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
             }
             else
             {
@@ -83,7 +84,7 @@ namespace SharpMediaFoundation.WPF
             }
 
             _nv12Decoder = new NV12toRGB(info.Width, info.Height);
-            _nv12Buffer = new byte[info.Width * info.Height * 3];
+            _nv12Buffer = new byte[_videoDecoder.OutputSize];
         }
 
         protected virtual void Dispose(bool disposing)

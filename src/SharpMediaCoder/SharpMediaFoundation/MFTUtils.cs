@@ -36,8 +36,7 @@ namespace SharpMediaFoundation
 
         public static void DestroyTransform(IMFTransform transform)
         {
-            // TODO
-            //throw new NotImplementedException();
+            Marshal.ReleaseComObject(transform);
         }
 
         public static IEnumerable<IMFActivate> FindTransforms(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)

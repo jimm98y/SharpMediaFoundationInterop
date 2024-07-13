@@ -52,6 +52,12 @@ namespace SharpMediaFoundation
             uint decoderOutputStatus;
             HRESULT outputResult = decoder.ProcessOutput(0, dataBuffer, out decoderOutputStatus);
 
+            if (dataBuffer[0].pEvents != null)
+            {
+                Marshal.ReleaseComObject(dataBuffer[0].pEvents);
+                dataBuffer[0].pEvents = null;
+            }
+
             if (dataBuffer[0].dwStatus == (uint)MFT_OUTPUT_DATA_BUFFER_FLAGS.FormatChange)
             {
                 decoder.GetOutputAvailableType(streamID, 0, out IMFMediaType mediaType);

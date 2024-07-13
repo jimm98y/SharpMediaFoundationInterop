@@ -6,7 +6,7 @@ namespace SharpMediaFoundation
     public abstract class VideoTransformBase : MFTBase, IVideoTransform
     {
         protected long _sampleDuration = 1;
-        private IMFTransform _decoder;
+        private IMFTransform _transform;
         private MFT_OUTPUT_DATA_BUFFER[] _dataBuffer;
         private bool _disposedValue;
 
@@ -36,8 +36,8 @@ namespace SharpMediaFoundation
             this.Width = MathUtils.RoundToMultipleOf(width, resMultiple);
             this.Height = MathUtils.RoundToMultipleOf(height, resMultiple);
 
-            _decoder = Create();
-            _decoder.GetOutputStreamInfo(0, out var streamInfo); 
+            _transform = Create();
+            _transform.GetOutputStreamInfo(0, out var streamInfo); 
             _dataBuffer = MFTUtils.CreateOutputDataBuffer(streamInfo.cbSize);
             this.OutputSize = streamInfo.cbSize;
         }
@@ -46,12 +46,12 @@ namespace SharpMediaFoundation
 
         public virtual bool ProcessInput(byte[] data, long timestamp)
         {
-            return ProcessInput(_decoder, data, _sampleDuration, timestamp);
+            return ProcessInput(_transform, data, _sampleDuration, timestamp);
         }
 
         public bool ProcessOutput(ref byte[] buffer, out uint length)
         {
-            return ProcessOutput(_decoder, _dataBuffer, ref buffer, out length);
+            return ProcessOutput(_transform, _dataBuffer, ref buffer, out length);
         }
 
         protected virtual void Dispose(bool disposing)
@@ -60,7 +60,8 @@ namespace SharpMediaFoundation
             {
                 if (disposing)
                 {
-                    MFTUtils.DestroyTransform(_decoder);
+                    MFTUtils.DestroyTransform(_transform);
+                    _transform = null;
                 }
 
                 _disposedValue = true;
