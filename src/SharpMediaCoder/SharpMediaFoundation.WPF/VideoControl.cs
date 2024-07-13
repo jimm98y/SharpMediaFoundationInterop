@@ -92,11 +92,11 @@ namespace SharpMediaFoundation.WPF
                     // decoded video image is upside down (pixel rows are in the bitmap order) => flip it
                     BitmapUtils.CopyBitmap(
                         decoded, 
+                        (int)_source.Info.Width,
+                        (int)_source.Info.Height,
                         _canvas.BackBuffer, 
                         (int)_source.Info.OriginalWidth, 
                         (int)_source.Info.OriginalHeight, 
-                        (int)_source.Info.Width,
-                        (int)_source.Info.Height,
                         true);
 
                     _canvas.AddDirtyRect(_croppingRect);
