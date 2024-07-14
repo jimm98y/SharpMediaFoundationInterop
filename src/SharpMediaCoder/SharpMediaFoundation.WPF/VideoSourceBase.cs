@@ -25,7 +25,7 @@ namespace SharpMediaFoundation.WPF
 
         public virtual Task FinalizeAsync() { return Task.CompletedTask; }
 
-        public async Task<byte[]> GetSampleAsync()
+        public async virtual Task<byte[]> GetSampleAsync()
         {
             if (_videoDecoder == null || _nv12Decoder == null)
             {

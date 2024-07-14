@@ -15,6 +15,7 @@ namespace SharpMediaFoundation
             CopyPixels(source, 0, sourceWidth, sourceHeight, target, 0, targetWidth, targetHeight, 3, flip, true);
         }
 
+        // https://learn.microsoft.com/en-us/answers/questions/1134688/media-foundation-wrong-size-for-video
         public static void CopyNV12Bitmap(byte[] source, int sourceWidth, int sourceHeight, byte[] target, int targetWidth, int targetHeight, bool flip = false)
         {
             // NV12 layout:
