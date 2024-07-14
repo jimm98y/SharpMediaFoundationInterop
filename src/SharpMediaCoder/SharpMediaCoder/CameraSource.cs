@@ -1,4 +1,5 @@
-﻿using SharpMediaFoundation.Input;
+﻿using SharpMediaFoundation.Colors;
+using SharpMediaFoundation.Input;
 using System.Buffers;
 using Windows.Win32;
 
@@ -9,7 +10,9 @@ namespace SharpMediaFoundation.WPF
         private MFDeviceSource _device;
         private bool _disposedValue;
 
-        private byte[] _buffer;
+        private byte[] _yuy2Buffer;
+
+        private ColorConverter _converter;
 
         public VideoInfo Info { get; private set; }
 
@@ -23,10 +26,11 @@ namespace SharpMediaFoundation.WPF
 
         public Task<byte[]> GetSampleAsync()
         {
-            if (_device.ReadSample(_buffer))
+            if (_device.ReadSample(_yuy2Buffer))
             {
-                var sampleBytes = ArrayPool<byte>.Shared.Rent(_buffer.Length);
-                BitmapUtils.CopyBitmap(_buffer, (int)Info.Width, (int)Info.Height, sampleBytes, (int)Info.Width, (int)Info.Height, true);
+                _converter.ProcessInput(_yuy2Buffer, 0);
+                var sampleBytes = ArrayPool<byte>.Shared.Rent((int)_converter.OutputSize);
+                _converter.ProcessOutput(ref sampleBytes, out _);
                 return Task.FromResult(sampleBytes);
             }
             else
@@ -39,9 +43,12 @@ namespace SharpMediaFoundation.WPF
         {
             if (_device == null)
             {
-                _device = new MFDeviceSource(PInvoke.MFVideoFormat_RGB24); // PInvoke.MFVideoFormat_YUY2
+                _device = new MFDeviceSource();
                 _device.Initialize();
-                _buffer = new byte[_device.OutputSize];
+                _yuy2Buffer = new byte[_device.OutputSize];
+
+                _converter = new ColorConverter(_device.OutputFormat, PInvoke.MFVideoFormat_RGB24, _device.Width, _device.Height);
+                _converter.Initialize();
             }
         
             var videoInfo = new VideoInfo();
