@@ -99,6 +99,7 @@ namespace SharpMediaFoundation.WPF
                         _canvas.BackBuffer, 
                         (int)_source.Info.OriginalWidth, 
                         (int)_source.Info.OriginalHeight, 
+                        3,
                         true);
 
                     _canvas.AddDirtyRect(_croppingRect);

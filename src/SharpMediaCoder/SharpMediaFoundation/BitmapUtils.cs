@@ -5,14 +5,14 @@ namespace SharpMediaFoundation
 {
     public static class BitmapUtils
     {
-        public static void CopyBitmap(byte[] source, int sourceWidth, int sourceHeight, nint target, int targetWidth, int targetHeight, bool flip = true)
+        public static void CopyBitmap(byte[] source, int sourceWidth, int sourceHeight, nint target, int targetWidth, int targetHeight, int bytesPerPixel = 3, bool flip = true)
         {
-            CopyPixels(source, 0, sourceWidth, sourceHeight, target, 0, targetWidth, targetHeight, 3, flip, true);
+            CopyPixels(source, 0, sourceWidth, sourceHeight, target, 0, targetWidth, targetHeight, bytesPerPixel, flip, true);
         }
 
-        public static void CopyBitmap(byte[] source, int sourceWidth, int sourceHeight, byte[] target, int targetWidth, int targetHeight, bool flip = false)
+        public static void CopyBitmap(byte[] source, int sourceWidth, int sourceHeight, byte[] target, int targetWidth, int targetHeight, int bytesPerPixel = 3, bool flip = false)
         {
-            CopyPixels(source, 0, sourceWidth, sourceHeight, target, 0, targetWidth, targetHeight, 3, flip, true);
+            CopyPixels(source, 0, sourceWidth, sourceHeight, target, 0, targetWidth, targetHeight, bytesPerPixel, flip, true);
         }
 
         // https://learn.microsoft.com/en-us/answers/questions/1134688/media-foundation-wrong-size-for-video
