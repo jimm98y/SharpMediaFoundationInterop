@@ -5,11 +5,11 @@ using System.IO;
 
 namespace SharpMediaFoundation.WPF
 {
-    public class VideoSource : VideoSourceBase
+    public class FileSource : VideoSourceBase
     {
         private string _path;
 
-        public VideoSource(string path)
+        public FileSource(string path)
         {
             this._path = path ?? throw new ArgumentNullException(nameof(path));
         }
