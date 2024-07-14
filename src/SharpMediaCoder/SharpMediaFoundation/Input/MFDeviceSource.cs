@@ -27,18 +27,26 @@ namespace SharpMediaFoundation.Input
             MFTUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out devices, out uint pcSourceActivate));
 
             // https://learn.microsoft.com/en-us/windows/win32/medfound/audio-video-capture-in-media-foundation
-            var device = (IMFMediaSource)devices[0].ActivateObject(IMF_MEDIA_SOURCE);
             for (int i = 0; i < devices.Length; i++)
             {
                 devices[i].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, out PWSTR name, out _);
                 Debug.WriteLine($"Found device {name}");
+            }
+
+            var device = (IMFMediaSource)devices[0].ActivateObject(IMF_MEDIA_SOURCE);
+
+            for (int i = 0; i < devices.Length; i++)
+            {
                 Marshal.ReleaseComObject(devices[i]);
             }
 
             IMFAttributes pSrcConfig;
             MFTUtils.Check(PInvoke.MFCreateAttributes(out pSrcConfig, 1));
-            pSrcConfig.SetUINT32(PInvoke.MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1); // this allows us to convert native YUY2 to NV12
+            
+            // this allows us to convert native YUY2 (YUYV) to NV12
+            pSrcConfig.SetUINT32(PInvoke.MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1);
             pSrcConfig.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
+            
             IMFSourceReader pReader;
             MFTUtils.Check(PInvoke.MFCreateSourceReaderFromMediaSource(device, pSrcConfig, out pReader));
 
@@ -67,7 +75,7 @@ namespace SharpMediaFoundation.Input
                 if (fs > frameSize)
                     frameSize = fs;
 
-                int width = (int)((frameSize >> 32) & 0xFFFFFFFF);
+                int width = (int)(frameSize >> 32);
                 int height = (int)(frameSize & 0xFFFFFFFF);
             }
 
@@ -109,6 +117,7 @@ namespace SharpMediaFoundation.Input
                     {
                         buffer.SetCurrentLength(0);
                         buffer.Unlock();
+                        Marshal.ReleaseComObject(buffer);
                     }
 
                     Marshal.ReleaseComObject(sample);
