@@ -43,7 +43,7 @@ using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileNam
                 {
                     if (stopwatch.ElapsedTicks - lastframe < frameDuration)
                     {
-                        await Task.Delay(1);
+                        await Task.Delay(10);
                         continue;
                     }
 

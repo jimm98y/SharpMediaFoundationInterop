@@ -32,15 +32,16 @@ namespace SharpMediaFoundation.Input
         public void Initialize()
         {
             IMFActivate[] devices = FindVideoCaptureDevices();
-            var device = CreateVideoCaptureDevice(devices[0]);
+            var device = (IMFMediaSource)devices[0].ActivateObject(IMF_MEDIA_SOURCE);
             ReleaseVideoCaptureDevices(devices);
             _pReader = CreateSourceReader(device);
             var mediaType = GetBestMediaType(_pReader);
             mediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out var frameSize);
             Width = (uint)(frameSize >> 32);
             Height = (uint)(frameSize & 0xFFFFFFFF);
-            OutputFormat = GetOutputMediaFormat(mediaType);
-            SetOutputMediaType(_pReader, mediaType);
+            mediaType.GetGUID(PInvoke.MF_MT_SUBTYPE, out var targetFormat);
+            OutputFormat = targetFormat;
+            _pReader.SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, mediaType);
 
             uint sampleSize;
             byte[] sample = null;
@@ -101,23 +102,10 @@ namespace SharpMediaFoundation.Input
             return false;
         }
 
-        private static unsafe void SetOutputMediaType(IMFSourceReader pReader, IMFMediaType mediaType)
-        {
-            pReader.SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, mediaType);
-        }
-
-        private static Guid GetOutputMediaFormat(IMFMediaType mediaType)
-        {
-            mediaType.GetGUID(PInvoke.MF_MT_SUBTYPE, out var targetFormat); 
-            return targetFormat;
-        }
-
         private static unsafe IMFMediaType GetBestMediaType(IMFSourceReader pReader)
         {
-            IMFMediaType nativeMediaType = null;
+            IMFMediaType nativeMediaType;
             IMFMediaType bestMediaType = null;
-            Guid majorType = Guid.Empty;
-            Guid subtype = Guid.Empty;
             ulong frameSize = 0;
             uint dwMediaTypeIndex = 0;
 
@@ -132,9 +120,6 @@ namespace SharpMediaFoundation.Input
                     Debug.WriteLine(ex.Message);
                     break;
                 }
-
-                nativeMediaType.GetGUID(PInvoke.MF_MT_MAJOR_TYPE, out majorType);
-                nativeMediaType.GetGUID(PInvoke.MF_MT_SUBTYPE, out subtype);
 
                 ulong fs = 0;
                 nativeMediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out fs);
@@ -156,11 +141,6 @@ namespace SharpMediaFoundation.Input
             IMFSourceReader pReader;
             MFTUtils.Check(PInvoke.MFCreateSourceReaderFromMediaSource(device, pSrcConfig, out pReader));
             return pReader;
-        }
-
-        private unsafe IMFMediaSource CreateVideoCaptureDevice(IMFActivate device)
-        {
-            return (IMFMediaSource)device.ActivateObject(IMF_MEDIA_SOURCE);
         }
 
         private static unsafe void ReleaseVideoCaptureDevices(IMFActivate[] devices)
@@ -195,9 +175,7 @@ namespace SharpMediaFoundation.Input
             if (!_disposedValue)
             {
                 if (disposing)
-                {
-                    
-                }
+                { }
 
                 if (_pReader != null)
                 {
