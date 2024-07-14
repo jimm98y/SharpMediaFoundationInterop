@@ -1,6 +1,6 @@
 ﻿using SharpMediaFoundation.Input;
 using System.Buffers;
-using Windows.Win32.Media.MediaFoundation;
+using Windows.Win32;
 
 namespace SharpMediaFoundation.WPF
 {
@@ -9,45 +9,46 @@ namespace SharpMediaFoundation.WPF
         private MFDeviceSource _device;
         private bool _disposedValue;
 
-        private byte[] _buffer = new byte[1280 * 720 * 3];
+        private byte[] _buffer;
 
         public VideoInfo Info { get; private set; }
 
         public CameraSource()
+        { }
+
+        public async Task InitializeAsync()
         {
+            Info = await OpenAsync();
         }
 
-        public Task InitializeAsync()
+        public Task<byte[]> GetSampleAsync()
         {
-            Info = OpenAsync().Result;
-            return Task.CompletedTask;
-        }
-
-        public async Task<byte[]> GetSampleAsync()
-        {
-            if(_device == null)
+            if (_device.ReadSample(_buffer))
             {
-                _device = new MFDeviceSource();
+                var sampleBytes = ArrayPool<byte>.Shared.Rent(_buffer.Length);
+                BitmapUtils.CopyBitmap(_buffer, (int)Info.Width, (int)Info.Height, sampleBytes, (int)Info.Width, (int)Info.Height, true);
+                return Task.FromResult(sampleBytes);
             }
-
-            while(!_device.ReadSample(_buffer))
+            else
             {
-                await Task.Delay(100);
+                return Task.FromResult<byte[]>(null);
             }
-
-            var sampleBytes = ArrayPool<byte>.Shared.Rent(1280 * 720 * 3);
-            BitmapUtils.CopyBitmap(_buffer, 1280, 720, sampleBytes, 1280, 720, true);
-
-            return sampleBytes;
         }
 
         private Task<VideoInfo> OpenAsync()
         {
+            if (_device == null)
+            {
+                _device = new MFDeviceSource(PInvoke.MFVideoFormat_RGB24); // PInvoke.MFVideoFormat_YUY2
+                _device.Initialize();
+                _buffer = new byte[_device.OutputSize];
+            }
+        
             var videoInfo = new VideoInfo();
-            videoInfo.Width = 1280;
-            videoInfo.Height = 720; 
-            videoInfo.OriginalWidth = 1280;
-            videoInfo.OriginalHeight = 720;
+            videoInfo.Width = _device.Width;
+            videoInfo.Height = _device.Height;
+            videoInfo.OriginalWidth = _device.Width;
+            videoInfo.OriginalHeight = _device.Height;
             videoInfo.FpsNom = 24000;
             videoInfo.FpsDenom = 1001;
             return Task.FromResult(videoInfo);
@@ -59,6 +60,11 @@ namespace SharpMediaFoundation.WPF
             {
                 if (disposing)
                 {
+                }
+
+                if(_device != null)
+                {
+                    _device.Dispose();
                 }
 
                 _disposedValue = true;

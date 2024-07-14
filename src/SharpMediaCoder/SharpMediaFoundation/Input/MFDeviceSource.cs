@@ -7,11 +7,17 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation.Input
 {
-    public class MFDeviceSource
+    public class MFDeviceSource : IDisposable
     {
         private const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
         public readonly Guid IMF_MEDIA_SOURCE = new Guid("279A808D-AEC7-40C8-9C6B-A6B492C78A66");
         private IMFSourceReader _pReader;
+        private bool _disposedValue;
+        
+        public uint Width { get; private set; }
+        public uint Height { get; private set; }
+
+        public uint OutputSize { get; private set; }
 
         public Guid TargetFormat { get; } = PInvoke.MFVideoFormat_RGB24; // PInvoke.MFVideoFormat_NV12;
 
@@ -26,13 +32,28 @@ namespace SharpMediaFoundation.Input
         public MFDeviceSource(Guid targetFormat)
         {
             TargetFormat = targetFormat;
+        }
+
+        public void Initialize()
+        {
             IMFActivate[] devices = FindVideoCaptureDevices();
             var device = CreateVideoCaptureDevice(devices[0]);
             ReleaseVideoCaptureDevices(devices);
             _pReader = CreateSourceReader(device, TargetFormat);
             var bestMediaType = GetBestMediaType(_pReader);
+            bestMediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out var frameSize);
+            Width = (uint)(frameSize >> 32);
+            Height = (uint)(frameSize & 0xFFFFFFFF);
             IMFMediaType mediaType = SetOutputMediaFormat(bestMediaType, TargetFormat);
             SetOutputMediaType(_pReader, mediaType);
+
+            uint sampleSize;
+            byte[] sample = null;
+            int i = 0;
+            // right now I know of no better solution to get the sample size than to read a sample
+            while(!ReadSample(_pReader, ref sample, out _, out _, out _, out sampleSize) && i++ < 2)
+            { }
+            OutputSize = sampleSize;
         }
 
         public bool ReadSample(byte[] sampleBytes)
@@ -40,10 +61,11 @@ namespace SharpMediaFoundation.Input
             uint actualStreamIndex;
             uint dwStreamFlags;
             long timestamp;
-            return ReadSample(_pReader, ref sampleBytes, out actualStreamIndex, out dwStreamFlags, out timestamp);
+            uint sampleSize;
+            return ReadSample(_pReader, ref sampleBytes, out actualStreamIndex, out dwStreamFlags, out timestamp, out sampleSize);
         }
 
-        private static unsafe bool ReadSample(IMFSourceReader pReader, ref byte[] sampleBytes, out uint actualStreamIndex, out uint dwStreamFlags, out long timestamp)
+        private static unsafe bool ReadSample(IMFSourceReader pReader, ref byte[] sampleBytes, out uint actualStreamIndex, out uint dwStreamFlags, out long timestamp, out uint sampleSize)
         {
             IMFSample sample;
             uint lactualStreamIndex;
@@ -66,8 +88,13 @@ namespace SharpMediaFoundation.Input
                     byte* data = default;
                     buffer.Lock(&data, &maxLength, &currentLength);
 
-                    Marshal.Copy((IntPtr)data, sampleBytes, 0, (int)currentLength);
+                    sampleSize = maxLength;
 
+                    if (sampleBytes != null)
+                    {
+                        Marshal.Copy((IntPtr)data, sampleBytes, 0, (int)currentLength);
+                    }
+                    
                     return true;
                 }
                 finally
@@ -79,6 +106,7 @@ namespace SharpMediaFoundation.Input
                 }
             }
 
+            sampleSize = 0;
             return false;
         }
 
@@ -100,7 +128,6 @@ namespace SharpMediaFoundation.Input
 
         private static unsafe IMFMediaType GetBestMediaType(IMFSourceReader pReader)
         {
-            // TODO: convert this method to "get media info"
             IMFMediaType nativeMediaType = null;
             IMFMediaType bestMediaType = null;
             Guid majorType = Guid.Empty;
@@ -130,9 +157,6 @@ namespace SharpMediaFoundation.Input
                     frameSize = fs;
                     bestMediaType = nativeMediaType;
                 }
-
-                int width = (int)(frameSize >> 32);
-                int height = (int)(frameSize & 0xFFFFFFFF);
             }
 
             return bestMediaType;
@@ -183,6 +207,31 @@ namespace SharpMediaFoundation.Input
             }
 
             return devices;
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    
+                }
+
+                if (_pReader != null)
+                {
+                    Marshal.ReleaseComObject(_pReader);
+                    _pReader = null;
+                }
+
+                _disposedValue = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

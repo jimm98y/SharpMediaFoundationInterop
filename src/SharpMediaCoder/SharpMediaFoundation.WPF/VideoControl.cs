@@ -14,6 +14,7 @@ namespace SharpMediaFoundation.WPF
     [TemplatePart(Name = "PART_image", Type = typeof(Image))]
     public class VideoControl : Control
     {
+        private IVideoSource _nextSource = null;
         private IVideoSource _source = null;
 
         public IVideoSource Source
@@ -25,16 +26,15 @@ namespace SharpMediaFoundation.WPF
         public static readonly DependencyProperty SourceProperty =
             DependencyProperty.Register("Source", typeof(IVideoSource), typeof(VideoControl), new PropertyMetadata(null, OnSourceChanged));
 
-        private static async void OnSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        private static void OnSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var sender = (VideoControl)d;
             var source = e.NewValue as IVideoSource;
-            sender._source = source;
+            sender._nextSource = source;
             if(source != null)
             {
-                await source.InitializeAsync();
                 sender.StartPlaying();
-            }   
+            }
         }
 
         private Image _image;
@@ -54,6 +54,8 @@ namespace SharpMediaFoundation.WPF
 
         public VideoControl()
         {
+            _timer = new System.Timers.Timer();
+            _timer.Elapsed += OnTickDecoder;
             Loaded += VideoControl_Loaded;
             CompositionTarget.Rendering += CompositionTarget_Rendering;
         }
@@ -112,6 +114,45 @@ namespace SharpMediaFoundation.WPF
         {
             await _semaphore.WaitAsync();
 
+            // Initialize
+            var nextSource = _nextSource;
+            var currentSource = _source;
+            if(nextSource != currentSource)
+            {
+                if (nextSource != null)
+                {
+                    // calling initialize from the same thread as GetSampleAsync
+                    await nextSource.InitializeAsync();
+                    _source = nextSource;
+
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        var info = nextSource.Info;
+                        _canvas = new WriteableBitmap(
+                            (int)info.OriginalWidth,
+                            (int)info.OriginalHeight,
+                            96,
+                            96,
+                            PixelFormats.Bgr24,
+                            null);
+                        this._image.Source = _canvas;
+                        _croppingRect = new Int32Rect(0, 0, (int)info.OriginalWidth, (int)info.OriginalHeight);
+                        _timer.Interval = 1000 * info.FpsDenom / info.FpsNom;
+                    });
+                }
+                else
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        this._image.Source = null;
+                    });
+
+                    _source = nextSource;
+                    StopPlaying();
+                }
+            }
+
+            // Get Sample
             try
             {
                 while (_renderQueue.Count <= 2) // taking just 1 frame seems to leak native memory, TODO: investigate
@@ -131,33 +172,14 @@ namespace SharpMediaFoundation.WPF
 
         private void StartPlaying()
         {
-            try
-            {
-                _timer?.Stop();
+            _timer.Start();
+            _stopwatch.Restart();
+        }
 
-                if (_source != null)
-                {
-                    var info = _source.Info;
-                    _canvas = new WriteableBitmap(
-                        (int)info.OriginalWidth,
-                        (int)info.OriginalHeight,
-                        96,
-                        96,
-                        PixelFormats.Bgr24,
-                        null);
-                    this._image.Source = _canvas;
-                    _croppingRect = new Int32Rect(0, 0, (int)info.OriginalWidth, (int)info.OriginalHeight);
-                    _timer = new System.Timers.Timer();
-                    _timer.Elapsed += OnTickDecoder;
-                    _timer.Interval = 1000 * info.FpsDenom / info.FpsNom;
-                    _timer.Start();
-                    _stopwatch.Start();
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex.Message);
-            }
+        private void StopPlaying()
+        {
+            _timer.Stop();
+            _stopwatch.Stop();
         }
     }
 }
