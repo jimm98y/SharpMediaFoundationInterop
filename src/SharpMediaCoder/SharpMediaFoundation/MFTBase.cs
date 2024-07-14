@@ -87,6 +87,7 @@ namespace SharpMediaFoundation
                 {
                     buffer.SetCurrentLength(0);
                     buffer.Unlock();
+                    Marshal.ReleaseComObject(buffer);
                 }
             }
 
