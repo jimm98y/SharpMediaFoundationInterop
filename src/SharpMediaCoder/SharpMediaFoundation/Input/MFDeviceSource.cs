@@ -19,37 +19,86 @@ namespace SharpMediaFoundation.Input
 
         private unsafe void Initialize()
         {
-            IMFActivate[] devices;
-            IMFAttributes pConfig;
-            MFTUtils.Check(PInvoke.MFCreateAttributes(out pConfig, 1));
-            pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-            pConfig.SetUINT32(PInvoke.MF_READWRITE_DISABLE_CONVERTERS, 0);
-            MFTUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out devices, out uint pcSourceActivate));
+            IMFActivate[] devices = FindVideoCaptureDevices();
+            IMFMediaSource device = CreateVideoCaptureDevice(devices[0]);
+            ReleaseVideoCaptureDevices(devices);
+            IMFSourceReader pReader = CreateSourceReader(device);
+            ulong frameSize = GetMaximumSupportedFrameSize(pReader);
+            IMFMediaType mediaType = CreateOutputMediaType(frameSize);
+            SetOutputMediaType(pReader, mediaType);
 
-            // https://learn.microsoft.com/en-us/windows/win32/medfound/audio-video-capture-in-media-foundation
-            for (int i = 0; i < devices.Length; i++)
+            while (true)
             {
-                devices[i].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, out PWSTR name, out _);
-                Debug.WriteLine($"Found device {name}");
+                uint actualStreamIndex;
+                uint dwStreamFlags;
+                long timestamp;
+                byte[] sampleBytes = ReadSample(pReader, out actualStreamIndex, out dwStreamFlags, out timestamp);
+
+                Thread.Sleep(100);
+            }
+        }
+
+        private static unsafe byte[] ReadSample(IMFSourceReader pReader, out uint actualStreamIndex, out uint dwStreamFlags, out long timestamp)
+        {
+            byte[] sampleBytes = null;
+            IMFSample sample;
+            uint lactualStreamIndex;
+            uint ldwStreamFlags;
+            long ltimestamp;
+
+            pReader.ReadSample(0, 0, &lactualStreamIndex, &ldwStreamFlags, &ltimestamp, out sample);
+
+            actualStreamIndex = lactualStreamIndex;
+            dwStreamFlags = ldwStreamFlags;
+            timestamp = ltimestamp;
+
+            if (sample != null)
+            {
+                sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
+                try
+                {
+                    uint maxLength = default;
+                    uint currentLength = default;
+                    byte* data = default;
+                    buffer.Lock(&data, &maxLength, &currentLength);
+
+                    if (sampleBytes == null)
+                    {
+                        sampleBytes = new byte[maxLength];
+                    }
+
+                    Marshal.Copy((IntPtr)data, sampleBytes, 0, (int)currentLength);
+                }
+                finally
+                {
+                    buffer.SetCurrentLength(0);
+                    buffer.Unlock();
+                    Marshal.ReleaseComObject(buffer);
+                }
+
+                Marshal.ReleaseComObject(sample);
             }
 
-            var device = (IMFMediaSource)devices[0].ActivateObject(IMF_MEDIA_SOURCE);
+            return sampleBytes;
+        }
 
-            for (int i = 0; i < devices.Length; i++)
-            {
-                Marshal.ReleaseComObject(devices[i]);
-            }
+        private static unsafe void SetOutputMediaType(IMFSourceReader pReader, IMFMediaType mediaType)
+        {
+            pReader.SetCurrentMediaType(0, mediaType);
+        }
 
-            IMFAttributes pSrcConfig;
-            MFTUtils.Check(PInvoke.MFCreateAttributes(out pSrcConfig, 1));
-            
-            // this allows us to convert native YUY2 (YUYV) to NV12
-            pSrcConfig.SetUINT32(PInvoke.MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1);
-            pSrcConfig.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
-            
-            IMFSourceReader pReader;
-            MFTUtils.Check(PInvoke.MFCreateSourceReaderFromMediaSource(device, pSrcConfig, out pReader));
+        private static unsafe IMFMediaType CreateOutputMediaType(ulong frameSize)
+        {
+            IMFMediaType mediaType;
+            MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaType));
+            mediaType.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
+            mediaType.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
+            mediaType.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, frameSize);
+            return mediaType;
+        }
 
+        private static unsafe ulong GetMaximumSupportedFrameSize(IMFSourceReader pReader)
+        {
             IMFMediaType nativeMediaType;
             Guid majorType = Guid.Empty;
             Guid subtype = Guid.Empty;
@@ -61,7 +110,7 @@ namespace SharpMediaFoundation.Input
                 {
                     pReader.GetNativeMediaType(0, dwMediaTypeIndex++, out nativeMediaType);
                 }
-                catch(COMException ex)
+                catch (COMException ex)
                 {
                     Debug.WriteLine(ex.Message);
                     break;
@@ -79,52 +128,53 @@ namespace SharpMediaFoundation.Input
                 int height = (int)(frameSize & 0xFFFFFFFF);
             }
 
-            IMFMediaType mediaType;
-            MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaType));
-            mediaType.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
-            mediaType.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
-            mediaType.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, frameSize);
-            pReader.SetCurrentMediaType(0, mediaType);
+            return frameSize;
+        }
 
-            uint actualStreamIndex;
-            uint dwStreamFlags;
-            long timestamp;
-            IMFSample sample;
-            byte[] sampleBytes = null;
+        private static unsafe IMFSourceReader CreateSourceReader(IMFMediaSource device)
+        {
+            IMFAttributes pSrcConfig;
+            MFTUtils.Check(PInvoke.MFCreateAttributes(out pSrcConfig, 1));
 
-            while (true)
+            // this allows us to convert native YUY2 (YUYV) to NV12
+            pSrcConfig.SetUINT32(PInvoke.MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1);
+            pSrcConfig.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
+
+            IMFSourceReader pReader;
+            MFTUtils.Check(PInvoke.MFCreateSourceReaderFromMediaSource(device, pSrcConfig, out pReader));
+            return pReader;
+        }
+
+        private unsafe IMFMediaSource CreateVideoCaptureDevice(IMFActivate device)
+        {
+            return (IMFMediaSource)device.ActivateObject(IMF_MEDIA_SOURCE);
+        }
+
+        private static unsafe void ReleaseVideoCaptureDevices(IMFActivate[] devices)
+        {
+            for (int i = 0; i < devices.Length; i++)
             {
-                pReader.ReadSample(0, 0, &actualStreamIndex, &dwStreamFlags, &timestamp, out sample);
-
-                if (sample != null)
-                {
-                    sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
-                    try
-                    {
-                        uint maxLength = default;
-                        uint currentLength = default;
-                        byte* data = default;
-                        buffer.Lock(&data, &maxLength, &currentLength);
-
-                        if (sampleBytes == null)
-                        {
-                            sampleBytes = new byte[maxLength];
-                        }
-
-                        Marshal.Copy((IntPtr)data, sampleBytes, 0, (int)currentLength);
-                    }
-                    finally
-                    {
-                        buffer.SetCurrentLength(0);
-                        buffer.Unlock();
-                        Marshal.ReleaseComObject(buffer);
-                    }
-
-                    Marshal.ReleaseComObject(sample);
-                }
-
-                Thread.Sleep(100);
+                Marshal.ReleaseComObject(devices[i]);
             }
+        }
+
+        private static unsafe IMFActivate[] FindVideoCaptureDevices()
+        {
+            IMFActivate[] devices;
+            IMFAttributes pConfig;
+            MFTUtils.Check(PInvoke.MFCreateAttributes(out pConfig, 1));
+            pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
+            pConfig.SetUINT32(PInvoke.MF_READWRITE_DISABLE_CONVERTERS, 0);
+            MFTUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out devices, out uint pcSourceActivate));
+
+            // https://learn.microsoft.com/en-us/windows/win32/medfound/audio-video-capture-in-media-foundation
+            for (int i = 0; i < devices.Length; i++)
+            {
+                devices[i].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, out PWSTR name, out _);
+                Debug.WriteLine($"Found device {name}");
+            }
+
+            return devices;
         }
     }
 }
