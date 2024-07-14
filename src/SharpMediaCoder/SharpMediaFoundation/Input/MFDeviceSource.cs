@@ -18,7 +18,6 @@ namespace SharpMediaFoundation.Input
         public uint Height { get; private set; }
 
         public Guid OutputFormat { get; private set; }
-
         public uint OutputSize { get; private set; }
 
         static MFDeviceSource()
@@ -121,11 +120,10 @@ namespace SharpMediaFoundation.Input
                     break;
                 }
 
-                ulong fs = 0;
-                nativeMediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out fs);
-                if (fs > frameSize)
+                nativeMediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out ulong currentFrameSize);
+                if (currentFrameSize > frameSize)
                 {
-                    frameSize = fs;
+                    frameSize = currentFrameSize;
                     bestMediaType = nativeMediaType;
                 }
             }
@@ -135,11 +133,8 @@ namespace SharpMediaFoundation.Input
 
         private static unsafe IMFSourceReader CreateSourceReader(IMFMediaSource device)
         {
-            IMFAttributes pSrcConfig;
-            MFTUtils.Check(PInvoke.MFCreateAttributes(out pSrcConfig, 1));
-
-            IMFSourceReader pReader;
-            MFTUtils.Check(PInvoke.MFCreateSourceReaderFromMediaSource(device, pSrcConfig, out pReader));
+            MFTUtils.Check(PInvoke.MFCreateAttributes(out var pSrcConfig, 1));
+            MFTUtils.Check(PInvoke.MFCreateSourceReaderFromMediaSource(device, pSrcConfig, out var pReader));
             return pReader;
         }
 
@@ -153,20 +148,14 @@ namespace SharpMediaFoundation.Input
 
         private static unsafe IMFActivate[] FindVideoCaptureDevices()
         {
-            IMFActivate[] devices;
-            IMFAttributes pConfig;
-            MFTUtils.Check(PInvoke.MFCreateAttributes(out pConfig, 1));
+            MFTUtils.Check(PInvoke.MFCreateAttributes(out var pConfig, 1));
             pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-            pConfig.SetUINT32(PInvoke.MF_READWRITE_DISABLE_CONVERTERS, 0);
-            MFTUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out devices, out uint pcSourceActivate));
-
-            // https://learn.microsoft.com/en-us/windows/win32/medfound/audio-video-capture-in-media-foundation
+            MFTUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out var devices, out uint pcSourceActivate));
             for (int i = 0; i < devices.Length; i++)
             {
                 devices[i].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, out PWSTR name, out _);
                 Debug.WriteLine($"Found device {name}");
             }
-
             return devices;
         }
 
