@@ -1,4 +1,5 @@
-﻿using Windows.Win32;
+﻿using System;
+using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation
@@ -20,6 +21,9 @@ namespace SharpMediaFoundation
         public uint FpsDenom { get; }
 
         public uint OutputSize { get; private set; }
+
+        public abstract Guid InputFormat { get; }
+        public abstract Guid OutputFormat { get; }
 
         protected VideoTransformBase(uint width, uint height)
           : this(1, width, height, 1, 1)

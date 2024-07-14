@@ -8,6 +8,9 @@ namespace SharpMediaFoundation.H264
     {
         public const uint H264_RES_MULTIPLE = 16;
 
+        public override Guid InputFormat => PInvoke.MFVideoFormat_H264;
+        public override Guid OutputFormat => PInvoke.MFVideoFormat_NV12;
+
         private bool _isLowLatency = false;
 
         public H264Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false)

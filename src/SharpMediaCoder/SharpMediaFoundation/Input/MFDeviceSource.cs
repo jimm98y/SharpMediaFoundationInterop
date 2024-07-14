@@ -51,13 +51,9 @@ namespace SharpMediaFoundation.Input
             OutputSize = sampleSize;
         }
 
-        public bool ReadSample(byte[] sampleBytes)
+        public bool ReadSample(byte[] sampleBytes, out long timestamp)
         {
-            uint actualStreamIndex;
-            uint dwStreamFlags;
-            long timestamp;
-            uint sampleSize;
-            return ReadSample(_pReader, ref sampleBytes, out actualStreamIndex, out dwStreamFlags, out timestamp, out sampleSize);
+            return ReadSample(_pReader, ref sampleBytes, out _, out _, out timestamp, out _);
         }
 
         private static unsafe bool ReadSample(IMFSourceReader pReader, ref byte[] sampleBytes, out uint actualStreamIndex, out uint dwStreamFlags, out long timestamp, out uint sampleSize)

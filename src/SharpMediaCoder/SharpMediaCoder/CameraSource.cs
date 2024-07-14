@@ -26,7 +26,7 @@ namespace SharpMediaFoundation.WPF
 
         public Task<byte[]> GetSampleAsync()
         {
-            if (_device.ReadSample(_yuy2Buffer))
+            if (_device.ReadSample(_yuy2Buffer, out _))
             {
                 _converter.ProcessInput(_yuy2Buffer, 0);
                 var sampleBytes = ArrayPool<byte>.Shared.Rent((int)_converter.OutputSize);

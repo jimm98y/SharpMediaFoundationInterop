@@ -8,6 +8,9 @@ namespace SharpMediaFoundation.H265
     {
         public const uint H265_RES_MULTIPLE = 8;
 
+        public override Guid InputFormat => PInvoke.MFVideoFormat_NV12;
+        public override Guid OutputFormat => PInvoke.MFVideoFormat_HEVC;
+
         public H265Encoder(uint width, uint height, uint fpsNom, uint fpsDenom)
             : base(H265_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
         { }
