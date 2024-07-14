@@ -27,20 +27,20 @@ namespace SharpMediaFoundation.Input
             IMFMediaType mediaType = CreateOutputMediaType(frameSize);
             SetOutputMediaType(pReader, mediaType);
 
+            byte[] sampleBytes = null;
             while (true)
             {
                 uint actualStreamIndex;
                 uint dwStreamFlags;
                 long timestamp;
-                byte[] sampleBytes = ReadSample(pReader, out actualStreamIndex, out dwStreamFlags, out timestamp);
+                ReadSample(pReader, ref sampleBytes, out actualStreamIndex, out dwStreamFlags, out timestamp);
 
                 Thread.Sleep(100);
             }
         }
 
-        private static unsafe byte[] ReadSample(IMFSourceReader pReader, out uint actualStreamIndex, out uint dwStreamFlags, out long timestamp)
+        private static unsafe bool ReadSample(IMFSourceReader pReader, ref byte[] sampleBytes, out uint actualStreamIndex, out uint dwStreamFlags, out long timestamp)
         {
-            byte[] sampleBytes = null;
             IMFSample sample;
             uint lactualStreamIndex;
             uint ldwStreamFlags;
@@ -68,18 +68,19 @@ namespace SharpMediaFoundation.Input
                     }
 
                     Marshal.Copy((IntPtr)data, sampleBytes, 0, (int)currentLength);
+
+                    return true;
                 }
                 finally
                 {
                     buffer.SetCurrentLength(0);
                     buffer.Unlock();
                     Marshal.ReleaseComObject(buffer);
+                    Marshal.ReleaseComObject(sample);
                 }
-
-                Marshal.ReleaseComObject(sample);
             }
 
-            return sampleBytes;
+            return false;
         }
 
         private static unsafe void SetOutputMediaType(IMFSourceReader pReader, IMFMediaType mediaType)
@@ -99,11 +100,13 @@ namespace SharpMediaFoundation.Input
 
         private static unsafe ulong GetMaximumSupportedFrameSize(IMFSourceReader pReader)
         {
+            // TODO: convert this method to "get media info"
             IMFMediaType nativeMediaType;
             Guid majorType = Guid.Empty;
             Guid subtype = Guid.Empty;
             ulong frameSize = 0;
             uint dwMediaTypeIndex = 0;
+
             while (true)
             {
                 try
