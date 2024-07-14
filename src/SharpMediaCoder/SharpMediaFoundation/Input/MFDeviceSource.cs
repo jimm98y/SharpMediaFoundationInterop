@@ -13,16 +13,25 @@ namespace SharpMediaFoundation.Input
         public readonly Guid IMF_MEDIA_SOURCE = new Guid("279A808D-AEC7-40C8-9C6B-A6B492C78A66");
         private IMFSourceReader _pReader;
 
-        private Guid _targetFormat = PInvoke.MFVideoFormat_RGB24; // PInvoke.MFVideoFormat_NV12;
+        public Guid TargetFormat { get; } = PInvoke.MFVideoFormat_RGB24; // PInvoke.MFVideoFormat_NV12;
 
-        public MFDeviceSource()
+        static MFDeviceSource()
         {
+            MFTUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
+        }
+
+        public MFDeviceSource() : this(PInvoke.MFVideoFormat_RGB24)
+        { }
+
+        public MFDeviceSource(Guid targetFormat)
+        {
+            TargetFormat = targetFormat;
             IMFActivate[] devices = FindVideoCaptureDevices();
             var device = CreateVideoCaptureDevice(devices[0]);
             ReleaseVideoCaptureDevices(devices);
-            _pReader = CreateSourceReader(device, _targetFormat);
+            _pReader = CreateSourceReader(device, TargetFormat);
             var bestMediaType = GetBestMediaType(_pReader);
-            IMFMediaType mediaType = SetOutputMediaFormat(bestMediaType, _targetFormat);
+            IMFMediaType mediaType = SetOutputMediaFormat(bestMediaType, TargetFormat);
             SetOutputMediaType(_pReader, mediaType);
         }
 

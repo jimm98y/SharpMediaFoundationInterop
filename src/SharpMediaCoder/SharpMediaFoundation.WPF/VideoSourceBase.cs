@@ -1,10 +1,11 @@
 ﻿using SharpMediaFoundation.H264;
 using SharpMediaFoundation.H265;
-using SharpMediaFoundation.NV12;
+using SharpMediaFoundation.Colors;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Windows.Win32;
 
 namespace SharpMediaFoundation.WPF
 {
@@ -13,7 +14,7 @@ namespace SharpMediaFoundation.WPF
         public VideoInfo Info { get; protected set; }
 
         protected IVideoTransform _videoDecoder;
-        protected NV12toRGB _nv12Decoder;
+        protected ColorConverter _nv12Decoder;
         protected Queue<IList<byte[]>> _sampleQueue = new Queue<IList<byte[]>>();
         protected Queue<byte[]> _renderQueue = new Queue<byte[]>();
         protected byte[] _nv12Buffer;
@@ -73,17 +74,21 @@ namespace SharpMediaFoundation.WPF
             if (info.VideoCodec == "H264")
             {
                 _videoDecoder = new H264Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
+                _videoDecoder.Initialize();
             }
             else if (info.VideoCodec == "H265")
             {
                 _videoDecoder = new H265Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
+                _videoDecoder.Initialize();
             }
             else
             {
                 throw new NotSupportedException();
             }
 
-            _nv12Decoder = new NV12toRGB(info.Width, info.Height);
+            _nv12Decoder = new ColorConverter(PInvoke.MFVideoFormat_NV12, PInvoke.MFVideoFormat_RGB24, info.Width, info.Height);
+            _nv12Decoder.Initialize();
+
             _nv12Buffer = new byte[_videoDecoder.OutputSize];
         }
 
