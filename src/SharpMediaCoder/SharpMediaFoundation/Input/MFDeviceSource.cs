@@ -1,22 +1,18 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation.Input
 {
-    public class MFSource
+    public class MFDeviceSource
     {
         public readonly Guid IMF_MEDIA_SOURCE = new Guid("279A808D-AEC7-40C8-9C6B-A6B492C78A66");
 
-        public MFSource()
+        public MFDeviceSource()
         {
             Initialize();
         }
@@ -27,6 +23,7 @@ namespace SharpMediaFoundation.Input
             IMFAttributes pConfig;
             MFTUtils.Check(PInvoke.MFCreateAttributes(out pConfig, 1));
             pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
+            pConfig.SetUINT32(PInvoke.MF_READWRITE_DISABLE_CONVERTERS, 0);
             MFTUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out devices, out uint pcSourceActivate));
 
             // https://learn.microsoft.com/en-us/windows/win32/medfound/audio-video-capture-in-media-foundation
@@ -42,15 +39,43 @@ namespace SharpMediaFoundation.Input
             MFTUtils.Check(PInvoke.MFCreateAttributes(out pSrcConfig, 1));
             pSrcConfig.SetUINT32(PInvoke.MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, 1); // this allows us to convert native YUY2 to NV12
             pSrcConfig.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
-            
             IMFSourceReader pReader;
             MFTUtils.Check(PInvoke.MFCreateSourceReaderFromMediaSource(device, pSrcConfig, out pReader));
+
+            IMFMediaType nativeMediaType;
+            Guid majorType = Guid.Empty;
+            Guid subtype = Guid.Empty;
+            ulong frameSize = 0;
+            uint dwMediaTypeIndex = 0;
+            while (true)
+            {
+                try
+                {
+                    pReader.GetNativeMediaType(0, dwMediaTypeIndex++, out nativeMediaType);
+                }
+                catch(COMException ex)
+                {
+                    Debug.WriteLine(ex.Message);
+                    break;
+                }
+
+                nativeMediaType.GetGUID(PInvoke.MF_MT_MAJOR_TYPE, out majorType);
+                nativeMediaType.GetGUID(PInvoke.MF_MT_SUBTYPE, out subtype);
+
+                ulong fs = 0;
+                nativeMediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out fs);
+                if (fs > frameSize)
+                    frameSize = fs;
+
+                int width = (int)((frameSize >> 32) & 0xFFFFFFFF);
+                int height = (int)(frameSize & 0xFFFFFFFF);
+            }
 
             IMFMediaType mediaType;
             MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaType));
             mediaType.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
             mediaType.SetGUID(PInvoke.MF_MT_SUBTYPE, PInvoke.MFVideoFormat_NV12);
-
+            mediaType.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, frameSize);
             pReader.SetCurrentMediaType(0, mediaType);
 
             uint actualStreamIndex;
@@ -73,7 +98,6 @@ namespace SharpMediaFoundation.Input
                         byte* data = default;
                         buffer.Lock(&data, &maxLength, &currentLength);
 
-                        // TODO: YUY2 to NV12 converter
                         if (sampleBytes == null)
                         {
                             sampleBytes = new byte[maxLength];

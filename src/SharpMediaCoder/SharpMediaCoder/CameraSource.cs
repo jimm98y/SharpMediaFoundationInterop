@@ -4,7 +4,7 @@ namespace SharpMediaFoundation.WPF
 {
     public class CameraSource : VideoSourceBase
     {
-        private MFSource _device;
+        private MFDeviceSource _device;
 
         public CameraSource()
         {
@@ -17,7 +17,7 @@ namespace SharpMediaFoundation.WPF
 
         private async Task<VideoInfo> OpenAsync()
         {
-            _device = new MFSource();
+            _device = new MFDeviceSource();
             
 
             var videoInfo = new VideoInfo();
