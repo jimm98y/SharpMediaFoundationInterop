@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Reflection.Metadata.Ecma335;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -30,8 +33,8 @@ namespace SharpMediaFoundation.Input
 
         public void Initialize()
         {
-            IMFActivate[] devices = FindVideoCaptureDevices();
-            var device = (IMFMediaSource)devices[0].ActivateObject(IMF_MEDIA_SOURCE);
+            CaptureDevice[] devices = FindVideoCaptureDevices();
+            var device = (IMFMediaSource)devices[0].Activator.ActivateObject(IMF_MEDIA_SOURCE);
             ReleaseVideoCaptureDevices(devices);
             _pReader = CreateSourceReader(device);
             var mediaType = GetBestMediaType(_pReader);
@@ -138,16 +141,28 @@ namespace SharpMediaFoundation.Input
             return pReader;
         }
 
-        private static unsafe void ReleaseVideoCaptureDevices(IMFActivate[] devices)
+        private static unsafe void ReleaseVideoCaptureDevices(CaptureDevice[] devices)
         {
             for (int i = 0; i < devices.Length; i++)
             {
-                Marshal.ReleaseComObject(devices[i]);
+                Marshal.ReleaseComObject(devices[i].Activator);
             }
         }
 
-        private static unsafe IMFActivate[] FindVideoCaptureDevices()
+        public class CaptureDevice
         {
+            public IMFActivate Activator { get; set; }
+            public string Name { get; set; }
+            public CaptureDevice(IMFActivate activator, string name)
+            {
+                this.Activator = activator;
+                this.Name = name;
+            }
+        }
+
+        public static unsafe CaptureDevice[] FindVideoCaptureDevices()
+        {
+            List<CaptureDevice> ret = new List<CaptureDevice>();
             MFTUtils.Check(PInvoke.MFCreateAttributes(out var pConfig, 1));
             pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
             MFTUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out var devices, out uint pcSourceActivate));
@@ -155,8 +170,9 @@ namespace SharpMediaFoundation.Input
             {
                 devices[i].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, out PWSTR name, out _);
                 Debug.WriteLine($"Found device {name}");
+                ret.Add(new CaptureDevice(devices[i], name.ToString()));
             }
-            return devices;
+            return ret.ToArray();
         }
 
         protected virtual void Dispose(bool disposing)
