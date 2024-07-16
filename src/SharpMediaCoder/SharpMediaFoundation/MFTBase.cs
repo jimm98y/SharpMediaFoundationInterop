@@ -52,12 +52,6 @@ namespace SharpMediaFoundation
             uint decoderOutputStatus;
             HRESULT outputResult = decoder.ProcessOutput(0, dataBuffer, out decoderOutputStatus);
 
-            if (dataBuffer[0].pEvents != null)
-            {
-                Marshal.ReleaseComObject(dataBuffer[0].pEvents);
-                dataBuffer[0].pEvents = null;
-            }
-
             if (dataBuffer[0].dwStatus == (uint)MFT_OUTPUT_DATA_BUFFER_FLAGS.FormatChange)
             {
                 decoder.GetOutputAvailableType(streamID, 0, out IMFMediaType mediaType);
@@ -72,23 +66,9 @@ namespace SharpMediaFoundation
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {
-                dataBuffer[0].pSample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
-                try
-                {
-                    uint maxLength = default;
-                    uint currentLength = default;
-                    byte* data = default;
-                    buffer.Lock(&data, &maxLength, &currentLength);
-                    Marshal.Copy((IntPtr)data, bytes, 0, (int)currentLength);
-                    length = currentLength;
-                    return true;
-                }
-                finally
-                {
-                    buffer.SetCurrentLength(0);
-                    buffer.Unlock();
-                    Marshal.ReleaseComObject(buffer);
-                }
+                IMFSample sample = dataBuffer[0].pSample;
+                sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
+                return MFTUtils.CopyBuffer(buffer, bytes, out length);
             }
 
             length = 0;

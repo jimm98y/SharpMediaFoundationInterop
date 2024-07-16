@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Reflection.Metadata.Ecma335;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -77,24 +75,10 @@ namespace SharpMediaFoundation.Input
                 sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
                 try
                 {
-                    uint maxLength = default;
-                    uint currentLength = default;
-                    byte* data = default;
-                    buffer.Lock(&data, &maxLength, &currentLength);
-
-                    sampleSize = maxLength;
-
-                    if (sampleBytes != null)
-                    {
-                        Marshal.Copy((IntPtr)data, sampleBytes, 0, (int)currentLength);
-                    }
-                    
-                    return true;
+                    return MFTUtils.CopyBuffer(buffer, sampleBytes, out sampleSize);
                 }
                 finally
                 {
-                    buffer.SetCurrentLength(0);
-                    buffer.Unlock();
                     Marshal.ReleaseComObject(buffer);
                     Marshal.ReleaseComObject(sample);
                 }
