@@ -22,27 +22,27 @@ namespace SharpMediaFoundation.H264
             var input = new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = InputFormat };
             var output = new MFT_REGISTER_TYPE_INFO { guidMajorType = PInvoke.MFMediaType_Video, guidSubtype = OutputFormat };
 
-            IMFTransform transform = MFTUtils.CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER | MFT_ENUM_FLAG.MFT_ENUM_FLAG_HARDWARE, input, output);
-            if (transform == null) transform = MFTUtils.CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER, input, output);
+            IMFTransform transform = CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER | MFT_ENUM_FLAG.MFT_ENUM_FLAG_HARDWARE, input, output);
+            if (transform == null) transform = CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER, input, output);
             if (transform == null) throw new NotSupportedException($"Unsupported transform! Input: {InputFormat}, Output: {OutputFormat}");
 
             IMFMediaType mediaOutput;
-            MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
+            MFUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
-            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFTUtils.EncodeAttributeValue(Width, Height));
-            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFTUtils.EncodeAttributeValue(FpsNom, FpsDenom));
+            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFUtils.EncodeAttributeValue(Width, Height));
+            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFUtils.EncodeAttributeValue(FpsNom, FpsDenom));
             mediaOutput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, 2);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BITRATE, MathUtils.CalculateBitrate(Width, Height, FpsNom, FpsDenom));
-            MFTUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
+            MFUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             IMFMediaType mediaInput;
-            MFTUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
+            MFUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
             mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
-            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFTUtils.EncodeAttributeValue(Width, Height));
-            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFTUtils.EncodeAttributeValue(FpsNom, FpsDenom));
-            MFTUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
+            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFUtils.EncodeAttributeValue(Width, Height));
+            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFUtils.EncodeAttributeValue(FpsNom, FpsDenom));
+            MFUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
             return transform;
         }

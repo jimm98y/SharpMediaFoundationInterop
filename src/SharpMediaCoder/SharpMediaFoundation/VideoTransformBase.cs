@@ -33,7 +33,7 @@ namespace SharpMediaFoundation
         {
             this.FpsNom = fpsNom;
             this.FpsDenom = fpsDenom;
-            _sampleDuration = MFTUtils.CalculateSampleDuration(FpsNom, FpsDenom);
+            _sampleDuration = MFUtils.CalculateSampleDuration(FpsNom, FpsDenom);
 
             this.OriginalWidth = width;
             this.OriginalHeight = height;
@@ -45,7 +45,7 @@ namespace SharpMediaFoundation
         {
             _transform = Create();
             _transform.GetOutputStreamInfo(0, out var streamInfo);
-            _dataBuffer = MFTUtils.CreateOutputDataBuffer(streamInfo.cbSize);
+            _dataBuffer = MFUtils.CreateOutputDataBuffer(streamInfo.cbSize);
             this.OutputSize = streamInfo.cbSize;
         }
 
@@ -67,7 +67,7 @@ namespace SharpMediaFoundation
             {
                 if (disposing)
                 {
-                    MFTUtils.DestroyTransform(_transform);
+                    DestroyTransform(_transform);
                     _transform = null;
                 }
 

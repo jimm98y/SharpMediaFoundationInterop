@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -8,6 +10,8 @@ namespace SharpMediaFoundation
 {
     public abstract class MFTBase
     {
+        public static readonly Guid IID_IMFTransform = new Guid("BF94C121-5B05-4E6F-8000-BA598961414D");
+
         [Flags]
         public enum MFT_OUTPUT_DATA_BUFFER_FLAGS : uint
         {
@@ -18,12 +22,12 @@ namespace SharpMediaFoundation
 
         static MFTBase()
         {
-            MFTUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
+            MFUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
         }
 
         protected bool ProcessInput(IMFTransform decoder, byte[] data, long sampleDuration, long timestamp)
         {
-            IMFSample sample = MFTUtils.CreateSample(data, sampleDuration, timestamp);
+            IMFSample sample = MFUtils.CreateSample(data, sampleDuration, timestamp);
             return Input(0, decoder, sample);
         }
 
@@ -36,7 +40,7 @@ namespace SharpMediaFoundation
         {
             try
             {
-                MFTUtils.Check(decoder.GetInputStatus(streamID, out uint decoderInputFlags));
+                MFUtils.Check(decoder.GetInputStatus(streamID, out uint decoderInputFlags));
                 HRESULT result = decoder.ProcessInput(streamID, sample, 0);
                 return result.Value == 0;
             }
@@ -51,6 +55,7 @@ namespace SharpMediaFoundation
             const int MF_E_TRANSFORM_NEED_MORE_INPUT = unchecked((int)0xc00d6d72);
             uint decoderOutputStatus;
             HRESULT outputResult = decoder.ProcessOutput(0, dataBuffer, out decoderOutputStatus);
+            IMFSample sample = dataBuffer[0].pSample;
 
             if (dataBuffer[0].dwStatus == (uint)MFT_OUTPUT_DATA_BUFFER_FLAGS.FormatChange)
             {
@@ -66,13 +71,53 @@ namespace SharpMediaFoundation
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {
-                IMFSample sample = dataBuffer[0].pSample;
+                
                 sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
-                return MFTUtils.CopyBuffer(buffer, bytes, out length);
+                return MFUtils.CopyBuffer(buffer, bytes, out length);
             }
 
             length = 0;
             return false;
+        }
+
+        public static IMFTransform CreateTransform(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
+        {
+            IMFTransform transform = default;
+
+            foreach (IMFActivate activate in FindTransforms(category, flags, input, output))
+            {
+                try
+                {
+                    activate.GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR name, out _);
+                    Debug.WriteLine($"Found MFT: {name}");
+                    transform = activate.ActivateObject(IID_IMFTransform) as IMFTransform;
+                    break;
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(activate);
+                }
+            }
+
+            return transform;
+        }
+
+        public static void DestroyTransform(IMFTransform transform)
+        {
+            Marshal.ReleaseComObject(transform);
+        }
+
+        public static IEnumerable<IMFActivate> FindTransforms(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
+        {
+            MFUtils.Check(PInvoke.MFTEnumEx(category, flags, input, output, out IMFActivate[] activates, out uint activateCount));
+
+            if (activateCount > 0)
+            {
+                foreach (IMFActivate activate in activates)
+                {
+                    yield return activate;
+                }
+            }
         }
     }
 }

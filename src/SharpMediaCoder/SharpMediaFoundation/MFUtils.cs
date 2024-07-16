@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Windows.Win32;
@@ -9,49 +7,8 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation
 {
-    public static class MFTUtils
+    public static class MFUtils
     {
-        public static readonly Guid IID_IMFTransform = new Guid("BF94C121-5B05-4E6F-8000-BA598961414D");
-
-        public static IMFTransform CreateTransform(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
-        {
-            IMFTransform transform = default;
-            foreach (IMFActivate activate in FindTransforms(category, flags, input, output))
-            {
-                try
-                {
-                    activate.GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR name, out _);
-                    Debug.WriteLine($"Found MFT: {name}");
-                    transform = activate.ActivateObject(IID_IMFTransform) as IMFTransform;
-                    break;
-                }
-                finally
-                {
-                    Marshal.ReleaseComObject(activate);
-                }
-            }
-
-            return transform;
-        }
-
-        public static void DestroyTransform(IMFTransform transform)
-        {
-            Marshal.ReleaseComObject(transform);
-        }
-
-        public static IEnumerable<IMFActivate> FindTransforms(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
-        {
-            Check(PInvoke.MFTEnumEx(category, flags, input, output, out IMFActivate[] activates, out uint activateCount));
-
-            if (activateCount > 0)
-            {
-                foreach (IMFActivate activate in activates)
-                {
-                    yield return activate;
-                }
-            }
-        }
-
         public static void Check(HRESULT result)
         {
             if (result.Failed)
@@ -80,7 +37,6 @@ namespace SharpMediaFoundation
             }
 
             Check(PInvoke.MFCreateSample(out IMFSample sample));
-
             sample.AddBuffer(buffer);
             sample.SetSampleDuration(sampleDuration);
             sample.SetSampleTime(timestamp);
@@ -95,7 +51,6 @@ namespace SharpMediaFoundation
             {
                 Check(PInvoke.MFCreateMemoryBuffer(size, out IMFMediaBuffer buffer));
                 Check(PInvoke.MFCreateSample(out IMFSample sample));
-
                 sample.AddBuffer(buffer);
                 result[0].pSample = sample;
             }
@@ -138,8 +93,7 @@ namespace SharpMediaFoundation
 
         public static long CalculateSampleDuration(uint fpsNom, uint fpsDenom)
         {
-            ulong sampleDuration;
-            Check(PInvoke.MFFrameRateToAverageTimePerFrame(fpsNom, fpsDenom, out sampleDuration));
+            Check(PInvoke.MFFrameRateToAverageTimePerFrame(fpsNom, fpsDenom, out ulong sampleDuration));
             return (long)sampleDuration;
         }
 
