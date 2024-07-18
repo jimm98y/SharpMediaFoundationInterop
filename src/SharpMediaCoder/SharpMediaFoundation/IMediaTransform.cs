@@ -19,4 +19,10 @@ namespace SharpMediaFoundation
         uint Width { get; }
         uint Height { get; }
     }
+
+    public interface IAudioTransform : IMediaTransform
+    {
+        uint Channels { get; }
+        uint SampleRate { get; }
+    }
 }
