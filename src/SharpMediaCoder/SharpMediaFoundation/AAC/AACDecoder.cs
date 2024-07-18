@@ -4,12 +4,12 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation.AAC
 {
-    public class AACEncoder : AudioTransformBase
+    public class AACDecoder : AudioTransformBase
     {
-        public override Guid InputFormat => PInvoke.MFAudioFormat_Float;
-        public override Guid OutputFormat => PInvoke.MFAudioFormat_AAC;
+        public override Guid InputFormat => PInvoke.MFAudioFormat_AAC;
+        public override Guid OutputFormat => PInvoke.MFAudioFormat_Float;
 
-        public AACEncoder(uint channels, uint sampleRate) 
+        public AACDecoder(uint channels, uint sampleRate) 
           : base(1024, channels, sampleRate)
         {  }
 
@@ -30,7 +30,7 @@ namespace SharpMediaFoundation.AAC
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
-            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, 32);
+            mediaInput.SetUINT32(PInvoke.MF_MT_AAC_PAYLOAD_TYPE, 0); // 0 = Raw, 1 = ADTS
             MFUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
             IMFMediaType mediaOutput;
@@ -39,7 +39,7 @@ namespace SharpMediaFoundation.AAC
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AAC_PAYLOAD_TYPE, 0); // 0 = Raw, 1 = ADTS
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, 32);
             MFUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             return transform;
