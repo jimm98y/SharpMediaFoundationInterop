@@ -9,8 +9,8 @@ namespace SharpMediaFoundation.AAC
         public override Guid InputFormat => PInvoke.MFAudioFormat_Float;
         public override Guid OutputFormat => PInvoke.MFAudioFormat_AAC;
 
-        public AACEncoder(uint channels, uint sampleRate) 
-          : base(1024, channels, sampleRate)
+        public AACEncoder(uint channels, uint sampleRate, uint bitsPerSample) 
+          : base(1024, channels, sampleRate, bitsPerSample)
         {  }
 
         protected override IMFTransform Create()
@@ -30,7 +30,7 @@ namespace SharpMediaFoundation.AAC
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
-            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, 32);
+            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
             MFUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
             IMFMediaType mediaOutput;

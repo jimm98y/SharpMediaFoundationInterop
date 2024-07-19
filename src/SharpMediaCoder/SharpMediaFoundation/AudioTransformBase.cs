@@ -19,12 +19,14 @@ namespace SharpMediaFoundation
         public uint Channels { get; private set; }
 
         public uint SampleRate { get; private set; }
+        public uint BitsPerSample { get; private set; }
 
-        protected AudioTransformBase(long sampleDuration, uint channels, uint sampleRate) : base()
+        protected AudioTransformBase(long sampleDuration, uint channels, uint sampleRate, uint bitsPerSample) : base()
         {
             _sampleDuration = sampleDuration;
             Channels = channels;
             SampleRate = sampleRate;
+            BitsPerSample = bitsPerSample;
         }
 
         public void Initialize()
