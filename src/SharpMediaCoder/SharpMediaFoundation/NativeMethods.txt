@@ -11,3 +11,9 @@ MFT_MESSAGE_TYPE
 MFT_OUTPUT_DATA_BUFFER
 IMFSourceReader
 MFCreateSourceReaderFromMediaSource
+waveOutOpen
+waveOutReset
+waveOutRestart
+waveOutPrepareHeader
+waveOutWrite
+waveOutClose

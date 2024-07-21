@@ -38,12 +38,6 @@ namespace SharpMediaFoundation.AAC
             mediaOutput.SetUINT32(PInvoke.MF_MT_AAC_PAYLOAD_TYPE, 0); // 0 = Raw, 1 = ADTS
             MFUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
-            mediaOutput.GetBlobSize(PInvoke.MF_MT_USER_DATA, out var userDataSize);
-            byte[] userData = new byte[userDataSize];
-            var userDataMF = PInvoke.MF_MT_USER_DATA;
-            mediaOutput.GetBlob(&userDataMF, userData, userDataSize);
-            this.UserData = userData;
-
             IMFMediaType mediaInput;
             MFUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
             mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
@@ -52,6 +46,12 @@ namespace SharpMediaFoundation.AAC
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
             MFUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
+
+            mediaOutput.GetBlobSize(PInvoke.MF_MT_USER_DATA, out var userDataSize);
+            byte[] userData = new byte[userDataSize];
+            var userDataMF = PInvoke.MF_MT_USER_DATA;
+            mediaOutput.GetBlob(&userDataMF, userData, userDataSize);
+            this.UserData = userData;
 
             return transform;
         }
