@@ -64,6 +64,7 @@ namespace SharpMediaFoundation
 
             if (outputResult.Value == MF_E_TRANSFORM_STREAM_CHANGE)
             {
+                Debug.WriteLine("MFT stream change requested");
                 length = 0;
 
                 IMFMediaType mediaType;
@@ -87,6 +88,7 @@ namespace SharpMediaFoundation
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {
+                Debug.WriteLine("MFT needs more input");
                 length = 0;
                 return false;
             }
