@@ -12,6 +12,10 @@ namespace SharpMediaFoundation
     {
         public static readonly Guid IID_IMFTransform = new Guid("BF94C121-5B05-4E6F-8000-BA598961414D");
 
+        public abstract Guid InputFormat { get; }
+        public abstract Guid OutputFormat { get; }
+
+
         [Flags]
         public enum MFT_OUTPUT_DATA_BUFFER_FLAGS : uint
         {
@@ -61,7 +65,21 @@ namespace SharpMediaFoundation
             if (outputResult.Value == MF_E_TRANSFORM_STREAM_CHANGE)
             {
                 length = 0;
-                transform.GetOutputAvailableType(streamID, 0, out IMFMediaType mediaType);
+
+                IMFMediaType mediaType;
+                uint i = 0;
+                while (true)
+                {
+                    transform.GetOutputAvailableType(streamID, i++, out IMFMediaType mType);
+                    mType.GetGUID(PInvoke.MF_MT_SUBTYPE, out var mSubtype);
+                    if(mSubtype == OutputFormat)
+                    {
+                        // TODO: log format change
+                        mediaType = mType;
+                        break;
+                    }
+                }
+
                 transform.SetOutputType(streamID, mediaType, 0);
                 transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
                 dataBuffer[0].dwStatus = (uint)MFT_OUTPUT_DATA_BUFFER_FLAGS.None;

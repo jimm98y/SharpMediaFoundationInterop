@@ -42,17 +42,18 @@ namespace SharpMediaFoundation.AAC
             mediaInput.SetBlob(PInvoke.MF_MT_USER_DATA, CreateUserData());
             MFUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
-            const uint outSamplingRate = 44100; // only 44100 and 48000 are supported
             IMFMediaType mediaOutput;
-            MFUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
-            mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
-            mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, outSamplingRate);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BLOCK_ALIGNMENT, Channels * BitsPerSample / 8);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_ALL_SAMPLES_INDEPENDENT, 1);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, Channels * outSamplingRate * BitsPerSample / 8);
+            uint i = 0;
+            while (true)
+            {
+                transform.GetOutputAvailableType(streamId, i++, out IMFMediaType mType);
+                mType.GetGUID(PInvoke.MF_MT_SUBTYPE, out var mSubtype);
+                if (mSubtype == PInvoke.MFAudioFormat_PCM)
+                {
+                    mediaOutput = mType;
+                    break;
+                }
+            }
             MFUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             return transform;

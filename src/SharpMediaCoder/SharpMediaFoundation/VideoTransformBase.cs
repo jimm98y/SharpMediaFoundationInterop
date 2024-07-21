@@ -22,9 +22,6 @@ namespace SharpMediaFoundation
 
         public uint OutputSize { get; private set; }
 
-        public abstract Guid InputFormat { get; }
-        public abstract Guid OutputFormat { get; }
-
         protected VideoTransformBase(uint width, uint height)
           : this(1, width, height, 1, 1)
         { }

@@ -11,9 +11,6 @@ namespace SharpMediaFoundation
         private IMFTransform _transform;
         private MFT_OUTPUT_DATA_BUFFER[] _dataBuffer;
 
-        public abstract Guid InputFormat { get; }
-        public abstract Guid OutputFormat { get; }
-
         public uint OutputSize { get; private set; }
 
         public uint Channels { get; private set; }
