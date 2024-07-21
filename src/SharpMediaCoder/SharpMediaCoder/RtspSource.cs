@@ -34,7 +34,7 @@ namespace SharpMediaFoundation.WPF
 
                 if (e.StreamConfigurationData is H264StreamConfigurationData h264cfg)
                 {
-                    _sampleQueue.Enqueue(new List<byte[]> { h264cfg.SPS, h264cfg.PPS });
+                    _videoSampleQueue.Enqueue(new List<byte[]> { h264cfg.SPS, h264cfg.PPS });
 
                     var decodedSPS = SharpMp4.H264SpsNalUnit.Parse(h264cfg.SPS);
                     var dimensions = decodedSPS.CalculateDimensions();
@@ -51,7 +51,7 @@ namespace SharpMediaFoundation.WPF
                 }
                 else if (e.StreamConfigurationData is H265StreamConfigurationData h265cfg)
                 {
-                    _sampleQueue.Enqueue(new List<byte[]> { h265cfg.VPS, h265cfg.SPS, h265cfg.PPS });
+                    _videoSampleQueue.Enqueue(new List<byte[]> { h265cfg.VPS, h265cfg.SPS, h265cfg.PPS });
 
                     var decodedSPS = SharpMp4.H265SpsNalUnit.Parse(h265cfg.SPS);
                     var dimensions = decodedSPS.CalculateDimensions();
@@ -88,7 +88,7 @@ namespace SharpMediaFoundation.WPF
 
         private void _rtspClient_ReceivedVideoData(object sender, SimpleDataEventArgs e)
         {
-            _sampleQueue.Enqueue(e.Data.Select(x => x.ToArray()).ToList());
+            _videoSampleQueue.Enqueue(e.Data.Select(x => x.ToArray()).ToList());
         }
     }
 }

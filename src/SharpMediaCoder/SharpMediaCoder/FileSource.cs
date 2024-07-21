@@ -27,7 +27,7 @@ namespace SharpMediaFoundation.WPF
 
         private async Task<VideoInfo> LoadFileAsync(string fileName)
         {
-            _sampleQueue.Clear();
+            _videoSampleQueue.Clear();
 
             var videoInfo = new VideoInfo();
             using (Stream fs = new BufferedStream(new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read)))
@@ -71,7 +71,7 @@ namespace SharpMediaFoundation.WPF
 
                     foreach (var au in parsedMDAT[videoTrackId])
                     {
-                        _sampleQueue.Enqueue(au);
+                        _videoSampleQueue.Enqueue(au);
                     }
                 }
             }

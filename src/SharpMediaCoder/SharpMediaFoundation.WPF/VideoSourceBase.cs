@@ -15,8 +15,8 @@ namespace SharpMediaFoundation.WPF
 
         protected IVideoTransform _videoDecoder;
         protected ColorConverter _nv12Decoder;
-        protected Queue<IList<byte[]>> _sampleQueue = new Queue<IList<byte[]>>();
-        protected Queue<byte[]> _renderQueue = new Queue<byte[]>();
+        protected Queue<IList<byte[]>> _videoSampleQueue = new Queue<IList<byte[]>>();
+        protected Queue<byte[]> _videoRenderQueue = new Queue<byte[]>();
         protected byte[] _nv12Buffer;
         protected long _time = 0;
         protected bool _isLowLatency = false;
@@ -34,10 +34,10 @@ namespace SharpMediaFoundation.WPF
             }
 
             byte[] existing;
-            if (_renderQueue.TryDequeue(out existing))
+            if (_videoRenderQueue.TryDequeue(out existing))
                 return existing;
 
-            while (_renderQueue.Count == 0 && _sampleQueue.TryDequeue(out var au))
+            while (_videoRenderQueue.Count == 0 && _videoSampleQueue.TryDequeue(out var au))
             {
                 foreach (var nalu in au)
                 {
@@ -50,14 +50,14 @@ namespace SharpMediaFoundation.WPF
                             byte[] decoded = ArrayPool<byte>.Shared.Rent((int)_nv12Decoder.OutputSize);
                             _nv12Decoder.ProcessOutput(ref decoded, out _);
 
-                            _renderQueue.Enqueue(decoded);
+                            _videoRenderQueue.Enqueue(decoded);
                         }
                     }
                 }
                 _time += 10000 * 1000 / (Info.FpsNom / Info.FpsDenom); // 100ns units
             }
 
-            if (_renderQueue.TryDequeue(out existing))
+            if (_videoRenderQueue.TryDequeue(out existing))
             {
                 return existing;
             }

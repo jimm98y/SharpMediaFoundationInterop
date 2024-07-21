@@ -25,23 +25,23 @@ namespace SharpMediaFoundation
             MFUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
         }
 
-        protected bool ProcessInput(IMFTransform decoder, byte[] data, long sampleDuration, long timestamp)
+        protected bool ProcessInput(IMFTransform transform, byte[] data, long sampleDuration, long timestamp)
         {
             IMFSample sample = MFUtils.CreateSample(data, sampleDuration, timestamp);
-            return Input(0, decoder, sample);
+            return Input(0, transform, sample);
         }
 
-        protected bool ProcessOutput(IMFTransform decoder, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length)
+        protected bool ProcessOutput(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length)
         {
-            return Output(0, decoder, dataBuffer, ref buffer, out length);
+            return Output(0, transform, dataBuffer, ref buffer, out length);
         }
 
-        private unsafe bool Input(uint streamID, IMFTransform decoder, IMFSample sample)
+        private unsafe bool Input(uint streamID, IMFTransform transform, IMFSample sample)
         {
             try
             {
-                MFUtils.Check(decoder.GetInputStatus(streamID, out uint decoderInputFlags));
-                HRESULT result = decoder.ProcessInput(streamID, sample, 0);
+                MFUtils.Check(transform.GetInputStatus(streamID, out uint decoderInputFlags));
+                HRESULT result = transform.ProcessInput(streamID, sample, 0);
                 return result.Value == 0;
             }
             finally
@@ -50,19 +50,22 @@ namespace SharpMediaFoundation
             }
         }
 
-        private unsafe bool Output(uint streamID, IMFTransform decoder, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length)
+        private unsafe bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length)
         {
             const int MF_E_TRANSFORM_NEED_MORE_INPUT = unchecked((int)0xc00d6d72);
+            const int MF_E_TRANSFORM_STREAM_CHANGE = unchecked((int)0xc00d6d61);
             uint decoderOutputStatus;
-            HRESULT outputResult = decoder.ProcessOutput(0, dataBuffer, out decoderOutputStatus);
+            HRESULT outputResult = transform.ProcessOutput(0, dataBuffer, out decoderOutputStatus);
             IMFSample sample = dataBuffer[0].pSample;
 
-            if (dataBuffer[0].dwStatus == (uint)MFT_OUTPUT_DATA_BUFFER_FLAGS.FormatChange)
+            if (outputResult.Value == MF_E_TRANSFORM_STREAM_CHANGE)
             {
-                decoder.GetOutputAvailableType(streamID, 0, out IMFMediaType mediaType);
-                decoder.SetOutputType(streamID, mediaType, 0);
-                decoder.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
+                length = 0;
+                transform.GetOutputAvailableType(streamID, 0, out IMFMediaType mediaType);
+                transform.SetOutputType(streamID, mediaType, 0);
+                transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
                 dataBuffer[0].dwStatus = (uint)MFT_OUTPUT_DATA_BUFFER_FLAGS.None;
+                return false;
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {
@@ -71,13 +74,15 @@ namespace SharpMediaFoundation
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {
-                
                 sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
                 return MFUtils.CopyBuffer(buffer, bytes, out length);
             }
-
-            length = 0;
-            return false;
+            else
+            {
+                length = 0;
+                MFUtils.Check(outputResult);
+                return false;
+            }
         }
 
         public static IMFTransform CreateTransform(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
