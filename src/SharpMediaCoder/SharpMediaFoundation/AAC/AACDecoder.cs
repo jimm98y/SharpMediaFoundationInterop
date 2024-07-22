@@ -10,11 +10,33 @@ namespace SharpMediaFoundation.AAC
         public override Guid InputFormat => PInvoke.MFAudioFormat_AAC;
         public override Guid OutputFormat => PInvoke.MFAudioFormat_PCM;
 
+        public uint SampleRateOut { get; private set; }
         public byte[] UserData { get; private set; }
 
-        public AACDecoder(uint channels, uint sampleRate, byte[] userData) 
+        public AACDecoder(uint channels, uint sampleRate, byte[] userData, uint sampleRateOut = 0) 
           : base(1024, channels, sampleRate, 16) // PCM = 16 bit, Float = 32 bit
         {
+            if(sampleRateOut != 0 && sampleRateOut != 44100 && sampleRateOut != 48000)
+            {
+                throw new ArgumentException(
+                    $"MediaFoundation AAC decoder does not support sample rate {sampleRate} Hz on the output. " +
+                    $"The only supported output sample rates are 44100 and 48000 Hz.");
+            }
+
+            if (sampleRateOut == 0)
+            {
+                if (sampleRateOut == 44100 || sampleRateOut == 48000)
+                    sampleRateOut = sampleRate;
+                else
+                    sampleRateOut = 44100; // default
+            }
+
+            if (userData == null)
+            {
+                throw new ArgumentNullException(nameof(userData));
+            }
+
+            this.SampleRateOut = sampleRateOut;
             this.UserData = userData;
         }
 
@@ -47,7 +69,7 @@ namespace SharpMediaFoundation.AAC
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRateOut);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
             MFUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 

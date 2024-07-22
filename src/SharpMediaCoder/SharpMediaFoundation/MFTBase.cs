@@ -31,8 +31,19 @@ namespace SharpMediaFoundation
 
         protected bool ProcessInput(IMFTransform transform, byte[] data, long sampleDuration, long timestamp)
         {
+            bool ret = false;
             IMFSample sample = MFUtils.CreateSample(data, sampleDuration, timestamp);
-            return Input(0, transform, sample);
+
+            try
+            {
+                ret = Input(0, transform, sample);
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(sample);
+            }
+
+            return ret;
         }
 
         protected bool ProcessOutput(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length)
@@ -42,20 +53,25 @@ namespace SharpMediaFoundation
 
         private unsafe bool Input(uint streamID, IMFTransform transform, IMFSample sample)
         {
+            bool ret = false;
+
             try
             {
                 MFUtils.Check(transform.GetInputStatus(streamID, out uint decoderInputFlags));
-                HRESULT result = transform.ProcessInput(streamID, sample, 0);
-                return result.Value == 0;
+                MFUtils.Check(transform.ProcessInput(streamID, sample, 0));
+                ret = true;
             }
-            finally
+            catch(Exception ex)
             {
-                Marshal.ReleaseComObject(sample);
+                Debug.WriteLine(ex.Message);
             }
+
+            return ret;
         }
 
         private unsafe bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length)
         {
+            bool ret = false;
             const int MF_E_TRANSFORM_NEED_MORE_INPUT = unchecked((int)0xc00d6d72);
             const int MF_E_TRANSFORM_STREAM_CHANGE = unchecked((int)0xc00d6d61);
             uint decoderOutputStatus;
@@ -84,25 +100,24 @@ namespace SharpMediaFoundation
                 transform.SetOutputType(streamID, mediaType, 0);
                 transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
                 dataBuffer[0].dwStatus = (uint)MFT_OUTPUT_DATA_BUFFER_FLAGS.None;
-                return false;
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {
                 Debug.WriteLine("MFT needs more input");
                 length = 0;
-                return false;
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {
                 sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
-                return MFUtils.CopyBuffer(buffer, bytes, out length);
+                ret = MFUtils.CopyBuffer(buffer, bytes, out length);
             }
             else
             {
                 length = 0;
                 MFUtils.Check(outputResult);
-                return false;
             }
+
+            return ret;
         }
 
         public static IMFTransform CreateTransform(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)

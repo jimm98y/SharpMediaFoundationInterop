@@ -13,7 +13,14 @@ namespace SharpMediaFoundation.AAC
 
         public AACEncoder(uint channels, uint sampleRate) 
           : base(1024, channels, sampleRate, 16) // PCM = 16 bit, Float = 32 bit
-        {  }
+        {
+            if (sampleRate != 44100 && sampleRate != 48000)
+            {
+                throw new ArgumentException(
+                    $"MediaFoundation AAC encoder does not support sample rate {sampleRate} Hz. " +
+                    $"The only supported sample rates are 44100 and 48000 Hz.");
+            }
+        }
 
         protected override unsafe IMFTransform Create()
         {
