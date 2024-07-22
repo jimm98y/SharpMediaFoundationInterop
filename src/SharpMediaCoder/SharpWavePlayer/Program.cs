@@ -36,15 +36,7 @@ using (var waveOut = new WaveOut())
                 {
                     while (audioEncoder.ProcessOutput(ref aacBuffer, out var aacLength))
                     {
-                        uint index = aacLength - 1;
-                        for (int i = 0; i < aacLength; i++)
-                        {
-                            if (aacBuffer[index] == 0)
-                                index--;
-                            else
-                                break;
-                        }
-                        if (audioDecoder.ProcessInput(aacBuffer.Take((int)index + 1).ToArray(), 0))
+                        if (audioDecoder.ProcessInput(aacBuffer.Take((int)aacLength).ToArray(), 0))
                         {
                             while (audioDecoder.ProcessOutput(ref pcmBuffer, out var pcmSize))
                             {
@@ -54,7 +46,7 @@ using (var waveOut = new WaveOut())
                             }
                         }
 
-                        Debug.WriteLine($"Processed {index} bytes");
+                        Debug.WriteLine($"Processed {aacLength} bytes");
                     }
                 }
             }

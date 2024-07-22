@@ -75,7 +75,7 @@ namespace SharpMediaFoundation
                 uint currentLength = default;
                 byte* data = default;
                 buffer.Lock(&data, &maxLength, &currentLength);
-                sampleSize = maxLength;
+                sampleSize = currentLength;
                 if (sampleBytes != null)
                 {
                     Marshal.Copy((IntPtr)data, sampleBytes, 0, (int)currentLength);
