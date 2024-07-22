@@ -39,7 +39,12 @@ namespace SharpMediaFoundation
             Check(PInvoke.MFCreateSample(out IMFSample sample));
             sample.AddBuffer(buffer);
             sample.SetSampleDuration(sampleDuration);
-            sample.SetSampleTime(timestamp);
+
+            if (timestamp != 0)
+            {
+                sample.SetSampleTime(timestamp);
+            }
+            
             return sample;
         }
 
