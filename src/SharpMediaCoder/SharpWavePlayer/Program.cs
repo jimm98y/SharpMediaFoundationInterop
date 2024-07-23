@@ -44,7 +44,11 @@ using (Stream sourceFileStream = new BufferedStream(new FileStream(sourceFileNam
                             while (audioDecoder.ProcessOutput(ref pcmBuffer, out var pcmSize))
                             {
                                 waveOut.Play(pcmBuffer, pcmSize);
-                                await Task.Delay(10);
+
+                                while(waveOut.QueuedFrames > 10)
+                                {
+                                    await Task.Delay(10);
+                                }
                             }
                         }
                     }
