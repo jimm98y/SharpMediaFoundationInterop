@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using SharpMediaFoundation.AAC;
 using System.Threading.Tasks;
-using SharpMediaFoundation.Output;
+using SharpMediaFoundation.Wave;
 
 const string sourceFileName = "frag_bunny.mp4";
 
@@ -43,7 +43,7 @@ using (Stream sourceFileStream = new BufferedStream(new FileStream(sourceFileNam
                         {
                             while (audioDecoder.ProcessOutput(ref pcmBuffer, out var pcmSize))
                             {
-                                waveOut.Play(pcmBuffer, pcmSize);
+                                waveOut.Enqueue(pcmBuffer, pcmSize);
 
                                 while(waveOut.QueuedFrames > 10)
                                 {

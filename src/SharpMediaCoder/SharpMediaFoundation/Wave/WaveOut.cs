@@ -4,11 +4,12 @@ using System.Threading;
 using Windows.Win32;
 using Windows.Win32.Media.Audio;
 
-namespace SharpMediaFoundation.Output
+namespace SharpMediaFoundation.Wave
 {
     public class WaveOut : IDisposable
     {
         public const int BUFFER_DONE = 0x3BD;
+        public const uint WAVE_MAPPER = unchecked((uint)-1);
 
         private HWAVEOUT _hDevice;
 
@@ -42,7 +43,6 @@ namespace SharpMediaFoundation.Output
             waveFormat.wFormatTag = 1; // pcm
 
             HWAVEOUT device;
-            const uint WAVE_MAPPER = unchecked((uint)-1);
             nint woDone = Marshal.GetFunctionPointerForDelegate(DoneCallback);
             PInvoke.waveOutOpen(&device, WAVE_MAPPER, waveFormat, (nuint)woDone, nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION); 
             this._hDevice = device;
@@ -71,7 +71,7 @@ namespace SharpMediaFoundation.Output
             PInvoke.waveOutClose(_hDevice);
         }
 
-        public unsafe void Play(byte[] data, uint length)
+        public unsafe void Enqueue(byte[] data, uint length)
         {
             if (_audioBuffer == nint.Zero)
                 throw new InvalidOperationException("You must first call Initialize!");

@@ -12,9 +12,16 @@ MFT_OUTPUT_DATA_BUFFER
 IMFSourceReader
 MFCreateSourceReaderFromMediaSource
 waveOutOpen
-waveOutReset
 waveOutRestart
 waveOutPrepareHeader
 waveOutWrite
 waveOutClose
 MEDIASUBTYPE_RAW_AAC1
+waveInAddBuffer 
+waveInOpen
+waveInReset
+waveInStart
+waveInStop
+waveInPrepareHeader
+waveInUnprepareHeader
+waveInClose
