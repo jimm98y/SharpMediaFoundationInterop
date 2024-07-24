@@ -8,7 +8,7 @@ namespace SharpMediaFoundation.Wave
 {
     public class WaveOut : IDisposable
     {
-        public const int BUFFER_DONE = 0x3BD;
+        public const int MM_WOM_DONE = 0x3BD;
         public const uint WAVE_MAPPER = unchecked((uint)-1);
 
         private HWAVEOUT _hDevice;
@@ -51,7 +51,7 @@ namespace SharpMediaFoundation.Wave
 
         private unsafe void DoneCallback(HWAVEOUT* dev, uint uMsg, uint* dwUser, uint dwParam1, uint dwParam2)
         {
-            if (uMsg == BUFFER_DONE)
+            if (uMsg == MM_WOM_DONE)
             {
                 Interlocked.Decrement(ref _queuedFrames);
                 OnPlaybackCompleted?.Invoke(this, new EventArgs());
