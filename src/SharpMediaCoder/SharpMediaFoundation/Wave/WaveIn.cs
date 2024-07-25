@@ -32,11 +32,14 @@ namespace SharpMediaFoundation.Wave
 
         private bool _disposedValue;
 
+        // https://github.com/microsoft/CsWin32/issues/623
+        private Delegate _callback; // hold on to the delegate so that it does not get garbage collected
+
         public unsafe void Initialize(uint samplesPerSecond, uint channels, uint bitsPerSample)
         {
             Close();
 
-            if (_audioBuffer == nint.Zero)
+            if(_audioBuffer == nint.Zero)
             {
                 _audioBuffer = Marshal.AllocHGlobal(_audioBufferSize);
             }
@@ -51,56 +54,47 @@ namespace SharpMediaFoundation.Wave
             waveFormat.wFormatTag = 1; // pcm
 
             HWAVEIN device;
-            nint woDone = Marshal.GetFunctionPointerForDelegate(DoneCallback);
-            PInvoke.waveInOpen(&device, WAVE_MAPPER, waveFormat, (nuint)woDone, nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
+            _callback = DoneCallback;
+            PInvoke.waveInOpen(&device, WAVE_MAPPER, waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
             this._hDevice = device;
 
-            uint waveHdrSize = (uint)sizeof(WAVEHDR);
-            byte* pAudioBuffer = (byte*)_audioBuffer;
-
+            uint audioBufferIndex = 0;
             for (int i = 0; i < NUM_BUF; i++)
             {
-                byte* pAudioData = &pAudioBuffer[_audioBufferIndex + waveHdrSize];
-                WAVEHDR* waveHdr = (WAVEHDR*)&pAudioBuffer[_audioBufferIndex];
-                waveHdr->lpData = pAudioData;
-                waveHdr->dwBufferLength = waveFormat.nSamplesPerSec * waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
+                WAVEHDR* waveHdr = (WAVEHDR*)((byte*)_audioBuffer + audioBufferIndex);
+                waveHdr->lpData = (byte*)_audioBuffer + audioBufferIndex + (uint)sizeof(WAVEHDR);
+                waveHdr->dwBufferLength = samplesPerSecond * channels * bitsPerSample / 8;
                 waveHdr->dwUser = nuint.Zero;
                 waveHdr->dwFlags = 0;
                 waveHdr->dwLoops = 0;
-                PInvoke.waveInPrepareHeader(_hDevice, ref *waveHdr, (uint)sizeof(WAVEHDR));
-                _audioBufferIndex += waveHdrSize + waveHdr->dwBufferLength;
+                PInvoke.waveInPrepareHeader(this._hDevice, waveHdr, (uint)sizeof(WAVEHDR));
+                audioBufferIndex = audioBufferIndex + (uint)sizeof(WAVEHDR) + waveHdr->dwBufferLength;
             }
 
-            _audioBufferIndex = 0;
-            PInvoke.waveInAddBuffer(_hDevice, ref *(WAVEHDR*)&pAudioBuffer[_audioBufferIndex], (uint)sizeof(WAVEHDR));
-            
-            Reset();
+            PInvoke.waveInAddBuffer(this._hDevice, (WAVEHDR*)(_audioBuffer + _audioBufferIndex), (uint)sizeof(WAVEHDR));
+            PInvoke.waveInStart(this._hDevice);
         }
 
         private unsafe void DoneCallback(HWAVEIN* dev, uint uMsg, uint* dwUser, uint dwParam1, uint dwParam2)
         {
             if (uMsg == MM_WIM_DATA)
             {
-                uint waveHdrSize = (uint)sizeof(WAVEHDR);
-                byte* pAudioBuffer = (byte*)_audioBuffer;
-                byte* pAudioData = &pAudioBuffer[_audioBufferIndex + waveHdrSize];
-                WAVEHDR* waveHdr = (WAVEHDR*)&pAudioBuffer[_audioBufferIndex];
-
+                WAVEHDR* waveHdr = (WAVEHDR*)(_audioBuffer + _audioBufferIndex);
                 byte[] dest = new byte[waveHdr->dwBufferLength];
-                Marshal.Copy((nint)pAudioData, dest, 0, dest.Length);
+                Marshal.Copy((nint)waveHdr->lpData.Value, dest, 0, dest.Length);
+                _audioBufferIndex = (_audioBufferIndex + (uint)sizeof(WAVEHDR) + waveHdr->dwBufferLength) % (NUM_BUF * (waveHdr->dwBufferLength + (uint)sizeof(WAVEHDR)));
+
+                waveHdr = (WAVEHDR*)(_audioBuffer + _audioBufferIndex);
+                PInvoke.waveInAddBuffer(_hDevice, waveHdr, (uint)sizeof(WAVEHDR));
+
                 FrameReceived?.Invoke(this, new WaveInEventArgs(dest));
-
-                _audioBufferIndex = (_audioBufferIndex + waveHdr->dwBufferLength + waveHdrSize) % (NUM_BUF * (waveHdr->dwBufferLength + waveHdrSize));
-
-                PInvoke.waveInAddBuffer(_hDevice, ref *(WAVEHDR*)&pAudioBuffer[_audioBufferIndex], (uint)sizeof(WAVEHDR));
             }
         }
 
         public void Reset()
         {
-            //PInvoke.waveInStop(_hDevice);
+            PInvoke.waveInStop(_hDevice);
             _audioBufferIndex = 0;
-            PInvoke.waveInStart(_hDevice);
         }
 
         public void Close()

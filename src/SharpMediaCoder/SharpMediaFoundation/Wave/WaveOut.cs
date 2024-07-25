@@ -24,6 +24,9 @@ namespace SharpMediaFoundation.Wave
 
         public event EventHandler<EventArgs> OnPlaybackCompleted;
 
+        // https://github.com/microsoft/CsWin32/issues/623
+        private Delegate _callback; // hold on to the delegate so that it does not get garbage collected
+
         public unsafe void Initialize(uint samplesPerSecond, uint channels, uint bitsPerSample)
         {
             Close();
@@ -33,6 +36,7 @@ namespace SharpMediaFoundation.Wave
                 _audioBuffer = Marshal.AllocHGlobal(_audioBufferSize);
             }
 
+            _callback = DoneCallback;
             WAVEFORMATEX waveFormat = new WAVEFORMATEX();  
             waveFormat.nAvgBytesPerSec = samplesPerSecond * (bitsPerSample / 8) * channels;
             waveFormat.nBlockAlign = (ushort)(channels * (bitsPerSample / 8));
@@ -43,8 +47,7 @@ namespace SharpMediaFoundation.Wave
             waveFormat.wFormatTag = 1; // pcm
 
             HWAVEOUT device;
-            nint woDone = Marshal.GetFunctionPointerForDelegate(DoneCallback);
-            PInvoke.waveOutOpen(&device, WAVE_MAPPER, waveFormat, (nuint)woDone, nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION); 
+            PInvoke.waveOutOpen(&device, WAVE_MAPPER, waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION); 
             this._hDevice = device;
             Reset();
         }
