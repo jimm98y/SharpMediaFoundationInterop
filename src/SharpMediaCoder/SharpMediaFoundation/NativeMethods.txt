@@ -16,7 +16,6 @@ waveOutRestart
 waveOutPrepareHeader
 waveOutWrite
 waveOutClose
-MEDIASUBTYPE_RAW_AAC1
 waveInAddBuffer 
 waveInOpen
 waveInReset
