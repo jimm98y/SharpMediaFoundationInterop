@@ -8,7 +8,7 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation
 {
-    public abstract class MFTBase
+    public abstract class MFTBase 
     {
         public abstract Guid InputFormat { get; }
         public abstract Guid OutputFormat { get; }

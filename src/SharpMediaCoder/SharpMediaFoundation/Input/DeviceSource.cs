@@ -8,7 +8,7 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation.Input
 {
-    public class DeviceSource : IDisposable
+    public class DeviceSource : IMediaVideoSource
     {
         public const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
 
@@ -17,6 +17,8 @@ namespace SharpMediaFoundation.Input
         
         public uint Width { get; private set; }
         public uint Height { get; private set; }
+        public uint OriginalWidth { get { return Width; } }
+        public uint OriginalHeight { get { return Height; } }
 
         public Guid OutputFormat { get; private set; }
         public uint OutputSize { get; private set; }

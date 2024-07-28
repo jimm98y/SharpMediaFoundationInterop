@@ -4,7 +4,7 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation
 {
-    public abstract class VideoTransformBase : MFTBase, IVideoTransform
+    public abstract class VideoTransformBase : MFTBase, IMediaVideoTransform
     {
         protected long _sampleDuration = 1;
         private IMFTransform _transform;
@@ -34,8 +34,8 @@ namespace SharpMediaFoundation
 
             this.OriginalWidth = width;
             this.OriginalHeight = height;
-            this.Width = MathUtils.RoundToMultipleOf(width, resMultiple);
-            this.Height = MathUtils.RoundToMultipleOf(height, resMultiple);
+            this.Width = MFUtils.RoundToMultipleOf(width, resMultiple);
+            this.Height = MFUtils.RoundToMultipleOf(height, resMultiple);
         }
 
         public void Initialize()

@@ -4,7 +4,7 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation
 {
-    public abstract class AudioTransformBase : MFTBase, IAudioTransform
+    public abstract class AudioTransformBase : MFTBase, IMediaAudioTransform
     {
         private bool _disposedValue;
         protected long _sampleDuration = 1;
@@ -14,7 +14,6 @@ namespace SharpMediaFoundation
         public uint OutputSize { get; private set; }
 
         public uint Channels { get; private set; }
-
         public uint SampleRate { get; private set; }
         public uint BitsPerSample { get; private set; }
 

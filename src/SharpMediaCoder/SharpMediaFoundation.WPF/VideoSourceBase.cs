@@ -13,7 +13,7 @@ namespace SharpMediaFoundation.WPF
     {
         public VideoInfo Info { get; protected set; }
 
-        protected IVideoTransform _videoDecoder;
+        protected IMediaVideoTransform _videoDecoder;
         protected ColorConverter _nv12Decoder;
         protected Queue<IList<byte[]>> _videoSampleQueue = new Queue<IList<byte[]>>();
         protected Queue<byte[]> _videoRenderQueue = new Queue<byte[]>();

@@ -33,7 +33,7 @@ namespace SharpMediaFoundation.H265
             mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFUtils.EncodeAttributeValue(Width, Height));
             mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFUtils.EncodeAttributeValue(FpsNom, FpsDenom));
             mediaOutput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, 2);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BITRATE, MathUtils.CalculateBitrate(Width, Height, FpsNom, FpsDenom));
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BITRATE, MFUtils.CalculateBitrate(Width, Height, FpsNom, FpsDenom));
             MFUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             IMFMediaType mediaInput;

@@ -11,7 +11,7 @@ using System.Runtime.InteropServices;
 
 namespace SharpMediaFoundation.Input
 {
-    public class ScreenCapture : IDisposable
+    public class ScreenCapture : IMediaVideoSource
     {
         private const uint BYTES_PER_PIXEL = 4;
         private readonly Stopwatch _stopwatch = new Stopwatch();
@@ -29,6 +29,9 @@ namespace SharpMediaFoundation.Input
         public uint OutputSize { get; private set; }
         public uint Width { get; private set; }
         public uint Height { get; private set; }
+        public uint OriginalWidth { get { return Width; } }
+        public uint OriginalHeight { get { return Height; } }
+
         public Guid OutputFormat { get; private set; } = PInvoke.MFVideoFormat_ARGB32;
 
         public unsafe void Initialize()
