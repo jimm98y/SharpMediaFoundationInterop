@@ -70,6 +70,8 @@ namespace SharpMediaFoundation.Input
 
         public Guid OutputFormat { get; private set; } = PInvoke.MFVideoFormat_ARGB32;
 
+        public uint ReadTimeoutInMilliseconds { get; set; } = 40;
+
         public void Initialize()
         {
             Initialize(0, 0);
@@ -168,7 +170,7 @@ namespace SharpMediaFoundation.Input
 
             try
             {
-                _duplicatedOutput.AcquireNextFrame(0, out DXGI_OUTDUPL_FRAME_INFO duplicateFrameInformation, out screenResource);
+                _duplicatedOutput.AcquireNextFrame(ReadTimeoutInMilliseconds, out DXGI_OUTDUPL_FRAME_INFO duplicateFrameInformation, out screenResource);
                 timestamp = _stopwatch.ElapsedTicks;
 
                 if (screenResource != null)
