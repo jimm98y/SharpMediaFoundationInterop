@@ -10,8 +10,6 @@ namespace SharpMediaFoundation
 {
     public abstract class MFTBase
     {
-        public static readonly Guid IID_IMFTransform = new Guid("BF94C121-5B05-4E6F-8000-BA598961414D");
-
         public abstract Guid InputFormat { get; }
         public abstract Guid OutputFormat { get; }
 
@@ -130,7 +128,7 @@ namespace SharpMediaFoundation
                 {
                     activate.GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR name, out _);
                     Debug.WriteLine($"Found MFT: {name}");
-                    transform = activate.ActivateObject(IID_IMFTransform) as IMFTransform;
+                    transform = activate.ActivateObject(typeof(IMFTransform).GUID) as IMFTransform;
                     break;
                 }
                 finally

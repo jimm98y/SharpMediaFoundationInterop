@@ -10,7 +10,6 @@ namespace SharpMediaFoundation.Input
 {
     public class DeviceSource : IDisposable
     {
-        public static readonly Guid IID_IMFMediaSource = new Guid("279A808D-AEC7-40C8-9C6B-A6B492C78A66");
         public const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
 
         private IMFSourceReader _pReader;
@@ -33,7 +32,7 @@ namespace SharpMediaFoundation.Input
         public void Initialize()
         {
             CaptureDevice[] devices = FindVideoCaptureDevices();
-            var device = (IMFMediaSource)devices[0].Activator.ActivateObject(IID_IMFMediaSource);
+            var device = (IMFMediaSource)devices[0].Activator.ActivateObject(typeof(IMFMediaSource).GUID);
             ReleaseVideoCaptureDevices(devices);
             _pReader = CreateSourceReader(device);
             var mediaType = GetBestMediaType(_pReader);

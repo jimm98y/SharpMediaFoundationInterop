@@ -14,9 +14,6 @@ namespace SharpMediaFoundation.Input
     public class ScreenCapture : IDisposable
     {
         private const uint BYTES_PER_PIXEL = 4;
-
-        private readonly Guid IID_IDXGIAdapter1 = new Guid("770AAE78-F26F-4DBA-A829-253C83D1B387");
-        private readonly Guid IID_IDXGIOutput5 = new Guid("80A07424-AB52-42EB-833C-0C42FD282D98");
         private readonly Stopwatch _stopwatch = new Stopwatch();
 
         private IDXGIFactory1 _factory;
@@ -36,7 +33,7 @@ namespace SharpMediaFoundation.Input
 
         public unsafe void Initialize()
         {
-            PInvoke.CreateDXGIFactory1(IID_IDXGIAdapter1, out var factory);
+            PInvoke.CreateDXGIFactory1(typeof(IDXGIFactory1).GUID, out var factory);
             _factory = (IDXGIFactory1)factory;
 
             IDXGIAdapter adapter;
