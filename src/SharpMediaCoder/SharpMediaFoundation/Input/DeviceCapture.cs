@@ -10,7 +10,7 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation.Input
 {
-    public class DeviceSource : IMediaVideoSource
+    public class DeviceCapture : IMediaVideoSource
     {
         public const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
 
@@ -25,12 +25,12 @@ namespace SharpMediaFoundation.Input
         public Guid OutputFormat { get; private set; }
         public uint OutputSize { get; private set; }
 
-        static DeviceSource()
+        static DeviceCapture()
         {
             MediaUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
         }
 
-        public DeviceSource()
+        public DeviceCapture()
         { }
 
         public void Initialize()
