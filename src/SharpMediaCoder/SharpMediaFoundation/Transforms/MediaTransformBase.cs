@@ -14,15 +14,6 @@ namespace SharpMediaFoundation.Transforms
         public abstract Guid InputFormat { get; }
         public abstract Guid OutputFormat { get; }
 
-
-        [Flags]
-        public enum MFT_OUTPUT_DATA_BUFFER_FLAGS : uint
-        {
-            None = 0x00,
-            FormatChange = 0x100,
-            Incomplete = 0x1000000,
-        }
-
         static MediaTransformBase()
         {
             MediaUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
@@ -98,7 +89,7 @@ namespace SharpMediaFoundation.Transforms
 
                 transform.SetOutputType(streamID, mediaType, 0);
                 transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
-                dataBuffer[0].dwStatus = (uint)MFT_OUTPUT_DATA_BUFFER_FLAGS.None;
+                dataBuffer[0].dwStatus = 0;
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {
