@@ -15,10 +15,10 @@ namespace SharpMediaFoundation.Input
         public string ID { get; private set; }
         public string Name { get; private set; }
 
-        public CaptureDevice(string name, string symbolicLink)
+        public CaptureDevice(string name, string id)
         {
             this.Name = name;
-            this.ID = symbolicLink;
+            this.ID = id;
         }
     }
 
@@ -44,21 +44,25 @@ namespace SharpMediaFoundation.Input
 
         public void Initialize()
         {
-            Initialize(null);
+            Initialize((string)null);
         }
 
-        public void Initialize(CaptureDevice device = null)
+        public void Initialize(CaptureDevice device)
         {
-            Initialize(device?.ID);
+            if (device == null)
+                throw new ArgumentNullException(nameof(device));
+
+            Initialize(device.ID);
         }
 
-        public void Initialize(string symbolicLink = null)
+        public void Initialize(string symbolicLink)
         {
             IMFMediaSource device = GetCaptureDevice(symbolicLink);
             _pReader = CreateSourceReader(device);
 
             // TODO: make configurable
             var mediaType = GetBestMediaType(_pReader);
+
             mediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out var frameSize);
             Width = (uint)(frameSize >> 32);
             Height = (uint)(frameSize & 0xFFFFFFFF);

@@ -50,8 +50,9 @@ namespace SharpMediaFoundation.WPF
         {
             if (_device == null)
             {
+                var screens = ScreenCapture.Enumerate();
                 _device = new ScreenCapture();
-                _device.Initialize();
+                _device.Initialize(screens.First());
 
                 _bytesPerPixel = 4;
 

@@ -10,9 +10,36 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using SharpMediaFoundation.Utils;
 using SharpMediaFoundation.Transforms;
+using System.Collections.Generic;
 
 namespace SharpMediaFoundation.Input
 {
+    public class ScreenDevice
+    {
+        public uint AdapterID { get; private set; }
+        public uint OutputID { get; private set; }
+
+        public int X { get; private set; }
+        public int Y { get; private set; }
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+        public string DeviceName { get; private set; }
+        public int Rotation { get; private set; }
+
+        public ScreenDevice(uint adapterID, uint outputID, int x, int y, int width, int height, int rotation, string deviceName)
+        {
+            this.AdapterID = adapterID;
+            this.OutputID = outputID;
+
+            this.X = x;
+            this.Y = y;
+            this.Width = width;
+            this.Height = height;
+            this.Rotation = rotation;
+            this.DeviceName = deviceName;
+        }
+    }
+
     public class ScreenCapture : IMediaVideoSource
     {
         private const uint BYTES_PER_PIXEL = 4;
@@ -24,6 +51,13 @@ namespace SharpMediaFoundation.Input
         private ID3D11Texture2D _captureTexture;
         private IDXGIOutput _output;
         private IDXGIOutputDuplication _duplicatedOutput;
+        private static readonly D3D_FEATURE_LEVEL[] _featureLevels = new[]
+        {
+            D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_11_1,
+            D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_11_0,
+            D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_10_1,
+            D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_10_0
+        };
 
         private nint _pData;
         private bool _disposedValue;
@@ -36,26 +70,32 @@ namespace SharpMediaFoundation.Input
 
         public Guid OutputFormat { get; private set; } = PInvoke.MFVideoFormat_ARGB32;
 
-        public unsafe void Initialize()
+        public void Initialize()
+        {
+            Initialize(0, 0);
+        }
+
+        public void Initialize(ScreenDevice device)
+        {
+            if (device == null)
+                throw new ArgumentNullException(nameof(device));
+
+            Initialize(device.AdapterID, device.OutputID);
+        }
+
+        public unsafe void Initialize(uint adapterID, uint outputID)
         {
             // TODO: reinitialize support when the device is lost
             PInvoke.CreateDXGIFactory1(typeof(IDXGIFactory1).GUID, out var factory);
             _factory = (IDXGIFactory1)factory;
 
             IDXGIAdapter adapter;
-            _factory.EnumAdapters(0, out adapter); // first returns the adapter with the output on which the desktop primary is displayed 
+            _factory.EnumAdapters(adapterID, out adapter); // first returns the adapter with the output on which the desktop primary is displayed 
 
             D3D_FEATURE_LEVEL level;
             ID3D11Device device;
-            D3D_FEATURE_LEVEL[] featureLevels = new[]
-            {
-                D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_11_1,
-                D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_11_0,
-                D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_10_1,
-                D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_10_0
-            };
 
-            fixed (D3D_FEATURE_LEVEL* pFeatureLevel = &featureLevels[0])
+            fixed (D3D_FEATURE_LEVEL* pFeatureLevel = &_featureLevels[0])
             {
                 PInvoke.D3D11CreateDevice(
                     adapter,
@@ -63,7 +103,7 @@ namespace SharpMediaFoundation.Input
                     (HMODULE)nint.Zero,
                     0,
                     pFeatureLevel,
-                    (uint)featureLevels.Length,
+                    (uint)_featureLevels.Length,
                     PInvoke.D3D11_SDK_VERSION,
                     out device,
                     &level,
@@ -73,7 +113,7 @@ namespace SharpMediaFoundation.Input
             _device = (ID3D11Device3)device;
 
             IDXGIOutput outputEn;
-            adapter.EnumOutputs(0, out outputEn);
+            adapter.EnumOutputs(outputID, out outputEn);
 
             DXGI_OUTPUT_DESC outputDescription;
             outputEn.GetDesc(&outputDescription);
@@ -100,6 +140,7 @@ namespace SharpMediaFoundation.Input
             };
 
             // must be set for the DuplicateOutput1 to succeed
+            // in WPF app, this call requires [assembly: DisableDpiAwareness] attribute and app.manifest with Windows 10 compatibility
             PInvoke.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
             ID3D11Texture2D captureTexture;
@@ -177,6 +218,96 @@ namespace SharpMediaFoundation.Input
             return ret;
         }
 
+        public static unsafe ScreenDevice[] Enumerate()
+        {
+            List<ScreenDevice> ret = new List<ScreenDevice>();
+
+            PInvoke.CreateDXGIFactory1(typeof(IDXGIFactory1).GUID, out var factory);
+            var factory1 = (IDXGIFactory1)factory;
+
+            uint adapterID = 0;
+            while (true)
+            {
+                IDXGIAdapter adapter;
+                try
+                {
+                    factory1.EnumAdapters(adapterID, out adapter); // first returns the adapter with the output on which the desktop primary is displayed 
+                }
+                catch(Exception ex)
+                {
+                    Debug.WriteLine(ex.Message);
+                    break;
+                }
+
+                D3D_FEATURE_LEVEL level;
+                ID3D11Device device;
+
+                fixed (D3D_FEATURE_LEVEL* pFeatureLevel = &_featureLevels[0])
+                {
+                    PInvoke.D3D11CreateDevice(
+                        adapter,
+                        D3D_DRIVER_TYPE.D3D_DRIVER_TYPE_UNKNOWN,
+                        (HMODULE)nint.Zero,
+                        0,
+                        pFeatureLevel,
+                        (uint)_featureLevels.Length,
+                        PInvoke.D3D11_SDK_VERSION,
+                        out device,
+                        &level,
+                        out _);
+                }
+                var device3 = (ID3D11Device3)device;
+
+                uint outputID = 0;
+                while (true)
+                {
+                    IDXGIOutput outputEn;
+
+                    try
+                    {
+                        MediaUtils.Check(adapter.EnumOutputs(outputID, out outputEn));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine(ex.Message);
+                        break;
+                    }
+
+                    DXGI_OUTPUT_DESC outputDescription;
+                    outputEn.GetDesc(&outputDescription);
+
+                    var screenDevice = new ScreenDevice(
+                            adapterID,
+                            outputID,
+                            outputDescription.DesktopCoordinates.X,
+                            outputDescription.DesktopCoordinates.Y,
+                            outputDescription.DesktopCoordinates.Width,
+                            outputDescription.DesktopCoordinates.Height,
+                            (int)outputDescription.Rotation,
+                            outputDescription.DeviceName.ToString());
+                    ret.Add(screenDevice);
+
+                    outputID++;
+
+                    Marshal.ReleaseComObject(outputEn);
+                    outputEn = null;
+                }
+
+                if (device != null)
+                {
+                    Marshal.ReleaseComObject(device);
+                    device = null;
+                }
+
+                adapterID++;
+            }
+
+            Marshal.ReleaseComObject(factory1);
+            factory1 = null;
+
+            return ret.ToArray();
+        }
+
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposedValue)
@@ -189,16 +320,10 @@ namespace SharpMediaFoundation.Input
                     _factory = null;
                 }
 
-                if (_device != null)
+                if (_duplicatedOutput != null)
                 {
-                    Marshal.ReleaseComObject(_device);
-                    _device = null;
-                }
-
-                if (_context != null)
-                {
-                    Marshal.ReleaseComObject(_context);
-                    _context = null;
+                    Marshal.ReleaseComObject(_duplicatedOutput);
+                    _duplicatedOutput = null;
                 }
 
                 if (_captureTexture != null)
@@ -207,16 +332,22 @@ namespace SharpMediaFoundation.Input
                     _captureTexture = null;
                 }
 
+                if (_context != null)
+                {
+                    Marshal.ReleaseComObject(_context);
+                    _context = null;
+                }
+
                 if (_output != null)
                 {
                     Marshal.ReleaseComObject(_output);
                     _output = null;
                 }
 
-                if (_duplicatedOutput != null)
+                if (_device != null)
                 {
-                    Marshal.ReleaseComObject(_duplicatedOutput);
-                    _duplicatedOutput = null;
+                    Marshal.ReleaseComObject(_device);
+                    _device = null;
                 }
 
                 if (_pData != nint.Zero)
