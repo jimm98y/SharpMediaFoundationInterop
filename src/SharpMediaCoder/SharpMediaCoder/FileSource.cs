@@ -55,14 +55,14 @@ namespace SharpMediaFoundation.WPF
                     if (vsbox.Children.FirstOrDefault(x => x is AvcConfigurationBox) != null)
                     {
                         videoInfo.VideoCodec = "H264";
-                        videoInfo.Width = MathUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
-                        videoInfo.Height = MathUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
+                        videoInfo.Width = MFUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
+                        videoInfo.Height = MFUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
                     }
                     else if (vsbox.Children.FirstOrDefault(x => x is HevcConfigurationBox) != null)
                     {
                         videoInfo.VideoCodec = "H265";
-                        videoInfo.Width = MathUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
-                        videoInfo.Height = MathUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
+                        videoInfo.Width = MFUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
+                        videoInfo.Height = MFUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
                     }
                     else
                     {
