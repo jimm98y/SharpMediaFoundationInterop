@@ -15,7 +15,8 @@ namespace SharpMediaFoundation.WPF
         public VideoInfo Info { get; protected set; }
 
         protected IMediaVideoTransform _videoDecoder;
-        protected ColorConverter _nv12Decoder;
+        protected IMediaVideoTransform _nv12Decoder;
+
         protected Queue<IList<byte[]>> _videoSampleQueue = new Queue<IList<byte[]>>();
         protected Queue<byte[]> _videoRenderQueue = new Queue<byte[]>();
         protected byte[] _nv12Buffer;
@@ -104,7 +105,17 @@ namespace SharpMediaFoundation.WPF
             {
                 if (disposing)
                 {
-                    
+                    if (_videoDecoder != null)
+                    {
+                        _videoDecoder.Dispose();
+                        _videoDecoder = null;
+                    }
+
+                    if (_nv12Decoder != null)
+                    {
+                        _nv12Decoder.Dispose();
+                        _nv12Decoder = null;
+                    }
                 }
 
                 _disposedValue = true;
