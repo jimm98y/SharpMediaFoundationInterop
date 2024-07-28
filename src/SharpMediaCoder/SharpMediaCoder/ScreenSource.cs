@@ -38,7 +38,7 @@ namespace SharpMediaFoundation.WPF
                     (int)Info.OriginalWidth,
                     (int)Info.OriginalHeight,
                     _bytesPerPixel,
-                    true);
+                    false);
 
                 return Task.FromResult(decoded);
             }
