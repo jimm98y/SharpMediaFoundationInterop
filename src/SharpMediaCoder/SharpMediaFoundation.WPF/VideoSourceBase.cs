@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Windows.Win32;
 using SharpMediaFoundation.Transforms;
 using SharpMediaFoundation.Transforms.Colors;
+using SharpMediaFoundation.Utils;
 
 namespace SharpMediaFoundation.WPF
 {
@@ -20,6 +21,9 @@ namespace SharpMediaFoundation.WPF
         protected Queue<IList<byte[]>> _videoSampleQueue = new Queue<IList<byte[]>>();
         protected Queue<byte[]> _videoRenderQueue = new Queue<byte[]>();
         protected byte[] _nv12Buffer;
+        protected byte[] _rgbBuffer;
+        private int _bytesPerPixel;
+        private int _imageBufferLen;
         protected long _time = 0;
         protected bool _isLowLatency = false;
         private bool _disposedValue;
@@ -49,10 +53,22 @@ namespace SharpMediaFoundation.WPF
                         {
                             _nv12Decoder.ProcessInput(_nv12Buffer, _time);
 
-                            byte[] decoded = ArrayPool<byte>.Shared.Rent((int)_nv12Decoder.OutputSize);
-                            _nv12Decoder.ProcessOutput(ref decoded, out _);
+                            if (_nv12Decoder.ProcessOutput(ref _rgbBuffer, out _))
+                            {
+                                byte[] decoded = ArrayPool<byte>.Shared.Rent(_imageBufferLen);
 
-                            _videoRenderQueue.Enqueue(decoded);
+                                BitmapUtils.CopyBitmap(
+                                    _rgbBuffer,
+                                    (int)Info.Width,
+                                    (int)Info.Height,
+                                    decoded,
+                                    (int)Info.OriginalWidth,
+                                    (int)Info.OriginalHeight,
+                                    _bytesPerPixel,
+                                    true);
+
+                                _videoRenderQueue.Enqueue(decoded);
+                            }
                         }
                     }
                 }
@@ -91,7 +107,11 @@ namespace SharpMediaFoundation.WPF
             _nv12Decoder = new ColorConverter(PInvoke.MFVideoFormat_NV12, PInvoke.MFVideoFormat_RGB24, info.Width, info.Height);
             _nv12Decoder.Initialize();
 
+            _bytesPerPixel = 3;
+
             _nv12Buffer = new byte[_videoDecoder.OutputSize];
+            _rgbBuffer = new byte[_nv12Decoder.OutputSize];
+            _imageBufferLen = (int)_nv12Decoder.OutputSize;
         }
 
         public void Return(byte[] decoded)

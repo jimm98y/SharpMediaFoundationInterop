@@ -1,4 +1,5 @@
 ﻿using SharpMediaFoundation.Input;
+using SharpMediaFoundation.Utils;
 using System.Buffers;
 using System.Windows.Media;
 
@@ -14,11 +15,9 @@ namespace SharpMediaFoundation.WPF
         private bool _disposedValue;
 
         private byte[] _rgbaBuffer;
+        private int _bytesPerPixel;
 
         public VideoInfo Info { get; private set; }
-
-        public ScreenSource()
-        { }
 
         public async Task InitializeAsync()
         {
@@ -29,19 +28,22 @@ namespace SharpMediaFoundation.WPF
         {
             if (_device.ReadSample(_rgbaBuffer, out _))
             {
-               var sampleBytes = ArrayPool<byte>.Shared.Rent((int)_device.OutputSize);
-               Buffer.BlockCopy(
+               var decoded = ArrayPool<byte>.Shared.Rent((int)_device.OutputSize);
+
+                BitmapUtils.CopyBitmap(
                     _rgbaBuffer,
-                    0,
-                    sampleBytes,
-                    0,
-                    (int)Info.Width * (int)Info.Height * 4);
-                return Task.FromResult(sampleBytes);
+                    (int)Info.Width,
+                    (int)Info.Height,
+                    decoded,
+                    (int)Info.OriginalWidth,
+                    (int)Info.OriginalHeight,
+                    _bytesPerPixel,
+                    true);
+
+                return Task.FromResult(decoded);
             }
-            else
-            {
-                return Task.FromResult<byte[]>(null);
-            }
+
+            return Task.FromResult<byte[]>(null);
         }
 
         private Task<VideoInfo> OpenAsync()
@@ -50,6 +52,8 @@ namespace SharpMediaFoundation.WPF
             {
                 _device = new ScreenCapture();
                 _device.Initialize();
+
+                _bytesPerPixel = 4;
 
                 _rgbaBuffer = new byte[_device.OutputSize];
             }

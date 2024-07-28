@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Timers;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using SharpMediaFoundation.Utils;
 
 namespace SharpMediaFoundation.WPF
 {
@@ -91,22 +91,13 @@ namespace SharpMediaFoundation.WPF
                 {
                     _canvas.Lock();
 
-                    int bytesPerPixel = 3;
-                    if (_source.Info.PixelFormat == PixelFormat.BGRA32)
-                    {
-                        bytesPerPixel = 4;
-                    }
-
-                    // decoded video image is upside down (pixel rows are in the bitmap order) => flip it
-                    BitmapUtils.CopyBitmap(
+                    // TODO: bitmap stride?
+                    Marshal.Copy(
                         decoded, 
-                        (int)_source.Info.Width,
-                        (int)_source.Info.Height,
-                        _canvas.BackBuffer, 
-                        (int)_source.Info.OriginalWidth, 
-                        (int)_source.Info.OriginalHeight,
-                        bytesPerPixel,
-                        true);
+                        0,
+                        _canvas.BackBuffer,
+                        (int)(_source.Info.OriginalWidth * _source.Info.OriginalHeight * (_source.Info.PixelFormat == PixelFormat.BGRA32 ? 4 : 3))
+                    );
 
                     _canvas.AddDirtyRect(_croppingRect);
                     _canvas.Unlock();

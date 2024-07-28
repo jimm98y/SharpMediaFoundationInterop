@@ -1,5 +1,6 @@
 ﻿using SharpMediaFoundation.Input;
 using SharpMediaFoundation.Transforms.Colors;
+using SharpMediaFoundation.Utils;
 using System.Buffers;
 using Windows.Win32;
 
@@ -11,13 +12,13 @@ namespace SharpMediaFoundation.WPF
         private bool _disposedValue;
 
         private byte[] _yuy2Buffer;
+        protected byte[] _rgbBuffer;
+        private int _bytesPerPixel;
+        private int _imageBufferLen;
 
         private ColorConverter _converter;
 
         public VideoInfo Info { get; private set; }
-
-        public CameraSource()
-        { }
 
         public async Task InitializeAsync()
         {
@@ -28,15 +29,28 @@ namespace SharpMediaFoundation.WPF
         {
             if (_device.ReadSample(_yuy2Buffer, out _))
             {
-                _converter.ProcessInput(_yuy2Buffer, 0);
-                var sampleBytes = ArrayPool<byte>.Shared.Rent((int)_converter.OutputSize);
-                _converter.ProcessOutput(ref sampleBytes, out _);
-                return Task.FromResult(sampleBytes);
+                if (_converter.ProcessInput(_yuy2Buffer, 0))
+                {
+                    if (_converter.ProcessOutput(ref _rgbBuffer, out _))
+                    {
+                        var decoded = ArrayPool<byte>.Shared.Rent((int)_imageBufferLen);
+
+                        BitmapUtils.CopyBitmap(
+                            _rgbBuffer,
+                            (int)Info.Width,
+                            (int)Info.Height,
+                            decoded,
+                            (int)Info.OriginalWidth,
+                            (int)Info.OriginalHeight,
+                            _bytesPerPixel,
+                            true);
+
+                        return Task.FromResult(decoded);
+                    }
+                }
             }
-            else
-            {
-                return Task.FromResult<byte[]>(null);
-            }
+
+            return Task.FromResult<byte[]>(null);
         }
 
         private Task<VideoInfo> OpenAsync()
@@ -49,6 +63,11 @@ namespace SharpMediaFoundation.WPF
 
                 _converter = new ColorConverter(_device.OutputFormat, PInvoke.MFVideoFormat_RGB24, _device.Width, _device.Height);
                 _converter.Initialize();
+
+                _bytesPerPixel = 3;
+
+                _rgbBuffer = new byte[_converter.OutputSize];
+                _imageBufferLen = (int)_converter.OutputSize;
             }
         
             var videoInfo = new VideoInfo();
