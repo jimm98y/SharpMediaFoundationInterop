@@ -190,7 +190,7 @@ namespace SharpMediaFoundation.Input
                             (int)Width,
                             (int)Height,
                             (int)BYTES_PER_PIXEL,
-                            false);
+                            true);
 
                     _context.Unmap(_captureTexture, subresource);
 
