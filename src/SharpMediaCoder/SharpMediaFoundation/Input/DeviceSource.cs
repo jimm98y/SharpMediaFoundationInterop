@@ -8,7 +8,7 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation.Input
 {
-    public class MFDeviceSource : IDisposable
+    public class DeviceSource : IDisposable
     {
         public static readonly Guid IID_IMFMediaSource = new Guid("279A808D-AEC7-40C8-9C6B-A6B492C78A66");
         public const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
@@ -22,12 +22,12 @@ namespace SharpMediaFoundation.Input
         public Guid OutputFormat { get; private set; }
         public uint OutputSize { get; private set; }
 
-        static MFDeviceSource()
+        static DeviceSource()
         {
             MFUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
         }
 
-        public MFDeviceSource()
+        public DeviceSource()
         { }
 
         public void Initialize()

@@ -21,7 +21,7 @@ using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileNam
         var targetVideoTrack = new H265Track();
         targetFile.AddTrack(targetVideoTrack);
                 
-        using (var camera = new MFDeviceSource())
+        using (var camera = new DeviceSource())
         {
             camera.Initialize();
             using (var videoEncoder = new H265Encoder(camera.Width, camera.Height, fpsNom, fpsDenom))

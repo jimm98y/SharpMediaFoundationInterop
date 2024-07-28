@@ -7,7 +7,7 @@ namespace SharpMediaFoundation.WPF
 {
     public class CameraSource : IVideoSource
     {
-        private MFDeviceSource _device;
+        private DeviceSource _device;
         private bool _disposedValue;
 
         private byte[] _yuy2Buffer;
@@ -43,7 +43,7 @@ namespace SharpMediaFoundation.WPF
         {
             if (_device == null)
             {
-                _device = new MFDeviceSource();
+                _device = new DeviceSource();
                 _device.Initialize();
                 _yuy2Buffer = new byte[_device.OutputSize];
 
