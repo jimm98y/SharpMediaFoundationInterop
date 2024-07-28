@@ -15,7 +15,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{3B9E
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharpWebcamRecorder", "SharpWebcamRecorder\SharpWebcamRecorder.csproj", "{07DF4D63-6793-4F9C-BF59-306E74FB6B89}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpWavePlayer", "SharpWavePlayer\SharpWavePlayer.csproj", "{F082DD55-A449-4112-931F-2B1B04E6DD9D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharpWavePlayer", "SharpWavePlayer\SharpWavePlayer.csproj", "{F082DD55-A449-4112-931F-2B1B04E6DD9D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpScreenCapture", "SharpScreenCapture\SharpScreenCapture.csproj", "{DE9DCB35-6268-4ED5-ADFC-647AD50F4552}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -73,6 +75,14 @@ Global
 		{F082DD55-A449-4112-931F-2B1B04E6DD9D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{F082DD55-A449-4112-931F-2B1B04E6DD9D}.Release|x64.ActiveCfg = Release|Any CPU
 		{F082DD55-A449-4112-931F-2B1B04E6DD9D}.Release|x64.Build.0 = Release|Any CPU
+		{DE9DCB35-6268-4ED5-ADFC-647AD50F4552}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DE9DCB35-6268-4ED5-ADFC-647AD50F4552}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DE9DCB35-6268-4ED5-ADFC-647AD50F4552}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{DE9DCB35-6268-4ED5-ADFC-647AD50F4552}.Debug|x64.Build.0 = Debug|Any CPU
+		{DE9DCB35-6268-4ED5-ADFC-647AD50F4552}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DE9DCB35-6268-4ED5-ADFC-647AD50F4552}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DE9DCB35-6268-4ED5-ADFC-647AD50F4552}.Release|x64.ActiveCfg = Release|Any CPU
+		{DE9DCB35-6268-4ED5-ADFC-647AD50F4552}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -82,6 +92,7 @@ Global
 		{D302D7E5-EEAD-49F6-B379-7072C978BB8C} = {3B9EE83C-519B-429D-B04F-0757A81CC39B}
 		{07DF4D63-6793-4F9C-BF59-306E74FB6B89} = {3B9EE83C-519B-429D-B04F-0757A81CC39B}
 		{F082DD55-A449-4112-931F-2B1B04E6DD9D} = {3B9EE83C-519B-429D-B04F-0757A81CC39B}
+		{DE9DCB35-6268-4ED5-ADFC-647AD50F4552} = {3B9EE83C-519B-429D-B04F-0757A81CC39B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {80EBDC0C-4BBE-4DBD-9E16-5B912CD928FA}

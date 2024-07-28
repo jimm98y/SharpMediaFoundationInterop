@@ -47,7 +47,7 @@ namespace SharpMediaFoundation.Wave
             waveFormat.wFormatTag = 1; // pcm
 
             HWAVEOUT device;
-            PInvoke.waveOutOpen(&device, WAVE_MAPPER, waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION); 
+            PInvoke.waveOutOpen(&device, WAVE_MAPPER, &waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION); 
             this._hDevice = device;
             Reset();
         }
@@ -97,8 +97,8 @@ namespace SharpMediaFoundation.Wave
                 Marshal.Copy(data, 0, (nint)pAudioData, (int)length);
                 _audioBufferIndex += waveHdrSize + length;
 
-                PInvoke.waveOutPrepareHeader(_hDevice, ref *waveHdr, (uint)sizeof(WAVEHDR));
-                PInvoke.waveOutWrite(_hDevice, ref *waveHdr, (uint)sizeof(WAVEHDR));
+                PInvoke.waveOutPrepareHeader(_hDevice, waveHdr, (uint)sizeof(WAVEHDR));
+                PInvoke.waveOutWrite(_hDevice, waveHdr, (uint)sizeof(WAVEHDR));
                 Interlocked.Increment(ref _queuedFrames);
             }
         }

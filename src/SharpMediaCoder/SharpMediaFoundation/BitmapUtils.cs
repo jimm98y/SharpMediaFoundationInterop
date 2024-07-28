@@ -10,6 +10,11 @@ namespace SharpMediaFoundation
             CopyPixels(source, 0, sourceWidth, sourceHeight, target, 0, targetWidth, targetHeight, bytesPerPixel, flip, true);
         }
 
+        public static void CopyBitmap(nint source, int sourceWidth, int sourceHeight, byte[] target, int targetWidth, int targetHeight, int bytesPerPixel = 3, bool flip = true)
+        {
+            CopyPixels(source, 0, sourceWidth, sourceHeight, target, 0, targetWidth, targetHeight, bytesPerPixel, flip, true);
+        }
+
         public static void CopyBitmap(byte[] source, int sourceWidth, int sourceHeight, byte[] target, int targetWidth, int targetHeight, int bytesPerPixel = 3, bool flip = false)
         {
             CopyPixels(source, 0, sourceWidth, sourceHeight, target, 0, targetWidth, targetHeight, bytesPerPixel, flip, true);
@@ -77,6 +82,35 @@ namespace SharpMediaFoundation
                    source,
                    sourceOffset + sourceStartIndex + i * sourceStride,
                    target + targetOffset + targetStartIndex + i * targetFlip * targetStride,
+                   targetStride
+                );
+            }
+        }
+
+        private static void CopyPixels(
+            nint source,
+            int sourceOffset,
+            int sourceWidth,
+            int sourceHeight,
+            byte[] target,
+            int targetOffset,
+            int targetWidth,
+            int targetHeight,
+            int bytesPerPixel = 1,
+            bool flip = false,
+            bool skipTop = true)
+        {
+            int sourceStride = sourceWidth * bytesPerPixel;
+            int sourceStartIndex = skipTop ? (sourceHeight - targetHeight) * sourceStride : 0;
+            int targetStride = targetWidth * bytesPerPixel;
+            int targetStartIndex = flip ? targetStride * (targetHeight - 1) : 0;
+            int targetFlip = flip ? -1 : 1;
+            for (int i = 0; i < targetHeight; i++)
+            {
+                Marshal.Copy(
+                   source + sourceOffset + sourceStartIndex + i * sourceStride,
+                   target,
+                   targetOffset + targetStartIndex + i * targetFlip * targetStride,
                    targetStride
                 );
             }

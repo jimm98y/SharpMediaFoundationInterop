@@ -55,7 +55,7 @@ namespace SharpMediaFoundation.Wave
 
             HWAVEIN device;
             _callback = DoneCallback;
-            PInvoke.waveInOpen(&device, WAVE_MAPPER, waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
+            PInvoke.waveInOpen(&device, WAVE_MAPPER, &waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
             this._hDevice = device;
 
             uint audioBufferIndex = 0;

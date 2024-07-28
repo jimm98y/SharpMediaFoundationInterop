@@ -35,20 +35,17 @@ using (Stream sourceFileStream = new BufferedStream(new FileStream(sourceFileNam
             {
                 waveOut.Initialize(sampleRate, channels, 16);
 
-                foreach (var sourceAudioFrame in sourceParsedMdat[sourceAudioTrackId])
+                foreach (var audioFrame in sourceParsedMdat[sourceAudioTrackId].First())
                 {
-                    foreach (var audioFrame in sourceAudioFrame)
+                    if (audioDecoder.ProcessInput(audioFrame, 0))
                     {
-                        if (audioDecoder.ProcessInput(audioFrame, 0))
+                        while (audioDecoder.ProcessOutput(ref pcmBuffer, out var pcmSize))
                         {
-                            while (audioDecoder.ProcessOutput(ref pcmBuffer, out var pcmSize))
-                            {
-                                waveOut.Enqueue(pcmBuffer, pcmSize);
+                            waveOut.Enqueue(pcmBuffer, pcmSize);
 
-                                while(waveOut.QueuedFrames > 10)
-                                {
-                                    await Task.Delay(10);
-                                }
+                            while(waveOut.QueuedFrames > 250)
+                            {
+                                await Task.Delay(50);
                             }
                         }
                     }
