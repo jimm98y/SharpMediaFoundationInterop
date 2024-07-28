@@ -1,9 +1,9 @@
-﻿using SharpMp4;
-using System.IO;
+﻿using System.IO;
 using System.Linq;
-using SharpMediaFoundation.AAC;
 using System.Threading.Tasks;
+using SharpMp4;
 using SharpMediaFoundation.Wave;
+using SharpMediaFoundation.Transforms.AAC;
 
 const string sourceFileName = "frag_bunny.mp4";
 

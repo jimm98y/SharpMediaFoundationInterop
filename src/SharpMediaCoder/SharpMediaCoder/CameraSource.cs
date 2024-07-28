@@ -1,5 +1,5 @@
-﻿using SharpMediaFoundation.Colors;
-using SharpMediaFoundation.Input;
+﻿using SharpMediaFoundation.Input;
+using SharpMediaFoundation.Transforms.Colors;
 using System.Buffers;
 using Windows.Win32;
 

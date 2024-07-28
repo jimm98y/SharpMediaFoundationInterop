@@ -1,11 +1,12 @@
-﻿using SharpMediaFoundation.H264;
-using SharpMediaFoundation.H265;
-using SharpMediaFoundation.Colors;
+﻿using SharpMediaFoundation.Transforms.H264;
+using SharpMediaFoundation.Transforms.H265;
 using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.Win32;
+using SharpMediaFoundation.Transforms;
+using SharpMediaFoundation.Transforms.Colors;
 
 namespace SharpMediaFoundation.WPF
 {

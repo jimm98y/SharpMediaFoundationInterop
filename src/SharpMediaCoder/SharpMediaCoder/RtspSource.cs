@@ -1,5 +1,6 @@
-﻿using SharpMediaFoundation.H264;
-using SharpMediaFoundation.H265;
+﻿using SharpMediaFoundation.Transforms.H264;
+using SharpMediaFoundation.Transforms.H265;
+using SharpMediaFoundation.Utils;
 using SharpRTSPClient;
 
 namespace SharpMediaFoundation.WPF
@@ -40,8 +41,8 @@ namespace SharpMediaFoundation.WPF
                     var dimensions = decodedSPS.CalculateDimensions();
                     videoInfo.OriginalWidth = dimensions.Width;
                     videoInfo.OriginalHeight = dimensions.Height;
-                    videoInfo.Width = MFUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
-                    videoInfo.Height = MFUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
+                    videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
+                    videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
 
                     var timescale = decodedSPS.CalculateTimescale();
                     videoInfo.FpsNom = (uint)timescale.Timescale;
@@ -57,8 +58,8 @@ namespace SharpMediaFoundation.WPF
                     var dimensions = decodedSPS.CalculateDimensions();
                     videoInfo.OriginalWidth = dimensions.Width;
                     videoInfo.OriginalHeight = dimensions.Height;
-                    videoInfo.Width = MFUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
-                    videoInfo.Height = MFUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
+                    videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
+                    videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
 
                     var timescale = decodedSPS.CalculateTimescale();
                     videoInfo.FpsNom = (uint)timescale.Timescale;

@@ -1,10 +1,11 @@
 ﻿using System;
+using SharpMediaFoundation.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundation.Transforms
 {
-    public abstract class VideoTransformBase : MFTBase, IMediaVideoTransform
+    public abstract class VideoTransformBase : MediaTransformBase, IMediaVideoTransform
     {
         protected long _sampleDuration = 1;
         private IMFTransform _transform;
@@ -12,9 +13,9 @@ namespace SharpMediaFoundation
         private bool _disposedValue;
 
         public uint OriginalWidth { get; }
-        public uint OriginalHeight { get; } 
+        public uint OriginalHeight { get; }
 
-        public uint Width { get; } 
+        public uint Width { get; }
         public uint Height { get; }
 
         public uint FpsNom { get; }
@@ -28,22 +29,22 @@ namespace SharpMediaFoundation
 
         protected VideoTransformBase(uint resMultiple, uint width, uint height, uint fpsNom, uint fpsDenom)
         {
-            this.FpsNom = fpsNom;
-            this.FpsDenom = fpsDenom;
-            _sampleDuration = MFUtils.CalculateSampleDuration(FpsNom, FpsDenom);
+            FpsNom = fpsNom;
+            FpsDenom = fpsDenom;
+            _sampleDuration = MediaUtils.CalculateSampleDuration(FpsNom, FpsDenom);
 
-            this.OriginalWidth = width;
-            this.OriginalHeight = height;
-            this.Width = MFUtils.RoundToMultipleOf(width, resMultiple);
-            this.Height = MFUtils.RoundToMultipleOf(height, resMultiple);
+            OriginalWidth = width;
+            OriginalHeight = height;
+            Width = MediaUtils.RoundToMultipleOf(width, resMultiple);
+            Height = MediaUtils.RoundToMultipleOf(height, resMultiple);
         }
 
         public void Initialize()
         {
             _transform = Create();
             _transform.GetOutputStreamInfo(0, out var streamInfo);
-            _dataBuffer = MFUtils.CreateOutputDataBuffer(streamInfo.cbSize);
-            this.OutputSize = streamInfo.cbSize;
+            _dataBuffer = MediaUtils.CreateOutputDataBuffer(streamInfo.cbSize);
+            OutputSize = streamInfo.cbSize;
         }
 
         protected abstract IMFTransform Create();
@@ -75,7 +76,7 @@ namespace SharpMediaFoundation
         public void Dispose()
         {
             Dispose(disposing: true);
-            System.GC.SuppressFinalize(this);
+            GC.SuppressFinalize(this);
         }
     }
 }

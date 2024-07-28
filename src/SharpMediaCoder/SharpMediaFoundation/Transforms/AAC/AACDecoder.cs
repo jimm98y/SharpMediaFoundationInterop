@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Linq;
+using SharpMediaFoundation.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation.AAC
+namespace SharpMediaFoundation.Transforms.AAC
 {
     public class AACDecoder : AudioTransformBase
     {
@@ -12,7 +13,7 @@ namespace SharpMediaFoundation.AAC
 
         public byte[] UserData { get; private set; }
 
-        public AACDecoder(uint channels, uint sampleRate, byte[] userData) 
+        public AACDecoder(uint channels, uint sampleRate, byte[] userData)
           : base(1024, channels, sampleRate, 16) // PCM = 16 bit, Float = 32 bit
         {
             if (sampleRate != 44100 && sampleRate != 48000)
@@ -27,7 +28,7 @@ namespace SharpMediaFoundation.AAC
                 throw new ArgumentNullException(nameof(userData));
             }
 
-            this.UserData = userData;
+            UserData = userData;
         }
 
         protected override IMFTransform Create()
@@ -42,7 +43,7 @@ namespace SharpMediaFoundation.AAC
             if (transform == null) throw new NotSupportedException($"Unsupported transform! Input: {InputFormat}, Output: {OutputFormat}");
 
             IMFMediaType mediaInput;
-            MFUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
+            MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
             mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
@@ -52,16 +53,16 @@ namespace SharpMediaFoundation.AAC
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 16000 * Channels);
             mediaInput.SetUINT32(PInvoke.MF_MT_AAC_PAYLOAD_TYPE, 0); // 0 = Raw, 1 = ADTS
             mediaInput.SetBlob(PInvoke.MF_MT_USER_DATA, UserData);
-            MFUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
+            MediaUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
             IMFMediaType mediaOutput;
-            MFUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
+            MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
-            MFUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
+            MediaUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             return transform;
         }

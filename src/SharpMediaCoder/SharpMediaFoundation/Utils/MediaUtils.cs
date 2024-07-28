@@ -5,9 +5,9 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundation.Utils
 {
-    public static class MFUtils
+    public static class MediaUtils
     {
         public static uint CalculateBitrate(uint width, uint height, uint fpsNom, uint fpsDenom, double bpp = 0.12)
         {
@@ -19,7 +19,7 @@ namespace SharpMediaFoundation
 
         public static uint RoundToMultipleOf(uint value, uint multiple)
         {
-            return ((value + multiple - 1) / multiple) * multiple;
+            return (value + multiple - 1) / multiple * multiple;
         }
 
         public static void Check(HRESULT result)
@@ -53,7 +53,7 @@ namespace SharpMediaFoundation
             sample.AddBuffer(buffer);
             sample.SetSampleDuration(sampleDuration);
             sample.SetSampleTime(timestamp); // timestamp is required
-            
+
             return sample;
         }
 
@@ -92,7 +92,7 @@ namespace SharpMediaFoundation
                 sampleSize = currentLength;
                 if (sampleBytes != null)
                 {
-                    Marshal.Copy((IntPtr)data, sampleBytes, 0, (int)currentLength);
+                    Marshal.Copy((nint)data, sampleBytes, 0, (int)currentLength);
                 }
                 ret = true;
             }

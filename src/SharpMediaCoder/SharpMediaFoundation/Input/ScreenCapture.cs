@@ -8,6 +8,8 @@ using Windows.Win32.Foundation;
 using Windows.Win32.UI.HiDpi;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using SharpMediaFoundation.Utils;
+using SharpMediaFoundation.Transforms;
 
 namespace SharpMediaFoundation.Input
 {

@@ -1,10 +1,11 @@
 ﻿using System;
+using SharpMediaFoundation.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundation.Transforms
 {
-    public abstract class AudioTransformBase : MFTBase, IMediaAudioTransform
+    public abstract class AudioTransformBase : MediaTransformBase, IMediaAudioTransform
     {
         private bool _disposedValue;
         protected long _sampleDuration = 1;
@@ -29,8 +30,8 @@ namespace SharpMediaFoundation
         {
             _transform = Create();
             _transform.GetOutputStreamInfo(0, out var streamInfo);
-            _dataBuffer = MFUtils.CreateOutputDataBuffer(streamInfo.cbSize);
-            this.OutputSize = streamInfo.cbSize;
+            _dataBuffer = MediaUtils.CreateOutputDataBuffer(streamInfo.cbSize);
+            OutputSize = streamInfo.cbSize;
         }
 
         protected abstract IMFTransform Create();
@@ -50,7 +51,7 @@ namespace SharpMediaFoundation
             if (!_disposedValue)
             {
                 if (disposing)
-                {  }
+                { }
 
                 _disposedValue = true;
             }

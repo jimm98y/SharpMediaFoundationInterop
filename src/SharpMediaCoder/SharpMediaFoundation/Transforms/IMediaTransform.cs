@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundation.Transforms
 {
     public interface IMediaOutput
     {
@@ -48,7 +48,7 @@ namespace SharpMediaFoundation
     }
 
     public interface IMediaVideoSource : IMediaSource, IVideoDescriptor
-    {  }
+    { }
 
     public interface IMediaAudioSource : IMediaSource, IAudioDescriptor
     { }

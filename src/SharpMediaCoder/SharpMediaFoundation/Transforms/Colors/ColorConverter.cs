@@ -1,8 +1,9 @@
 ﻿using System;
+using SharpMediaFoundation.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation.Colors
+namespace SharpMediaFoundation.Transforms.Colors
 {
     /// <summary>
     /// Converts among different color formats.
@@ -32,18 +33,18 @@ namespace SharpMediaFoundation.Colors
             if (transform == null) throw new NotSupportedException($"Unsupported transform! Input: {InputFormat}, Output: {OutputFormat}");
 
             IMFMediaType mediaInput;
-            MFUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
+            MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
             mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
-            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFUtils.EncodeAttributeValue(Width, Height));
-            MFUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
+            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MediaUtils.EncodeAttributeValue(Width, Height));
+            MediaUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
             IMFMediaType mediaOutput;
-            MFUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
+            MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
-            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFUtils.EncodeAttributeValue(Width, Height));
-            MFUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
+            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MediaUtils.EncodeAttributeValue(Width, Height));
+            MediaUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             return transform;
         }

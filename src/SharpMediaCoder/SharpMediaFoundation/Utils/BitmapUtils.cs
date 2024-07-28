@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundation.Utils
 {
     public static class BitmapUtils
     {
@@ -33,27 +33,27 @@ namespace SharpMediaFoundation
             // copy luma (y)
             CopyPixels(
                 source,
-                0, 
-                sourceWidth, 
+                0,
+                sourceWidth,
                 sourceHeight,
-                target, 
-                0, 
+                target,
+                0,
                 targetWidth,
                 targetHeight,
-                1, 
+                1,
                 flip,
                 false);
             // copy chroma (u, v)
             CopyPixels(
-                source, 
-                sourceWidth * sourceHeight, 
-                sourceWidth / 2, 
-                sourceHeight / 2, 
-                target, 
-                targetWidth * targetHeight, 
-                targetWidth / 2, 
-                targetHeight / 2, 
-                2, 
+                source,
+                sourceWidth * sourceHeight,
+                sourceWidth / 2,
+                sourceHeight / 2,
+                target,
+                targetWidth * targetHeight,
+                targetWidth / 2,
+                targetHeight / 2,
+                2,
                 flip,
                 false);
         }

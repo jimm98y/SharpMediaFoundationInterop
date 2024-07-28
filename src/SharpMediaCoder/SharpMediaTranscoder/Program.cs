@@ -1,10 +1,9 @@
-﻿
-using SharpMp4;
-using SharpMediaFoundation;
-using SharpMediaFoundation.H264;
-using SharpMediaFoundation.H265;
-using System.IO;
+﻿using System.IO;
 using System.Linq;
+using SharpMp4;
+using SharpMediaFoundation.Transforms.H264;
+using SharpMediaFoundation.Transforms.H265;
+using SharpMediaFoundation.Utils;
 
 const string sourceFileName = "frag_bunny.mp4";
 const string targetFileName = "frag_bunny_out.mp4";

@@ -1,8 +1,9 @@
 ﻿using System;
+using SharpMediaFoundation.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation.H265
+namespace SharpMediaFoundation.Transforms.H265
 {
     public class H265Encoder : VideoTransformBase
     {
@@ -27,22 +28,22 @@ namespace SharpMediaFoundation.H265
             if (transform == null) throw new NotSupportedException($"Unsupported transform! Input: {InputFormat}, Output: {OutputFormat}");
 
             IMFMediaType mediaOutput;
-            MFUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
+            MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
-            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFUtils.EncodeAttributeValue(Width, Height));
-            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFUtils.EncodeAttributeValue(FpsNom, FpsDenom));
+            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MediaUtils.EncodeAttributeValue(Width, Height));
+            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MediaUtils.EncodeAttributeValue(FpsNom, FpsDenom));
             mediaOutput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, 2);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BITRATE, MFUtils.CalculateBitrate(Width, Height, FpsNom, FpsDenom));
-            MFUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BITRATE, MediaUtils.CalculateBitrate(Width, Height, FpsNom, FpsDenom));
+            MediaUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             IMFMediaType mediaInput;
-            MFUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
+            MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
             mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
-            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MFUtils.EncodeAttributeValue(Width, Height));
-            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MFUtils.EncodeAttributeValue(FpsNom, FpsDenom));
-            MFUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
+            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MediaUtils.EncodeAttributeValue(Width, Height));
+            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MediaUtils.EncodeAttributeValue(FpsNom, FpsDenom));
+            MediaUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
             return transform;
         }
