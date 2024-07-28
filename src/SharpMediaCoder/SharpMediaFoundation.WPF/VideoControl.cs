@@ -92,6 +92,12 @@ namespace SharpMediaFoundation.WPF
                 {
                     _canvas.Lock();
 
+                    int bytesPerPixel = 3;
+                    if (_source.Info.PixelFormat == PixelFormat.BGRA32)
+                    {
+                        bytesPerPixel = 4;
+                    }
+
                     // decoded video image is upside down (pixel rows are in the bitmap order) => flip it
                     BitmapUtils.CopyBitmap(
                         decoded, 
@@ -99,14 +105,14 @@ namespace SharpMediaFoundation.WPF
                         (int)_source.Info.Height,
                         _canvas.BackBuffer, 
                         (int)_source.Info.OriginalWidth, 
-                        (int)_source.Info.OriginalHeight, 
-                        3,
+                        (int)_source.Info.OriginalHeight,
+                        bytesPerPixel,
                         true);
 
                     _canvas.AddDirtyRect(_croppingRect);
                     _canvas.Unlock();
 
-                    ArrayPool<byte>.Shared.Return(decoded);
+                    _source.Return(decoded);
                     _lastTime = elapsed;
                 }
             }
@@ -135,7 +141,7 @@ namespace SharpMediaFoundation.WPF
                             (int)info.OriginalHeight,
                             96,
                             96,
-                            PixelFormats.Bgr24,
+                            info.PixelFormat == PixelFormat.BGRA32 ? PixelFormats.Bgra32 : PixelFormats.Bgr24,
                             null);
                         this._image.Source = _canvas;
                         _croppingRect = new Int32Rect(0, 0, (int)info.OriginalWidth, (int)info.OriginalHeight);

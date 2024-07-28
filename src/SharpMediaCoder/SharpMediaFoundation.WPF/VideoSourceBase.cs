@@ -93,6 +93,11 @@ namespace SharpMediaFoundation.WPF
             _nv12Buffer = new byte[_videoDecoder.OutputSize];
         }
 
+        public void Return(byte[] decoded)
+        {
+            ArrayPool<byte>.Shared.Return(decoded);
+        }
+
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposedValue)

@@ -3,6 +3,12 @@ using System.Threading.Tasks;
 
 namespace SharpMediaFoundation.WPF
 {
+    public enum PixelFormat
+    {
+        BGR24,
+        BGRA32
+    }
+
     public struct VideoInfo
     {
         public string VideoCodec { get; set; }
@@ -12,6 +18,7 @@ namespace SharpMediaFoundation.WPF
         public uint OriginalHeight { get; set; }
         public uint FpsNom { get; set; }
         public uint FpsDenom { get; set; }
+        public PixelFormat PixelFormat { get; set; }
     }
 
     public interface IVideoSource : IDisposable
@@ -19,5 +26,6 @@ namespace SharpMediaFoundation.WPF
         VideoInfo Info { get; }
         Task InitializeAsync();
         Task<byte[]> GetSampleAsync();
+        void Return(byte[] decoded);
     }
 }

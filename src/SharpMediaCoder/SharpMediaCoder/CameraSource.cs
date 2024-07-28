@@ -61,6 +61,11 @@ namespace SharpMediaFoundation.WPF
             return Task.FromResult(videoInfo);
         }
 
+        public void Return(byte[] decoded)
+        {
+            ArrayPool<byte>.Shared.Return(decoded);
+        }
+
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposedValue)

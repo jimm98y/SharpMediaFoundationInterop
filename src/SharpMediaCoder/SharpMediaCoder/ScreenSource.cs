@@ -1,8 +1,9 @@
 ﻿using SharpMediaFoundation.Input;
-using SharpMediaFoundation.Utils;
 using System.Buffers;
 using System.Windows.Media;
 
+// Together with the app.manifest where we disable dpiAware for the WPF application,
+//  this is necessary for the SetProcessDpiAwarenessContext API to work. This API must be called before DuplicateOutput1...
 [assembly: DisableDpiAwareness]
 
 namespace SharpMediaFoundation.WPF
@@ -28,16 +29,13 @@ namespace SharpMediaFoundation.WPF
         {
             if (_device.ReadSample(_rgbaBuffer, out _))
             {
-                var sampleBytes = ArrayPool<byte>.Shared.Rent((int)_device.OutputSize);
-                BitmapUtils.CopyBitmap(
+               var sampleBytes = ArrayPool<byte>.Shared.Rent((int)_device.OutputSize);
+               Buffer.BlockCopy(
                     _rgbaBuffer,
-                    (int)Info.Width,
-                    (int)Info.Height,
+                    0,
                     sampleBytes,
-                    (int)Info.Width,
-                    (int)Info.Height,
-                    4,
-                    true);
+                    0,
+                    (int)Info.Width * (int)Info.Height * 4);
                 return Task.FromResult(sampleBytes);
             }
             else
@@ -63,7 +61,13 @@ namespace SharpMediaFoundation.WPF
             videoInfo.OriginalHeight = _device.Height;
             videoInfo.FpsNom = 24000;
             videoInfo.FpsDenom = 1001;
+            videoInfo.PixelFormat = PixelFormat.BGRA32;
             return Task.FromResult(videoInfo);
+        }
+
+        public void Return(byte[] decoded)
+        {
+            ArrayPool<byte>.Shared.Return(decoded);
         }
 
         protected virtual void Dispose(bool disposing)
