@@ -33,6 +33,7 @@ namespace SharpMediaFoundation.Input
 
         public unsafe void Initialize()
         {
+            // TODO: reinitialize support when the device is lost
             PInvoke.CreateDXGIFactory1(typeof(IDXGIFactory1).GUID, out var factory);
             _factory = (IDXGIFactory1)factory;
 
@@ -48,6 +49,7 @@ namespace SharpMediaFoundation.Input
                 D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_10_1,
                 D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_10_0
             };
+
             fixed (D3D_FEATURE_LEVEL* pFeatureLevel = &featureLevels[0])
             {
                 PInvoke.D3D11CreateDevice(
@@ -75,17 +77,9 @@ namespace SharpMediaFoundation.Input
             outputEn.GetDesc(&outputDescription);
             _output = outputEn;
 
-            if (outputDescription.Rotation == DXGI_MODE_ROTATION.DXGI_MODE_ROTATION_ROTATE90 || outputDescription.Rotation == DXGI_MODE_ROTATION.DXGI_MODE_ROTATION_ROTATE270)
-            {
-                Width = (uint)outputDescription.DesktopCoordinates.Height;
-                Height = (uint)outputDescription.DesktopCoordinates.Width;
-            }
-            else
-            {
-                Width = (uint)outputDescription.DesktopCoordinates.Width;
-                Height = (uint)outputDescription.DesktopCoordinates.Height;
-            }
-
+            // TODO: rotation support
+            Width = (uint)outputDescription.DesktopCoordinates.Width;
+            Height = (uint)outputDescription.DesktopCoordinates.Height;
             OutputSize = Width * Height * BYTES_PER_PIXEL;
 
             IDXGIOutput5 output = (IDXGIOutput5)outputEn;
@@ -143,8 +137,6 @@ namespace SharpMediaFoundation.Input
                     _context.Map(_captureTexture, subresource, D3D11_MAP.D3D11_MAP_READ, 0, null);
 
                     _device.ReadFromSubresource((void*)_pData, Width * BYTES_PER_PIXEL, Height, _captureTexture, 0);
-
-                    //Marshal.Copy(_pData, buffer, 0, buffer.Length);
                     BitmapUtils.CopyBitmap(
                             _pData,
                             (int)Width,
