@@ -20,7 +20,7 @@ namespace SharpMediaFoundation.Input
 
         private IDXGIFactory1 _factory;
         private ID3D11Device3 _device;
-        private ID3D11DeviceContext _context;
+        private ID3D11DeviceContext _context; // we need immediate context
         private ID3D11Texture2D _captureTexture;
         private IDXGIOutput _output;
         private IDXGIOutputDuplication _duplicatedOutput;
@@ -43,7 +43,7 @@ namespace SharpMediaFoundation.Input
             _factory = (IDXGIFactory1)factory;
 
             IDXGIAdapter adapter;
-            _factory.EnumAdapters(0, out adapter);
+            _factory.EnumAdapters(0, out adapter); // first returns the adapter with the output on which the desktop primary is displayed 
 
             D3D_FEATURE_LEVEL level;
             ID3D11Device device;
@@ -67,13 +67,10 @@ namespace SharpMediaFoundation.Input
                     PInvoke.D3D11_SDK_VERSION,
                     out device,
                     &level,
-                    out var ctx);
+                    out ID3D11DeviceContext deviceContext);
+                _context = deviceContext;
             }
             _device = (ID3D11Device3)device;
-
-            ID3D11DeviceContext deviceContext;
-            _device.GetImmediateContext(out deviceContext);
-            _context = deviceContext;
 
             IDXGIOutput outputEn;
             adapter.EnumOutputs(0, out outputEn);

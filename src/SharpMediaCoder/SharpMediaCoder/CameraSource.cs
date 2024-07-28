@@ -33,7 +33,7 @@ namespace SharpMediaFoundation.WPF
                 {
                     if (_converter.ProcessOutput(ref _rgbBuffer, out _))
                     {
-                        var decoded = ArrayPool<byte>.Shared.Rent((int)_imageBufferLen);
+                        var decoded = ArrayPool<byte>.Shared.Rent(_imageBufferLen);
 
                         BitmapUtils.CopyBitmap(
                             _rgbBuffer,
@@ -57,8 +57,9 @@ namespace SharpMediaFoundation.WPF
         {
             if (_device == null)
             {
+                var devices = DeviceCapture.Enumerate();
                 _device = new DeviceCapture();
-                _device.Initialize();
+                _device.Initialize(devices.First());
                 _yuy2Buffer = new byte[_device.OutputSize];
 
                 _converter = new ColorConverter(_device.OutputFormat, PInvoke.MFVideoFormat_RGB24, _device.Width, _device.Height);

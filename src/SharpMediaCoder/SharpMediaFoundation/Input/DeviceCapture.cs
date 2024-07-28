@@ -10,6 +10,18 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation.Input
 {
+    public class CaptureDevice
+    {
+        public string ID { get; private set; }
+        public string Name { get; private set; }
+
+        public CaptureDevice(string name, string symbolicLink)
+        {
+            this.Name = name;
+            this.ID = symbolicLink;
+        }
+    }
+
     public class DeviceCapture : IMediaVideoSource
     {
         public const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
@@ -30,15 +42,22 @@ namespace SharpMediaFoundation.Input
             MediaUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
         }
 
-        public DeviceCapture()
-        { }
-
         public void Initialize()
         {
-            CaptureDevice[] devices = FindVideoCaptureDevices();
-            var device = (IMFMediaSource)devices[0].Activator.ActivateObject(typeof(IMFMediaSource).GUID);
-            ReleaseVideoCaptureDevices(devices);
+            Initialize(null);
+        }
+
+        public void Initialize(CaptureDevice device = null)
+        {
+            Initialize(device?.ID);
+        }
+
+        public void Initialize(string symbolicLink = null)
+        {
+            IMFMediaSource device = GetCaptureDevice(symbolicLink);
             _pReader = CreateSourceReader(device);
+
+            // TODO: make configurable
             var mediaType = GetBestMediaType(_pReader);
             mediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out var frameSize);
             Width = (uint)(frameSize >> 32);
@@ -51,7 +70,7 @@ namespace SharpMediaFoundation.Input
             byte[] sample = null;
             int i = 0;
             // right now I know of no better solution to get the sample size than to read a sample
-            while(!ReadSample(_pReader, ref sample, out _, out _, out _, out sampleSize) && i++ < 2)
+            while (!ReadSample(_pReader, ref sample, out _, out _, out _, out sampleSize) && i++ < 2)
             { }
             OutputSize = sampleSize;
         }
@@ -129,37 +148,52 @@ namespace SharpMediaFoundation.Input
             return pReader;
         }
 
-        private static unsafe void ReleaseVideoCaptureDevices(CaptureDevice[] devices)
+        private static IMFMediaSource GetCaptureDevice(string symbolicLink)
         {
-            for (int i = 0; i < devices.Length; i++)
+            MediaUtils.Check(PInvoke.MFCreateAttributes(out var pConfig, 1));
+            pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
+            MediaUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out var devices, out _));
+            int deviceIndex;
+            for (deviceIndex = 0; deviceIndex < devices.Length; deviceIndex++)
             {
-                Marshal.ReleaseComObject(devices[i].Activator);
+                devices[deviceIndex].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, out PWSTR sLink, out _);
+                if (string.IsNullOrEmpty(symbolicLink))
+                {
+                    // we take the first device available
+                    break;
+                }
+                else if (symbolicLink == sLink.ToString())
+                {
+                    break;
+                }
+                else if (deviceIndex == devices.Length - 1)
+                {
+                    throw new Exception($"Device {symbolicLink} was not found!");
+                }
             }
+            var device = (IMFMediaSource)devices[deviceIndex].ActivateObject(typeof(IMFMediaSource).GUID);
+            for (deviceIndex = 0; deviceIndex < devices.Length; deviceIndex++)
+            {
+                Marshal.ReleaseComObject(devices[deviceIndex]);
+            }
+            Marshal.ReleaseComObject(pConfig);
+            return device;
         }
 
-        public class CaptureDevice
-        {
-            public IMFActivate Activator { get; set; }
-            public string Name { get; set; }
-            public CaptureDevice(IMFActivate activator, string name)
-            {
-                this.Activator = activator;
-                this.Name = name;
-            }
-        }
-
-        public static unsafe CaptureDevice[] FindVideoCaptureDevices()
+        public static CaptureDevice[] Enumerate()
         {
             List<CaptureDevice> ret = new List<CaptureDevice>();
             MediaUtils.Check(PInvoke.MFCreateAttributes(out var pConfig, 1));
             pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-            MediaUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out var devices, out uint pcSourceActivate));
+            MediaUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out var devices, out _));
             for (int i = 0; i < devices.Length; i++)
             {
                 devices[i].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, out PWSTR name, out _);
-                Debug.WriteLine($"Found device {name}");
-                ret.Add(new CaptureDevice(devices[i], name.ToString()));
+                devices[i].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, out PWSTR symbolicLink, out _);
+                ret.Add(new CaptureDevice(name.ToString(), symbolicLink.ToString()));
+                Marshal.ReleaseComObject(devices[i]);
             }
+            Marshal.ReleaseComObject(pConfig);
             return ret.ToArray();
         }
 
