@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Windows.Win32;
+using Windows.Win32.Media;
 using Windows.Win32.Media.Audio;
 
 namespace SharpMediaFoundation.Wave
@@ -33,6 +34,13 @@ namespace SharpMediaFoundation.Wave
     
     public class WaveOut : IDisposable
     {
+        const int TIME_MS = 0x0001;
+        const int TIME_SAMPLES = 0x0002;
+        const int TIME_BYTES = 0x0004;
+        const int TIME_SMPTE = 0x0008;
+        const int TIME_MIDI = 0x0010;
+        const int TIME_TICKS = 0x0020;
+
         public const int MM_WOM_DONE = 0x3BD;
         public const uint MMSYSERR_NOERROR = 0;
         public const uint WAVE_MAPPER = unchecked((uint)-1);
@@ -90,6 +98,16 @@ namespace SharpMediaFoundation.Wave
                 Interlocked.Decrement(ref _queuedFrames);
                 OnPlaybackCompleted?.Invoke(this, new EventArgs());
             }
+        }
+
+        public unsafe uint GetPosition()
+        {
+            MMTIME time = new MMTIME();
+            time.wType = TIME_SAMPLES;
+            PInvoke.waveOutGetPosition(_hDevice, &time, (uint)sizeof(MMTIME));
+            if (time.wType != TIME_SAMPLES)
+                throw new Exception("WaveOut device does not support reading time in samples");
+            return time.u.sample;
         }
 
         public void Reset()

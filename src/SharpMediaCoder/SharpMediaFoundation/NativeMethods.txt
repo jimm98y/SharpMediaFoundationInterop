@@ -18,6 +18,7 @@ waveOutWrite
 waveOutClose
 waveOutGetNumDevs
 waveOutGetDevCaps
+waveOutGetPosition
 WAVEOUTCAPS2W
 waveInAddBuffer 
 waveInOpen
