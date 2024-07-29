@@ -16,6 +16,9 @@ waveOutRestart
 waveOutPrepareHeader
 waveOutWrite
 waveOutClose
+waveOutGetNumDevs
+waveOutGetDevCaps
+WAVEOUTCAPS2W
 waveInAddBuffer 
 waveInOpen
 waveInReset
@@ -24,6 +27,9 @@ waveInStop
 waveInPrepareHeader
 waveInUnprepareHeader
 waveInClose
+waveInGetNumDevs
+waveInGetDevCaps
+WAVEINCAPS2W
 IDXGIFactory1
 IDXGIOutput
 IDXGIOutputDuplication

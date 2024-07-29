@@ -1,4 +1,7 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Windows.Win32;
@@ -6,9 +9,32 @@ using Windows.Win32.Media.Audio;
 
 namespace SharpMediaFoundation.Wave
 {
+    public class WaveOutDevice
+    {
+        public uint DeviceID { get; }
+        public uint Formats { get; }
+        public string Name { get; }
+        public ushort Channels { get; }
+        public uint DriverVersion { get; }
+        public ushort Mid { get; }
+        public ushort Pid { get; }
+
+        public WaveOutDevice(uint deviceID, uint formats, string name, ushort channels, uint driverVersion, ushort mid, ushort pid)
+        {
+            DeviceID = deviceID;
+            Formats = formats;
+            Name = name;
+            Channels = channels;
+            DriverVersion = driverVersion;
+            Mid = mid;
+            Pid = pid;
+        }
+    }
+    
     public class WaveOut : IDisposable
     {
         public const int MM_WOM_DONE = 0x3BD;
+        public const uint MMSYSERR_NOERROR = 0;
         public const uint WAVE_MAPPER = unchecked((uint)-1);
 
         private HWAVEOUT _hDevice;
@@ -27,7 +53,12 @@ namespace SharpMediaFoundation.Wave
         // https://github.com/microsoft/CsWin32/issues/623
         private Delegate _callback; // hold on to the delegate so that it does not get garbage collected
 
-        public unsafe void Initialize(uint samplesPerSecond, uint channels, uint bitsPerSample)
+        public void Initialize(uint samplesPerSecond, uint channels, uint bitsPerSample)
+        {
+            Initialize(WAVE_MAPPER, samplesPerSecond, channels, bitsPerSample);
+        }
+
+        public unsafe void Initialize(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample)
         {
             Close();
 
@@ -47,7 +78,7 @@ namespace SharpMediaFoundation.Wave
             waveFormat.wFormatTag = 1; // pcm
 
             HWAVEOUT device;
-            PInvoke.waveOutOpen(&device, WAVE_MAPPER, &waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION); 
+            PInvoke.waveOutOpen(&device, deviceID, &waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION); 
             this._hDevice = device;
             Reset();
         }
@@ -102,6 +133,52 @@ namespace SharpMediaFoundation.Wave
                 Interlocked.Increment(ref _queuedFrames);
             }
         }
+
+        public static unsafe WaveOutDevice[] Enumerate()
+        {
+            uint deviceCount = PInvoke.waveOutGetNumDevs();
+            List<WaveOutDevice> ret = new List<WaveOutDevice>();
+            for (int i = 0; i < deviceCount; i++)
+            {
+                uint deviceID = (uint)i;
+                WAVEOUTCAPS2W caps = new WAVEOUTCAPS2W();
+                uint result = PInvoke.waveOutGetDevCapsW(deviceID, (WAVEOUTCAPSW*)&caps, (uint)Marshal.SizeOf<WAVEOUTCAPS2W>());
+                if (result == MMSYSERR_NOERROR)
+                {
+                    string name = null;
+                    try
+                    {
+                        RegistryKey namesKey = Registry.LocalMachine.OpenSubKey(@"System\CurrentControlSet\Control\MediaCategories");
+                        if (namesKey != null)
+                        {
+                            RegistryKey nameKey = namesKey.OpenSubKey(caps.NameGuid.ToString("B"));
+                            if (nameKey != null) name = nameKey.GetValue("Name") as string;
+                        }
+                    }
+                    catch(Exception ex)
+                    {
+                        Debug.WriteLine(ex.Message);
+                    }
+
+                    ret.Add(
+                        new WaveOutDevice(
+                            deviceID,
+                            caps.dwFormats,
+                            name ?? caps.szPname.ToString(),
+                            caps.wChannels,
+                            caps.vDriverVersion,
+                            caps.wMid,
+                            caps.wPid
+                        ));
+                }
+                else
+                {
+                    throw new Exception($"Wave device enumeration failed with error {result}.");
+                }
+            }
+            return ret.ToArray();
+        }
+
 
         protected virtual void Dispose(bool disposing)
         {
