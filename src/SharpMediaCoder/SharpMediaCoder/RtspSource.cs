@@ -19,9 +19,15 @@ namespace SharpMediaFoundation.WPF
             this._password = password;
         }
 
-        public async override Task InitializeAsync()
+        public async override Task InitializeVideoAsync()
         {
-            Info = await CreateClient(_uri, _userName, _password);
+            // TODO audio
+            VideoInfo = await CreateClient(_uri, _userName, _password);
+        }
+
+        public override Task InitializeAudioAsync()
+        {
+            return Task.CompletedTask;
         }
 
         private Task<VideoInfo> CreateClient(string uri, string userName, string password)

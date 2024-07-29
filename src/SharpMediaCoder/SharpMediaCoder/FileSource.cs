@@ -15,22 +15,31 @@ namespace SharpMediaFoundation.WPF
             this._path = path ?? throw new ArgumentNullException(nameof(path));
         }
 
-        public async override Task InitializeAsync()
+        public async override Task InitializeVideoAsync()
         {
-            Info = await LoadFileAsync(_path);
+            var ret = await LoadFileAsync(_path);
+            VideoInfo = ret.Video;
+            AudioInfo = ret.Audio;
         }
 
-        public async override Task FinalizeAsync()
+        public override Task InitializeAudioAsync()
+        {
+            return Task.CompletedTask;
+        }
+
+        public async override Task FinalizeVideoAsync()
         {
             // restart playback
-            await InitializeAsync();
+            await InitializeVideoAsync();
         }
 
-        private async Task<VideoInfo> LoadFileAsync(string fileName)
+        private async Task<(VideoInfo Video, AudioInfo Audio)> LoadFileAsync(string fileName)
         {
             _videoSampleQueue.Clear();
+            _audioSampleQueue.Clear();
 
-            var videoInfo = new VideoInfo();
+            VideoInfo videoInfo = new VideoInfo();
+            AudioInfo audioInfo = null;
             using (Stream fs = new BufferedStream(new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read)))
             {
                 using (var fmp4 = await FragmentedMp4.ParseAsync(fs))
@@ -74,10 +83,35 @@ namespace SharpMediaFoundation.WPF
                     {
                         _videoSampleQueue.Enqueue(au);
                     }
+
+                    if (audioTrackBox != null)
+                    {
+                        audioInfo = new AudioInfo();
+
+                        var sourceAudioSampleBox =
+                            audioTrackBox
+                                .GetMdia()
+                                .GetMinf()
+                                .GetStbl()
+                                .GetStsd()
+                                .Children.Single((Mp4Box x) => x is AudioSampleEntryBox) as AudioSampleEntryBox;
+                        var audioDescriptor = sourceAudioSampleBox.GetAudioSpecificConfigDescriptor();
+
+                        audioInfo.AudioCodec = "AAC"; // TODO
+                        audioInfo.BitsPerSample = 16;
+                        audioInfo.UserData = await audioDescriptor.ToBytes();
+                        audioInfo.Channels = (uint)audioDescriptor.ChannelConfiguration;
+                        audioInfo.SampleRate = (uint)audioDescriptor.GetSamplingFrequency();
+
+                        foreach (var frame in parsedMDAT[audioTrackId][0])
+                        {
+                            _audioSampleQueue.Enqueue(frame);
+                        }
+                    }
                 }
             }
 
-            return videoInfo;
+            return (videoInfo, audioInfo);
         }
     }
 }

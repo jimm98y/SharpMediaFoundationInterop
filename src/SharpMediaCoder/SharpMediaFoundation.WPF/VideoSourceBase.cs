@@ -1,42 +1,96 @@
-﻿using SharpMediaFoundation.Transforms.H264;
-using SharpMediaFoundation.Transforms.H265;
-using System;
+﻿using System;
 using System.Buffers;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.Win32;
 using SharpMediaFoundation.Transforms;
+using SharpMediaFoundation.Transforms.AAC;
 using SharpMediaFoundation.Transforms.Colors;
+using SharpMediaFoundation.Transforms.H264;
+using SharpMediaFoundation.Transforms.H265;
 using SharpMediaFoundation.Utils;
 
 namespace SharpMediaFoundation.WPF
 {
-    public abstract class VideoSourceBase : IVideoSource
+    public abstract class VideoSourceBase : IVideoSource, IAudioSource
     {
-        public VideoInfo Info { get; protected set; }
+        public VideoInfo VideoInfo { get; protected set; }
+        public AudioInfo AudioInfo { get; protected set; }
 
         protected IMediaVideoTransform _videoDecoder;
         protected IMediaVideoTransform _nv12Decoder;
+        protected IMediaAudioTransform _audioDecoder;
 
         protected Queue<IList<byte[]>> _videoSampleQueue = new Queue<IList<byte[]>>();
         protected Queue<byte[]> _videoRenderQueue = new Queue<byte[]>();
+
+        protected Queue<byte[]> _audioSampleQueue = new Queue<byte[]>();
+        protected Queue<byte[]> _audioRenderQueue = new Queue<byte[]>();
+
         protected byte[] _nv12Buffer;
         protected byte[] _rgbBuffer;
+        private byte[] _pcmBuffer;
         private int _bytesPerPixel;
         private int _imageBufferLen;
-        protected long _time = 0;
+        protected long _videoTime = 0;
+        protected long _audioTime = 0;
         protected bool _isLowLatency = false;
         private bool _disposedValue;
 
-        public abstract Task InitializeAsync();
+        public abstract Task InitializeVideoAsync();
+        public abstract Task InitializeAudioAsync();
 
-        public virtual Task FinalizeAsync() { return Task.CompletedTask; }
+        public virtual Task FinalizeVideoAsync() 
+        {
+            return Task.CompletedTask;
+        }
 
-        public async virtual Task<byte[]> GetSampleAsync()
+        public virtual Task FinalizeAudioAsync()
+        {
+            return Task.CompletedTask;
+        }
+
+        public async virtual Task<byte[]> GetAudioSampleAsync()
+        {
+            if(_audioDecoder == null)
+            {
+                CreateAudioDecoder(AudioInfo);
+            }
+
+            byte[] existing;
+            if (_audioRenderQueue.TryDequeue(out existing))
+                return existing;
+
+            while (_audioRenderQueue.Count == 0 && _audioSampleQueue.TryDequeue(out var frame))
+            {
+                if (_audioDecoder.ProcessInput(frame, 0))
+                {
+                    while (_audioDecoder.ProcessOutput(ref _pcmBuffer, out var pcmSize))
+                    {
+                        byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize);
+                        Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
+                        _audioRenderQueue.Enqueue(decoded);
+                        _audioTime += 10000 * 1000 * decoded.Length / (AudioInfo.SampleRate * AudioInfo.Channels * (AudioInfo.BitsPerSample / 8)); // 100ns units
+                    }
+                }
+            }
+
+            if (_audioRenderQueue.TryDequeue(out existing))
+            {
+                return existing;
+            }
+            else
+            {
+                await FinalizeAudioAsync();
+                return null;
+            }
+        }
+
+        public async virtual Task<byte[]> GetVideoSampleAsync()
         {
             if (_videoDecoder == null || _nv12Decoder == null)
             {
-                CreateDecoder(Info);
+                CreateVideoDecoder(VideoInfo);
             }
 
             byte[] existing;
@@ -47,11 +101,11 @@ namespace SharpMediaFoundation.WPF
             {
                 foreach (var nalu in au)
                 {
-                    if (_videoDecoder.ProcessInput(nalu, _time))
+                    if (_videoDecoder.ProcessInput(nalu, _videoTime))
                     {
                         while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out _))
                         {
-                            _nv12Decoder.ProcessInput(_nv12Buffer, _time);
+                            _nv12Decoder.ProcessInput(_nv12Buffer, _videoTime);
 
                             if (_nv12Decoder.ProcessOutput(ref _rgbBuffer, out _))
                             {
@@ -59,11 +113,11 @@ namespace SharpMediaFoundation.WPF
 
                                 BitmapUtils.CopyBitmap(
                                     _rgbBuffer,
-                                    (int)Info.Width,
-                                    (int)Info.Height,
+                                    (int)VideoInfo.Width,
+                                    (int)VideoInfo.Height,
                                     decoded,
-                                    (int)Info.OriginalWidth,
-                                    (int)Info.OriginalHeight,
+                                    (int)VideoInfo.OriginalWidth,
+                                    (int)VideoInfo.OriginalHeight,
                                     _bytesPerPixel,
                                     true);
 
@@ -72,7 +126,7 @@ namespace SharpMediaFoundation.WPF
                         }
                     }
                 }
-                _time += 10000 * 1000 / (Info.FpsNom / Info.FpsDenom); // 100ns units
+                _videoTime += 10000 * 1000 / (VideoInfo.FpsNom / VideoInfo.FpsDenom); // 100ns units
             }
 
             if (_videoRenderQueue.TryDequeue(out existing))
@@ -81,12 +135,12 @@ namespace SharpMediaFoundation.WPF
             }
             else
             {
-                await FinalizeAsync();
+                await FinalizeVideoAsync();
                 return null;
             }
         }
 
-        protected virtual void CreateDecoder(VideoInfo info)
+        protected virtual void CreateVideoDecoder(VideoInfo info)
         {
             // decoders must be created on the same thread as the samples
             if (info.VideoCodec == "H264")
@@ -114,7 +168,28 @@ namespace SharpMediaFoundation.WPF
             _imageBufferLen = (int)_nv12Decoder.OutputSize;
         }
 
-        public void Return(byte[] decoded)
+        private void CreateAudioDecoder(AudioInfo info)
+        {
+            // decoders must be created on the same thread as the samples
+            if (info.AudioCodec == "AAC")
+            {
+                _audioDecoder = new AACDecoder(info.Channels, info.SampleRate, AACDecoder.CreateUserData(info.UserData));
+                _audioDecoder.Initialize();
+            }
+            else
+            {
+                throw new NotSupportedException();
+            }
+
+            _pcmBuffer = new byte[_audioDecoder.OutputSize];
+        }
+
+        public void ReturnVideoFrame(byte[] decoded)
+        {
+            ArrayPool<byte>.Shared.Return(decoded);
+        }
+
+        public void ReturnAudioFrame(byte[] decoded)
         {
             ArrayPool<byte>.Shared.Return(decoded);
         }
@@ -135,6 +210,12 @@ namespace SharpMediaFoundation.WPF
                     {
                         _nv12Decoder.Dispose();
                         _nv12Decoder = null;
+                    }
+
+                    if (_audioDecoder != null)
+                    {
+                        _audioDecoder.Dispose();
+                        _audioDecoder = null;
                     }
                 }
 

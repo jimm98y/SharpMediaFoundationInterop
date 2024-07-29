@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SharpMediaFoundation.Wave;
+using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -12,8 +13,10 @@ using System.Windows.Media.Imaging;
 namespace SharpMediaFoundation.WPF
 {
     [TemplatePart(Name = "PART_image", Type = typeof(Image))]
-    public class VideoControl : Control
+    public class VideoControl : Control, IDisposable
     {
+        private WaveOut _waveOut;
+
         private IVideoSource _nextSource = null;
         private IVideoSource _source = null;
 
@@ -42,10 +45,11 @@ namespace SharpMediaFoundation.WPF
         private WriteableBitmap _canvas;
         private System.Timers.Timer _timer;
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
-
-        private ConcurrentQueue<byte[]> _renderQueue = new ConcurrentQueue<byte[]>();
         private Stopwatch _stopwatch = new Stopwatch();
-        private long _lastTime = 0;
+
+        private ConcurrentQueue<byte[]> _videoRenderQueue = new ConcurrentQueue<byte[]>();
+        private long _videoLastTime = 0;
+        private bool _disposedValue;
 
         static VideoControl()
         {
@@ -85,9 +89,9 @@ namespace SharpMediaFoundation.WPF
 
             long elapsed = _stopwatch.ElapsedMilliseconds;
 
-            if (elapsed - _lastTime >= _timer.Interval)
+            if (elapsed - _videoLastTime >= _timer.Interval)
             {
-                if (_renderQueue.TryDequeue(out byte[] decoded))
+                if (_videoRenderQueue.TryDequeue(out byte[] decoded))
                 {
                     _canvas.Lock();
 
@@ -96,14 +100,14 @@ namespace SharpMediaFoundation.WPF
                         decoded, 
                         0,
                         _canvas.BackBuffer,
-                        (int)(_source.Info.OriginalWidth * _source.Info.OriginalHeight * (_source.Info.PixelFormat == PixelFormat.BGRA32 ? 4 : 3))
+                        (int)(_source.VideoInfo.OriginalWidth * _source.VideoInfo.OriginalHeight * (_source.VideoInfo.PixelFormat == PixelFormat.BGRA32 ? 4 : 3))
                     );
 
                     _canvas.AddDirtyRect(_croppingRect);
                     _canvas.Unlock();
 
-                    _source.Return(decoded);
-                    _lastTime = elapsed;
+                    _source.ReturnVideoFrame(decoded);
+                    _videoLastTime = elapsed;
                 }
             }
         }       
@@ -120,23 +124,38 @@ namespace SharpMediaFoundation.WPF
                 if (nextSource != null)
                 {
                     // calling initialize from the same thread as GetSampleAsync
-                    await nextSource.InitializeAsync();
+                    await nextSource.InitializeVideoAsync();
+                    if (nextSource is IAudioSource audioSource)
+                    {
+                        await audioSource.InitializeAudioAsync();
+                    }
+
                     _source = nextSource;
 
                     await Dispatcher.InvokeAsync(() =>
                     {
-                        var info = nextSource.Info;
+                        var videoInfo = nextSource.VideoInfo;
                         _canvas = new WriteableBitmap(
-                            (int)info.OriginalWidth,
-                            (int)info.OriginalHeight,
+                            (int)videoInfo.OriginalWidth,
+                            (int)videoInfo.OriginalHeight,
                             96,
                             96,
-                            info.PixelFormat == PixelFormat.BGRA32 ? PixelFormats.Bgra32 : PixelFormats.Bgr24,
+                            videoInfo.PixelFormat == PixelFormat.BGRA32 ? PixelFormats.Bgra32 : PixelFormats.Bgr24,
                             null);
                         this._image.Source = _canvas;
-                        _croppingRect = new Int32Rect(0, 0, (int)info.OriginalWidth, (int)info.OriginalHeight);
-                        _timer.Interval = 1000 * info.FpsDenom / info.FpsNom;
+                        _croppingRect = new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight);
+                        _timer.Interval = 1000 * videoInfo.FpsDenom / videoInfo.FpsNom;
                     });
+
+                    if (nextSource is IAudioSource nextAudioSource)
+                    {
+                        var audioInfo = nextAudioSource.AudioInfo;
+                        if (audioInfo != null)
+                        {
+                            _waveOut = new WaveOut();
+                            _waveOut.Initialize(audioInfo.SampleRate, audioInfo.Channels, audioInfo.BitsPerSample);
+                        }
+                    }
                 }
                 else
                 {
@@ -153,11 +172,26 @@ namespace SharpMediaFoundation.WPF
             // Get Sample
             try
             {
-                while (_renderQueue.Count <= 2) // taking just 1 frame seems to leak native memory, TODO: investigate
+                if (_waveOut != null)
                 {
-                    byte[] sample = await _source.GetSampleAsync();
+                    while (_waveOut.QueuedFrames <= 20)
+                    {
+                        byte[] sample = await ((IAudioSource)_source).GetAudioSampleAsync();
+                        if (sample != null)
+                        {
+                            _waveOut.Enqueue(sample, (uint)sample.Length);
+                            ((IAudioSource)_source).ReturnAudioFrame(sample);
+                        }
+                        else
+                            break;
+                    }
+                }
+
+                while (_videoRenderQueue.Count <= 2) // taking just 1 frame seems to leak native memory, TODO: investigate
+                {
+                    byte[] sample = await _source.GetVideoSampleAsync();
                     if (sample != null)
-                        _renderQueue.Enqueue(sample);
+                        _videoRenderQueue.Enqueue(sample);
                     else
                         break;
                 }
@@ -178,6 +212,35 @@ namespace SharpMediaFoundation.WPF
         {
             _timer.Stop();
             _stopwatch.Stop();
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects)
+                }
+
+                if(_waveOut != null)
+                {
+                    _waveOut.Dispose();
+                    _waveOut = null;
+                }
+
+                _disposedValue = true;
+            }
+        }
+        ~VideoControl()
+        {
+            Dispose(disposing: false);
+        }
+
+        public void Dispose()
+        {
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

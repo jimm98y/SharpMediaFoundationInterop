@@ -9,7 +9,7 @@ namespace SharpMediaFoundation.WPF
         BGRA32
     }
 
-    public struct VideoInfo
+    public class VideoInfo
     {
         public string VideoCodec { get; set; }
         public uint Width { get; set; }
@@ -21,11 +21,28 @@ namespace SharpMediaFoundation.WPF
         public PixelFormat PixelFormat { get; set; }
     }
 
+    public class AudioInfo
+    {
+        public string AudioCodec { get; set; }
+        public uint Channels { get; set; }
+        public uint SampleRate { get; set; }
+        public byte[] UserData { get; set; }
+        public uint BitsPerSample { get; set; }
+    }
+
     public interface IVideoSource : IDisposable
     {
-        VideoInfo Info { get; }
-        Task InitializeAsync();
-        Task<byte[]> GetSampleAsync();
-        void Return(byte[] decoded);
+        VideoInfo VideoInfo { get; }
+        Task InitializeVideoAsync();
+        Task<byte[]> GetVideoSampleAsync();
+        void ReturnVideoFrame(byte[] decoded);
+    }
+
+    public interface IAudioSource : IDisposable
+    {
+        AudioInfo AudioInfo { get; }
+        Task InitializeAudioAsync();
+        Task<byte[]> GetAudioSampleAsync();
+        void ReturnAudioFrame(byte[] decoded);
     }
 }

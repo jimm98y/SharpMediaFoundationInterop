@@ -17,14 +17,14 @@ namespace SharpMediaFoundation.WPF
         private byte[] _rgbaBuffer;
         private int _bytesPerPixel;
 
-        public VideoInfo Info { get; private set; }
+        public VideoInfo VideoInfo { get; private set; }
 
-        public async Task InitializeAsync()
+        public async Task InitializeVideoAsync()
         {
-            Info = await OpenAsync();
+            VideoInfo = await OpenAsync();
         }
 
-        public Task<byte[]> GetSampleAsync()
+        public Task<byte[]> GetVideoSampleAsync()
         {
             if (_device.ReadSample(_rgbaBuffer, out _))
             {
@@ -32,11 +32,11 @@ namespace SharpMediaFoundation.WPF
 
                 BitmapUtils.CopyBitmap(
                     _rgbaBuffer,
-                    (int)Info.Width,
-                    (int)Info.Height,
+                    (int)VideoInfo.Width,
+                    (int)VideoInfo.Height,
                     decoded,
-                    (int)Info.OriginalWidth,
-                    (int)Info.OriginalHeight,
+                    (int)VideoInfo.OriginalWidth,
+                    (int)VideoInfo.OriginalHeight,
                     _bytesPerPixel,
                     true);
 
@@ -70,7 +70,7 @@ namespace SharpMediaFoundation.WPF
             return Task.FromResult(videoInfo);
         }
 
-        public void Return(byte[] decoded)
+        public void ReturnVideoFrame(byte[] decoded)
         {
             ArrayPool<byte>.Shared.Return(decoded);
         }
