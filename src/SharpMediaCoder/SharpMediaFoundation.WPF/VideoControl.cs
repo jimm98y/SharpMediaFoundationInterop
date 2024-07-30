@@ -106,7 +106,7 @@ namespace SharpMediaFoundation.WPF
                     _canvas.AddDirtyRect(_croppingRect);
                     _canvas.Unlock();
 
-                    _source.ReturnVideoFrame(decoded);
+                    _source.ReturnVideoSample(decoded);
                     _videoLastTime = elapsed;
                 }
             }
@@ -176,11 +176,11 @@ namespace SharpMediaFoundation.WPF
                 {
                     while (_waveOut.QueuedFrames <= 20)
                     {
-                        byte[] sample = await ((IAudioSource)_source).GetAudioSampleAsync();
+                        ((IAudioSource)_source).GetAudioSample(out byte[] sample);
                         if (sample != null)
                         {
                             _waveOut.Enqueue(sample, (uint)sample.Length);
-                            ((IAudioSource)_source).ReturnAudioFrame(sample);
+                            ((IAudioSource)_source).ReturnAudioSample(sample);
                         }
                         else
                             break;
@@ -189,7 +189,7 @@ namespace SharpMediaFoundation.WPF
 
                 while (_videoRenderQueue.Count <= 2) // taking just 1 frame seems to leak native memory, TODO: investigate
                 {
-                    byte[] sample = await _source.GetVideoSampleAsync();
+                    _source.GetVideoSample(out byte[] sample);
                     if (sample != null)
                         _videoRenderQueue.Enqueue(sample);
                     else

@@ -27,7 +27,7 @@ namespace SharpMediaFoundation.WPF
             return Task.CompletedTask;
         }
 
-        public async override Task FinalizeVideoAsync()
+        public async override void FinalizeVideo()
         {
             // restart playback
             await InitializeVideoAsync();

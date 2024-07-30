@@ -24,7 +24,7 @@ namespace SharpMediaFoundation.WPF
             VideoInfo = await OpenAsync();
         }
 
-        public Task<byte[]> GetVideoSampleAsync()
+        public void GetVideoSample(out byte[] sample)
         {
             if (_device.ReadSample(_rgbaBuffer, out _))
             {
@@ -40,10 +40,11 @@ namespace SharpMediaFoundation.WPF
                     _bytesPerPixel,
                     true);
 
-                return Task.FromResult(decoded);
+                sample = decoded;
+                return;
             }
 
-            return Task.FromResult<byte[]>(null);
+            sample = null;
         }
 
         private Task<VideoInfo> OpenAsync()
@@ -70,7 +71,7 @@ namespace SharpMediaFoundation.WPF
             return Task.FromResult(videoInfo);
         }
 
-        public void ReturnVideoFrame(byte[] decoded)
+        public void ReturnVideoSample(byte[] decoded)
         {
             ArrayPool<byte>.Shared.Return(decoded);
         }

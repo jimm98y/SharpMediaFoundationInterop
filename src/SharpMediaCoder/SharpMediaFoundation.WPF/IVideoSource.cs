@@ -34,15 +34,15 @@ namespace SharpMediaFoundation.WPF
     {
         VideoInfo VideoInfo { get; }
         Task InitializeVideoAsync();
-        Task<byte[]> GetVideoSampleAsync();
-        void ReturnVideoFrame(byte[] decoded);
+        void GetVideoSample(out byte[] sample);
+        void ReturnVideoSample(byte[] sample);
     }
 
     public interface IAudioSource : IDisposable
     {
         AudioInfo AudioInfo { get; }
         Task InitializeAudioAsync();
-        Task<byte[]> GetAudioSampleAsync();
-        void ReturnAudioFrame(byte[] decoded);
+        void GetAudioSample(out byte[] sample);
+        void ReturnAudioSample(byte[] sample);
     }
 }

@@ -40,26 +40,21 @@ namespace SharpMediaFoundation.WPF
         public abstract Task InitializeVideoAsync();
         public abstract Task InitializeAudioAsync();
 
-        public virtual Task FinalizeVideoAsync() 
-        {
-            return Task.CompletedTask;
-        }
+        public virtual void FinalizeVideo() 
+        { }
 
-        public virtual Task FinalizeAudioAsync()
-        {
-            return Task.CompletedTask;
-        }
+        public virtual void FinalizeAudio()
+        { }
 
-        public async virtual Task<byte[]> GetAudioSampleAsync()
+        public virtual void GetAudioSample(out byte[] sample)
         {
             if(_audioDecoder == null)
             {
                 CreateAudioDecoder(AudioInfo);
             }
 
-            byte[] existing;
-            if (_audioRenderQueue.TryDequeue(out existing))
-                return existing;
+            if (_audioRenderQueue.TryDequeue(out sample))
+                return;
 
             while (_audioRenderQueue.Count == 0 && _audioSampleQueue.TryDequeue(out var frame))
             {
@@ -70,32 +65,31 @@ namespace SharpMediaFoundation.WPF
                         byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize);
                         Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
                         _audioRenderQueue.Enqueue(decoded);
-                        _audioTime += 10000 * 1000 * decoded.Length / (AudioInfo.SampleRate * AudioInfo.Channels * (AudioInfo.BitsPerSample / 8)); // 100ns units
+                        _audioTime += 10000L * 1000 * decoded.Length / (AudioInfo.SampleRate * AudioInfo.Channels * (AudioInfo.BitsPerSample / 8)); // 100ns units
                     }
                 }
             }
 
-            if (_audioRenderQueue.TryDequeue(out existing))
+            if (_audioRenderQueue.TryDequeue(out sample))
             {
-                return existing;
+                return;
             }
             else
             {
-                await FinalizeAudioAsync();
-                return null;
+                FinalizeAudio();
+                sample = null;
             }
         }
 
-        public async virtual Task<byte[]> GetVideoSampleAsync()
+        public virtual void GetVideoSample(out byte[] sample)
         {
             if (_videoDecoder == null || _nv12Decoder == null)
             {
                 CreateVideoDecoder(VideoInfo);
             }
 
-            byte[] existing;
-            if (_videoRenderQueue.TryDequeue(out existing))
-                return existing;
+            if (_videoRenderQueue.TryDequeue(out sample))
+                return;
 
             while (_videoRenderQueue.Count == 0 && _videoSampleQueue.TryDequeue(out var au))
             {
@@ -126,17 +120,17 @@ namespace SharpMediaFoundation.WPF
                         }
                     }
                 }
-                _videoTime += 10000 * 1000 / (VideoInfo.FpsNom / VideoInfo.FpsDenom); // 100ns units
+                _videoTime += 10000L * 1000 / (VideoInfo.FpsNom / VideoInfo.FpsDenom); // 100ns units
             }
 
-            if (_videoRenderQueue.TryDequeue(out existing))
+            if (_videoRenderQueue.TryDequeue(out sample))
             {
-                return existing;
+                return;
             }
             else
             {
-                await FinalizeVideoAsync();
-                return null;
+                FinalizeVideo();
+                sample = null;
             }
         }
 
@@ -184,12 +178,12 @@ namespace SharpMediaFoundation.WPF
             _pcmBuffer = new byte[_audioDecoder.OutputSize];
         }
 
-        public void ReturnVideoFrame(byte[] decoded)
+        public void ReturnVideoSample(byte[] decoded)
         {
             ArrayPool<byte>.Shared.Return(decoded);
         }
 
-        public void ReturnAudioFrame(byte[] decoded)
+        public void ReturnAudioSample(byte[] decoded)
         {
             ArrayPool<byte>.Shared.Return(decoded);
         }
