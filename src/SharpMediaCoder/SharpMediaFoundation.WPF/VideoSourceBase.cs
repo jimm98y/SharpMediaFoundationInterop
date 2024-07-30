@@ -46,7 +46,7 @@ namespace SharpMediaFoundation.WPF
         public virtual void FinalizeAudio()
         { }
 
-        public virtual void GetAudioSample(out byte[] sample)
+        public virtual bool GetAudioSample(out byte[] sample)
         {
             if(_audioDecoder == null)
             {
@@ -54,7 +54,7 @@ namespace SharpMediaFoundation.WPF
             }
 
             if (_audioRenderQueue.TryDequeue(out sample))
-                return;
+                return true;
 
             while (_audioRenderQueue.Count == 0 && _audioSampleQueue.TryDequeue(out var frame))
             {
@@ -65,23 +65,24 @@ namespace SharpMediaFoundation.WPF
                         byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize);
                         Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
                         _audioRenderQueue.Enqueue(decoded);
-                        _audioTime += 10000L * 1000 * decoded.Length / (AudioInfo.SampleRate * AudioInfo.Channels * (AudioInfo.BitsPerSample / 8)); // 100ns units
+                        _audioTime += 100000L * 1000 * decoded.Length / (AudioInfo.SampleRate * AudioInfo.Channels * (AudioInfo.BitsPerSample / 8)); // 100ns units
                     }
                 }
             }
 
             if (_audioRenderQueue.TryDequeue(out sample))
             {
-                return;
+                return true;
             }
             else
             {
                 FinalizeAudio();
                 sample = null;
+                return false;
             }
         }
 
-        public virtual void GetVideoSample(out byte[] sample)
+        public virtual bool GetVideoSample(out byte[] sample)
         {
             if (_videoDecoder == null || _nv12Decoder == null)
             {
@@ -89,7 +90,7 @@ namespace SharpMediaFoundation.WPF
             }
 
             if (_videoRenderQueue.TryDequeue(out sample))
-                return;
+                return true;
 
             while (_videoRenderQueue.Count == 0 && _videoSampleQueue.TryDequeue(out var au))
             {
@@ -120,17 +121,18 @@ namespace SharpMediaFoundation.WPF
                         }
                     }
                 }
-                _videoTime += 10000L * 1000 / (VideoInfo.FpsNom / VideoInfo.FpsDenom); // 100ns units
+                _videoTime += 100000L * 1000 / (VideoInfo.FpsNom / VideoInfo.FpsDenom); // 100ns units
             }
 
             if (_videoRenderQueue.TryDequeue(out sample))
             {
-                return;
+                return true;
             }
             else
             {
                 FinalizeVideo();
                 sample = null;
+                return false;
             }
         }
 

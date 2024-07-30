@@ -25,7 +25,7 @@ namespace SharpMediaFoundation.WPF
             VideoInfo = await OpenAsync();
         }
 
-        public void GetVideoSample(out byte[] sample)
+        public bool GetVideoSample(out byte[] sample)
         {
             if (_device.ReadSample(_yuy2Buffer, out _))
             {
@@ -46,12 +46,13 @@ namespace SharpMediaFoundation.WPF
                             true);
 
                         sample = decoded;
-                        return;
+                        return true;
                     }
                 }
             }
 
             sample = null;
+            return false;
         }
 
         private Task<VideoInfo> OpenAsync()

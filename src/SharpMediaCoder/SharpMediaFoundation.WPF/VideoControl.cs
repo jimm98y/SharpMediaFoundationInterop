@@ -47,8 +47,8 @@ namespace SharpMediaFoundation.WPF
         private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
         private Stopwatch _stopwatch = new Stopwatch();
 
-        private ConcurrentQueue<byte[]> _videoRenderQueue = new ConcurrentQueue<byte[]>();
-        private long _videoLastTime = 0;
+        private long _videoFrames = 0;
+        private long _audioFrames = 0;
         private bool _disposedValue;
 
         static VideoControl()
@@ -84,33 +84,66 @@ namespace SharpMediaFoundation.WPF
 
         private void CompositionTarget_Rendering(object sender, EventArgs e)
         {
-            if (_timer == null  || !_timer.Enabled)
-                return;
+            byte[] decoded = GetVideoFrame();
 
-            long elapsed = _stopwatch.ElapsedMilliseconds;
-
-            if (elapsed - _videoLastTime >= _timer.Interval)
+            if (decoded != null)
             {
-                if (_videoRenderQueue.TryDequeue(out byte[] decoded))
+                _canvas.Lock();
+
+                // TODO: bitmap stride?
+                Marshal.Copy(
+                    decoded, 
+                    0,
+                    _canvas.BackBuffer,
+                    (int)(_source.VideoInfo.OriginalWidth * _source.VideoInfo.OriginalHeight * (_source.VideoInfo.PixelFormat == PixelFormat.BGRA32 ? 4 : 3))
+                );
+
+                _canvas.AddDirtyRect(_croppingRect);
+                _canvas.Unlock();
+
+                _source.ReturnVideoSample(decoded);
+            }
+        }
+
+        private byte[] GetVideoFrame()
+        {
+            if (_source == null || !_stopwatch.IsRunning)
+                return null;
+
+            long elapsed = _stopwatch.ElapsedMilliseconds * 10L;
+            long currentTimestamp = _videoFrames * 10000L / (_source.VideoInfo.FpsNom / _source.VideoInfo.FpsDenom);
+            long nextTimestamp = (_videoFrames + 1) * 10000L / (_source.VideoInfo.FpsNom / _source.VideoInfo.FpsDenom);
+            if (elapsed >= currentTimestamp && elapsed < nextTimestamp)
+            {
+                Interlocked.Increment(ref _videoFrames);
+                if (_source.GetVideoSample(out var sample))
+                    return sample;
+                else
+                    Debug.WriteLine("Buffer underrun");
+            }
+            else if(elapsed > nextTimestamp)
+            {
+                // drop frames
+                while (_source.GetVideoSample(out var sample))
                 {
-                    _canvas.Lock();
+                    Debug.WriteLine("Buffer overrun, skipping");
+                    long inc = Interlocked.Increment(ref _videoFrames);
+                    currentTimestamp = nextTimestamp;
+                    nextTimestamp = (inc + 1) * 10000L / (_source.VideoInfo.FpsNom / _source.VideoInfo.FpsDenom);
 
-                    // TODO: bitmap stride?
-                    Marshal.Copy(
-                        decoded, 
-                        0,
-                        _canvas.BackBuffer,
-                        (int)(_source.VideoInfo.OriginalWidth * _source.VideoInfo.OriginalHeight * (_source.VideoInfo.PixelFormat == PixelFormat.BGRA32 ? 4 : 3))
-                    );
-
-                    _canvas.AddDirtyRect(_croppingRect);
-                    _canvas.Unlock();
-
-                    _source.ReturnVideoSample(decoded);
-                    _videoLastTime = elapsed;
+                    if (elapsed >= currentTimestamp && elapsed < nextTimestamp)
+                    {
+                        return sample;
+                    }
+                    else
+                    {
+                        _source.ReturnVideoSample(sample);
+                    }
                 }
             }
-        }       
+
+            return null;
+        }
 
         private async void OnTickDecoder(object sender, ElapsedEventArgs e)
         {
@@ -172,28 +205,26 @@ namespace SharpMediaFoundation.WPF
             // Get Sample
             try
             {
+                byte[] sample;
                 if (_waveOut != null)
                 {
                     while (_waveOut.QueuedFrames <= 20)
                     {
-                        ((IAudioSource)_source).GetAudioSample(out byte[] sample);
+                        ((IAudioSource)_source).GetAudioSample(out sample);
                         if (sample != null)
                         {
+                            if (!_stopwatch.IsRunning)
+                            {
+                                _stopwatch.Start();
+                            }
+
                             _waveOut.Enqueue(sample, (uint)sample.Length);
+                            Interlocked.Increment(ref _audioFrames);
                             ((IAudioSource)_source).ReturnAudioSample(sample);
                         }
                         else
                             break;
                     }
-                }
-
-                while (_videoRenderQueue.Count <= 2) // taking just 1 frame seems to leak native memory, TODO: investigate
-                {
-                    _source.GetVideoSample(out byte[] sample);
-                    if (sample != null)
-                        _videoRenderQueue.Enqueue(sample);
-                    else
-                        break;
                 }
             }
             finally
@@ -205,13 +236,11 @@ namespace SharpMediaFoundation.WPF
         private void StartPlaying()
         {
             _timer.Start();
-            _stopwatch.Restart();
         }
 
         private void StopPlaying()
         {
             _timer.Stop();
-            _stopwatch.Stop();
         }
 
         protected virtual void Dispose(bool disposing)

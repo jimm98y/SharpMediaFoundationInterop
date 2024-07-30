@@ -34,7 +34,7 @@ namespace SharpMediaFoundation.WPF
     {
         VideoInfo VideoInfo { get; }
         Task InitializeVideoAsync();
-        void GetVideoSample(out byte[] sample);
+        bool GetVideoSample(out byte[] sample);
         void ReturnVideoSample(byte[] sample);
     }
 
@@ -42,7 +42,7 @@ namespace SharpMediaFoundation.WPF
     {
         AudioInfo AudioInfo { get; }
         Task InitializeAudioAsync();
-        void GetAudioSample(out byte[] sample);
+        bool GetAudioSample(out byte[] sample);
         void ReturnAudioSample(byte[] sample);
     }
 }
