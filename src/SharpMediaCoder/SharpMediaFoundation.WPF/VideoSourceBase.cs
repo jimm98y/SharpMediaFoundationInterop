@@ -65,7 +65,7 @@ namespace SharpMediaFoundation.WPF
                         byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize);
                         Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
                         _audioRenderQueue.Enqueue(decoded);
-                        _audioTime += 100000L * 1000 * decoded.Length / (AudioInfo.SampleRate * AudioInfo.Channels * (AudioInfo.BitsPerSample / 8)); // 100ns units
+                        _audioTime += 10000L * decoded.Length / (AudioInfo.SampleRate * AudioInfo.Channels * (AudioInfo.BitsPerSample / 8)); // 100ns units
                     }
                 }
             }
@@ -121,7 +121,7 @@ namespace SharpMediaFoundation.WPF
                         }
                     }
                 }
-                _videoTime += 100000L * 1000 / (VideoInfo.FpsNom / VideoInfo.FpsDenom); // 100ns units
+                _videoTime += 10000L / (VideoInfo.FpsNom / VideoInfo.FpsDenom); // 100ns units
             }
 
             if (_videoRenderQueue.TryDequeue(out sample))
