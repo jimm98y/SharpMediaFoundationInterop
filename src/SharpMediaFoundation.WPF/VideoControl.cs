@@ -1,6 +1,5 @@
 ﻿using SharpMediaFoundation.Wave;
 using System;
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -157,7 +156,8 @@ namespace SharpMediaFoundation.WPF
                 if (nextSource != null)
                 {
                     // calling initialize from the same thread as GetSampleAsync
-                    await nextSource.InitializeVideoAsync();
+                    await Dispatcher.InvokeAsync(nextSource.InitializeVideoAsync);
+
                     if (nextSource is IAudioSource audioSource)
                     {
                         await audioSource.InitializeAudioAsync();
@@ -202,6 +202,11 @@ namespace SharpMediaFoundation.WPF
                 }
             }
 
+            if (!_stopwatch.IsRunning)
+            {
+                _stopwatch.Start();
+            }
+
             // Get Sample
             try
             {
@@ -213,11 +218,6 @@ namespace SharpMediaFoundation.WPF
                         ((IAudioSource)_source).GetAudioSample(out sample);
                         if (sample != null)
                         {
-                            if (!_stopwatch.IsRunning)
-                            {
-                                _stopwatch.Start();
-                            }
-
                             _waveOut.Enqueue(sample, (uint)sample.Length);
                             Interlocked.Increment(ref _audioFrames);
                             ((IAudioSource)_source).ReturnAudioSample(sample);

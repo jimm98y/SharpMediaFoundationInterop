@@ -171,7 +171,7 @@ namespace SharpMediaFoundation.Input
             try
             {
                 _duplicatedOutput.AcquireNextFrame(ReadTimeoutInMilliseconds, out DXGI_OUTDUPL_FRAME_INFO duplicateFrameInformation, out screenResource);
-                timestamp = _stopwatch.ElapsedTicks;
+                timestamp = _stopwatch.ElapsedMilliseconds * 10L;
 
                 if (screenResource != null)
                 {
