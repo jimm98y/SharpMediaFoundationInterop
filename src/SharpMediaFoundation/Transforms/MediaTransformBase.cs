@@ -93,7 +93,7 @@ namespace SharpMediaFoundation.Transforms
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {
-                Debug.WriteLine("MFT needs more input");
+                //Debug.WriteLine("MFT needs more input");
                 length = 0;
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
