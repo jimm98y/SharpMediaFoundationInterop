@@ -22,7 +22,7 @@ namespace SharpMediaFoundation.WPF
             await _semaphoreSlim.WaitAsync();
             try
             {
-                if (VideoInfo == null)
+                if (VideoInfo == null || _videoSampleQueue.Count == 0)
                 {
                     var ret = await LoadFileAsync(_path);
                     VideoInfo = ret.Video;

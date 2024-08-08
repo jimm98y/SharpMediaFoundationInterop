@@ -45,7 +45,7 @@ namespace SharpMediaFoundation.WPF
             }
 
             sample = null;
-            return false;
+            return true; // indicates whether the stream has ended
         }
 
         private Task<VideoInfo> OpenAsync()

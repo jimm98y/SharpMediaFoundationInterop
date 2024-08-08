@@ -5,10 +5,10 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:ctrl="clr-namespace:SharpMediaFoundation.WPF;assembly=SharpMediaFoundation.WPF"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="SharpMediaPlayer" Height="450" Width="800">
 
     <Grid>
-        <ctrl:VideoControl Source="{Binding Source}" />
+        <ctrl:VideoControl Source="{Binding Source}" Looping="True" />
     </Grid>
     
     

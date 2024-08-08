@@ -103,23 +103,23 @@ namespace SharpMediaFoundation.Wave
         public unsafe uint GetPosition()
         {
             MMTIME time = new MMTIME();
-            time.wType = TIME_SAMPLES;
+            time.wType = TIME_BYTES;
             PInvoke.waveOutGetPosition(_hDevice, &time, (uint)sizeof(MMTIME));
-            if (time.wType != TIME_SAMPLES)
-                throw new Exception("WaveOut device does not support reading time in samples");
+            if (time.wType != TIME_BYTES)
+                throw new Exception("WaveOut device does not support reading time in bytes");
             return time.u.sample;
         }
 
         public void Reset()
         {
-            PInvoke.waveOutRestart(_hDevice);
+            PInvoke.waveOutReset(_hDevice);
             Interlocked.Exchange(ref _queuedFrames, 0);
             _audioBufferIndex = 0; 
         }
 
         public void Close()
         {
-            Reset();
+            Reset(); // waveOutReset must be called before waveOutClose
             PInvoke.waveOutClose(_hDevice);
         }
 

@@ -9,6 +9,7 @@ using SharpMediaFoundation.Transforms.Colors;
 using SharpMediaFoundation.Transforms.H264;
 using SharpMediaFoundation.Transforms.H265;
 using SharpMediaFoundation.Utils;
+using System.Threading;
 
 namespace SharpMediaFoundation.WPF
 {
@@ -32,8 +33,8 @@ namespace SharpMediaFoundation.WPF
         private byte[] _pcmBuffer;
         private int _bytesPerPixel;
         private int _imageBufferLen;
-        protected long _videoTime = 0;
-        protected long _audioTime = 0;
+        protected long _videoFrames = 0;
+        protected long _audioFrames = 0;
         protected bool _isLowLatency = false;
         private bool _disposedValue;
 
@@ -58,7 +59,7 @@ namespace SharpMediaFoundation.WPF
                         byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize);
                         Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
                         _audioRenderQueue.Enqueue(decoded);
-                        _audioTime += 10000L * decoded.Length / (AudioInfo.SampleRate * AudioInfo.Channels * (AudioInfo.BitsPerSample / 8)); // 100ns units
+                        Interlocked.Increment(ref _audioFrames);
                     }
                 }
             }
@@ -89,11 +90,12 @@ namespace SharpMediaFoundation.WPF
             {
                 foreach (var nalu in au)
                 {
-                    if (_videoDecoder.ProcessInput(nalu, _videoTime))
+                    long videoTime = _videoFrames * 10000L / (VideoInfo.FpsNom / VideoInfo.FpsDenom);
+                    if (_videoDecoder.ProcessInput(nalu, videoTime))
                     {
                         while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out _))
                         {
-                            _nv12Decoder.ProcessInput(_nv12Buffer, _videoTime);
+                            _nv12Decoder.ProcessInput(_nv12Buffer, videoTime);
 
                             if (_nv12Decoder.ProcessOutput(ref _rgbBuffer, out _))
                             {
@@ -110,11 +112,11 @@ namespace SharpMediaFoundation.WPF
                                     true);
 
                                 _videoRenderQueue.Enqueue(decoded);
+                                Interlocked.Increment(ref _videoFrames);
                             }
                         }
                     }
                 }
-                _videoTime += 10000L / (VideoInfo.FpsNom / VideoInfo.FpsDenom); // 100ns units
             }
 
             if (_videoRenderQueue.TryDequeue(out sample))
@@ -129,8 +131,14 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        protected virtual void CompletedVideo() { }
-        protected virtual void CompletedAudio() { }
+        protected virtual void CompletedVideo()
+        {
+            Interlocked.Exchange(ref _videoFrames, 0);
+        }
+        protected virtual void CompletedAudio() 
+        {
+            Interlocked.Exchange(ref _audioFrames, 0);
+        }
 
         protected virtual void CreateVideoDecoder(VideoInfo info)
         {
