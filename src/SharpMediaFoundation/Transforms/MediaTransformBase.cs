@@ -9,6 +9,12 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundation.Transforms
 {
+    /// <summary>
+    /// Base media transform.
+    /// </summary>
+    /// <remarks>
+    /// To trace Media Foundation, run: mftrace -v SharpMediaPlayer_x86.exe
+    /// </remarks>
     public abstract class MediaTransformBase
     {
         public abstract Guid InputFormat { get; }
