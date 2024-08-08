@@ -46,16 +46,15 @@ namespace SharpMediaFoundation.Transforms.H264
             }
             MediaUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
-            IMFMediaType mediaOutput;
+            IMFMediaType mediaOutput = null;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
             mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MediaUtils.EncodeAttributeValue(Width, Height));
             mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MediaUtils.EncodeAttributeValue(FpsNom, FpsDenom));
-            mediaOutput.SetUINT64(PInvoke.MF_MT_PIXEL_ASPECT_RATIO, MediaUtils.EncodeAttributeValue(Width, Height));
             mediaOutput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, (uint)MFVideoInterlaceMode.MFVideoInterlace_MixedInterlaceOrProgressive); 
+            mediaOutput.SetUINT64(PInvoke.MF_MT_PIXEL_ASPECT_RATIO, MediaUtils.EncodeAttributeValue(1, 1));
             mediaOutput.SetUINT32(PInvoke.MF_MT_ALL_SAMPLES_INDEPENDENT, 1);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_DEFAULT_STRIDE, Width);
             MediaUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
