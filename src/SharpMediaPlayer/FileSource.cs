@@ -10,27 +10,29 @@ namespace SharpMediaFoundation.WPF
     {
         private string _path;
 
+        private SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1);
+
         public FileSource(string path)
         {
             this._path = path ?? throw new ArgumentNullException(nameof(path));
         }
 
-        public async override Task InitializeVideoAsync()
+        public async override Task InitializeAsync()
         {
-            var ret = await LoadFileAsync(_path);
-            VideoInfo = ret.Video;
-            AudioInfo = ret.Audio;
-        }
-
-        public override Task InitializeAudioAsync()
-        {
-            return Task.CompletedTask;
-        }
-
-        public async override void FinalizeVideo()
-        {
-            // restart playback
-            await InitializeVideoAsync();
+            await _semaphoreSlim.WaitAsync();
+            try
+            {
+                if (VideoInfo == null)
+                {
+                    var ret = await LoadFileAsync(_path);
+                    VideoInfo = ret.Video;
+                    AudioInfo = ret.Audio;
+                }
+            }
+            finally
+            {
+                _semaphoreSlim.Release();
+            }
         }
 
         private async Task<(VideoInfo Video, AudioInfo Audio)> LoadFileAsync(string fileName)

@@ -20,7 +20,7 @@ namespace SharpMediaFoundation.WPF
 
         public VideoInfo VideoInfo { get; private set; }
 
-        public async Task InitializeVideoAsync()
+        public async Task InitializeAsync()
         {
             VideoInfo = await OpenAsync();
         }

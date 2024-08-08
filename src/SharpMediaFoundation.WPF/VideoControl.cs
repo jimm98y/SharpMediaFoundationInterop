@@ -1,8 +1,11 @@
 ﻿using SharpMediaFoundation.Wave;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Timers;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,7 +19,6 @@ namespace SharpMediaFoundation.WPF
     {
         private WaveOut _waveOut;
 
-        private IVideoSource _nextSource = null;
         private IVideoSource _source = null;
 
         public IVideoSource Source
@@ -32,23 +34,31 @@ namespace SharpMediaFoundation.WPF
         {
             var sender = (VideoControl)d;
             var source = e.NewValue as IVideoSource;
-            sender._nextSource = source;
+            sender._source = source;
             if(source != null)
             {
-                sender.StartPlaying();
+                sender._videoRenderThread = Task.Run(sender.VideoRenderThread);
+                sender._audioRenderThread = Task.Run(sender.AudioRenderThread);
             }
         }
 
         private Image _image;
         private Int32Rect _croppingRect;
         private WriteableBitmap _canvas;
-        private System.Timers.Timer _timer;
-        private SemaphoreSlim _semaphore = new SemaphoreSlim(1);
+
+        private AutoResetEvent _eventVideo = new AutoResetEvent(true);
+        private AutoResetEvent _eventAudio = new AutoResetEvent(true);
         private Stopwatch _stopwatch = new Stopwatch();
 
         private long _videoFrames = 0;
         private long _audioFrames = 0;
+
+        private Queue<byte[]> _videoFrameQueue = new Queue<byte[]>();
+
         private bool _disposedValue;
+
+        private Task _videoRenderThread = null;
+        private Task _audioRenderThread = null;
 
         static VideoControl()
         {
@@ -57,8 +67,6 @@ namespace SharpMediaFoundation.WPF
 
         public VideoControl()
         {
-            _timer = new System.Timers.Timer();
-            _timer.Elapsed += OnTickDecoder;
             Loaded += VideoControl_Loaded;
             CompositionTarget.Rendering += CompositionTarget_Rendering;
         }
@@ -83,164 +91,137 @@ namespace SharpMediaFoundation.WPF
 
         private void CompositionTarget_Rendering(object sender, EventArgs e)
         {
-            byte[] decoded = GetVideoFrame();
-
-            if (decoded != null)
+            long elapsed = 0;
+            if (_waveOut != null)
             {
-                _canvas.Lock();
-
-                // TODO: bitmap stride?
-                Marshal.Copy(
-                    decoded, 
-                    0,
-                    _canvas.BackBuffer,
-                    (int)(_source.VideoInfo.OriginalWidth * _source.VideoInfo.OriginalHeight * (_source.VideoInfo.PixelFormat == PixelFormat.BGRA32 ? 4 : 3))
-                );
-
-                _canvas.AddDirtyRect(_croppingRect);
-                _canvas.Unlock();
-
-                _source.ReturnVideoSample(decoded);
+                var audioSource = _source as IAudioSource;
+                var audioInfo = audioSource.AudioInfo;
+                elapsed = _waveOut.GetPosition() * 10000L / (audioInfo.SampleRate * audioInfo.Channels);
+                Debug.WriteLine($"Audio {elapsed / 10000d}");
             }
-        }
+            else
+            {
+                elapsed = _stopwatch.ElapsedMilliseconds * 10L;
+            }
 
-        private byte[] GetVideoFrame()
-        {
-            if (_source == null || !_stopwatch.IsRunning)
-                return null;
+            if (_videoFrameQueue.Count == 0)
+                return;
 
-            long elapsed = _stopwatch.ElapsedMilliseconds * 10L;
             long currentTimestamp = _videoFrames * 10000L / (_source.VideoInfo.FpsNom / _source.VideoInfo.FpsDenom);
             long nextTimestamp = (_videoFrames + 1) * 10000L / (_source.VideoInfo.FpsNom / _source.VideoInfo.FpsDenom);
-            if (elapsed >= currentTimestamp && elapsed < nextTimestamp)
-            {
-                Interlocked.Increment(ref _videoFrames);
-                if (_source.GetVideoSample(out var sample))
-                    return sample;
-                else
-                    Debug.WriteLine("Buffer underrun");
-            }
-            else if(elapsed > nextTimestamp)
-            {
-                // drop frames
-                while (_source.GetVideoSample(out var sample))
-                {
-                    Debug.WriteLine("Buffer overrun, skipping");
-                    long inc = Interlocked.Increment(ref _videoFrames);
-                    currentTimestamp = nextTimestamp;
-                    nextTimestamp = (inc + 1) * 10000L / (_source.VideoInfo.FpsNom / _source.VideoInfo.FpsDenom);
 
-                    if (elapsed >= currentTimestamp && elapsed < nextTimestamp)
+            if(elapsed > currentTimestamp && elapsed < nextTimestamp)
+            {
+                return;
+            }
+
+            Debug.WriteLine($"Video {currentTimestamp / 10000d}, next {nextTimestamp / 10000d}");
+
+            // immediately start decoding new frame
+            this._eventVideo.Set();
+
+            byte[] decoded = _videoFrameQueue.Dequeue();
+            Interlocked.Increment(ref _videoFrames);
+
+            _canvas.Lock();
+
+            // TODO: bitmap stride?
+            Marshal.Copy(
+                decoded, 
+                0,
+                _canvas.BackBuffer,
+                (int)(_source.VideoInfo.OriginalWidth * _source.VideoInfo.OriginalHeight * (_source.VideoInfo.PixelFormat == PixelFormat.BGRA32 ? 4 : 3))
+            );
+
+            _canvas.AddDirtyRect(_croppingRect);
+            _canvas.Unlock();
+
+            _source.ReturnVideoSample(decoded);
+        }
+
+        private async Task VideoRenderThread()
+        {
+            var videoSource = _source;
+            if (videoSource != null)
+            {
+                // initialize
+                await videoSource.InitializeAsync();
+
+                var videoInfo = videoSource.VideoInfo;
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    _canvas = new WriteableBitmap(
+                        (int)videoInfo.OriginalWidth,
+                        (int)videoInfo.OriginalHeight,
+                        96,
+                        96,
+                        videoInfo.PixelFormat == PixelFormat.BGRA32 ? PixelFormats.Bgra32 : PixelFormats.Bgr24,
+                        null);
+                    this._image.Source = _canvas;
+                });
+                this._croppingRect = new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight);
+                this._stopwatch.Restart();
+
+                // stream samples
+                while(true)
+                {
+                    if (_videoFrameQueue.Count > 0)
                     {
-                        return sample;
+                        this._eventVideo.WaitOne();
+                    }
+
+                    if(videoSource.GetVideoSample(out var sample) && sample != null)
+                    {
+                        _videoFrameQueue.Enqueue(sample);
                     }
                     else
                     {
-                        _source.ReturnVideoSample(sample);
+                        break;
                     }
                 }
-            }
 
-            return null;
+                Debug.WriteLine($"Video completed {_videoFrames}");
+            }
         }
 
-        private async void OnTickDecoder(object sender, ElapsedEventArgs e)
+        private async Task AudioRenderThread()
         {
-            await _semaphore.WaitAsync();
-
-            // Initialize
-            var nextSource = _nextSource;
-            var currentSource = _source;
-            if(nextSource != currentSource)
+            var audioSource = _source as IAudioSource;
+            if(audioSource != null)
             {
-                if (nextSource != null)
-                {
-                    // calling initialize from the same thread as GetSampleAsync
-                    await Dispatcher.InvokeAsync(nextSource.InitializeVideoAsync);
+                // initialize
+                await audioSource.InitializeAsync();
 
-                    if (nextSource is IAudioSource audioSource)
+                var audioInfo = audioSource.AudioInfo;
+                this._waveOut = new WaveOut();
+                this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.Channels, audioInfo.BitsPerSample);
+                this._waveOut.OnPlaybackCompleted += (o, e) =>
+                {
+                    this._eventAudio.Set();
+                };
+
+                // stream samples
+                while(true)
+                {
+                    if (_waveOut.QueuedFrames > 2) // have at least 2 frames in the queue
                     {
-                        await audioSource.InitializeAudioAsync();
+                        this._eventAudio.WaitOne();
                     }
 
-                    _source = nextSource;
-
-                    await Dispatcher.InvokeAsync(() =>
+                    if (audioSource.GetAudioSample(out var sample) && sample != null)
                     {
-                        var videoInfo = nextSource.VideoInfo;
-                        _canvas = new WriteableBitmap(
-                            (int)videoInfo.OriginalWidth,
-                            (int)videoInfo.OriginalHeight,
-                            96,
-                            96,
-                            videoInfo.PixelFormat == PixelFormat.BGRA32 ? PixelFormats.Bgra32 : PixelFormats.Bgr24,
-                            null);
-                        this._image.Source = _canvas;
-                        _croppingRect = new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight);
-                        _timer.Interval = 1000 * videoInfo.FpsDenom / videoInfo.FpsNom;
-                    });
-
-                    if (nextSource is IAudioSource nextAudioSource)
+                        _waveOut.Enqueue(sample, (uint)sample.Length);
+                        Interlocked.Increment(ref _audioFrames);
+                        ((IAudioSource)_source).ReturnAudioSample(sample);
+                    }
+                    else
                     {
-                        var audioInfo = nextAudioSource.AudioInfo;
-                        if (audioInfo != null)
-                        {
-                            _waveOut = new WaveOut();
-                            _waveOut.Initialize(audioInfo.SampleRate, audioInfo.Channels, audioInfo.BitsPerSample);
-                        }
+                        break;
                     }
                 }
-                else
-                {
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        this._image.Source = null;
-                    });
 
-                    _source = nextSource;
-                    StopPlaying();
-                }
+                Debug.WriteLine($"Audio completed {_audioFrames}");
             }
-
-            if (!_stopwatch.IsRunning)
-            {
-                _stopwatch.Start();
-            }
-
-            // Get Sample
-            try
-            {
-                byte[] sample;
-                if (_waveOut != null)
-                {
-                    while (_waveOut.QueuedFrames <= 20)
-                    {
-                        ((IAudioSource)_source).GetAudioSample(out sample);
-                        if (sample != null)
-                        {
-                            _waveOut.Enqueue(sample, (uint)sample.Length);
-                            Interlocked.Increment(ref _audioFrames);
-                            ((IAudioSource)_source).ReturnAudioSample(sample);
-                        }
-                        else
-                            break;
-                    }
-                }
-            }
-            finally
-            {
-                _semaphore.Release();
-            }            
-        }
-
-        private void StartPlaying()
-        {
-            _timer.Start();
-        }
-
-        private void StopPlaying()
-        {
-            _timer.Stop();
         }
 
         protected virtual void Dispose(bool disposing)

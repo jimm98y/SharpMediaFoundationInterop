@@ -33,7 +33,7 @@ namespace SharpMediaFoundation.WPF
     public interface IVideoSource : IDisposable
     {
         VideoInfo VideoInfo { get; }
-        Task InitializeVideoAsync();
+        Task InitializeAsync();
         bool GetVideoSample(out byte[] sample);
         void ReturnVideoSample(byte[] sample);
     }
@@ -41,7 +41,7 @@ namespace SharpMediaFoundation.WPF
     public interface IAudioSource : IDisposable
     {
         AudioInfo AudioInfo { get; }
-        Task InitializeAudioAsync();
+        Task InitializeAsync();
         bool GetAudioSample(out byte[] sample);
         void ReturnAudioSample(byte[] sample);
     }

@@ -37,14 +37,7 @@ namespace SharpMediaFoundation.WPF
         protected bool _isLowLatency = false;
         private bool _disposedValue;
 
-        public abstract Task InitializeVideoAsync();
-        public abstract Task InitializeAudioAsync();
-
-        public virtual void FinalizeVideo() 
-        { }
-
-        public virtual void FinalizeAudio()
-        { }
+        public abstract Task InitializeAsync();
 
         public virtual bool GetAudioSample(out byte[] sample)
         {
@@ -76,7 +69,7 @@ namespace SharpMediaFoundation.WPF
             }
             else
             {
-                FinalizeAudio();
+                CompletedAudio();
                 sample = null;
                 return false;
             }
@@ -130,11 +123,14 @@ namespace SharpMediaFoundation.WPF
             }
             else
             {
-                FinalizeVideo();
+                CompletedVideo();
                 sample = null;
                 return false;
             }
         }
+
+        protected virtual void CompletedVideo() { }
+        protected virtual void CompletedAudio() { }
 
         protected virtual void CreateVideoDecoder(VideoInfo info)
         {

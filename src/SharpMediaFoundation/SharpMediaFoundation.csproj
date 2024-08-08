@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-	  <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+	<GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
 
   <ItemGroup>
