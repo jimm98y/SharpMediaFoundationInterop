@@ -97,7 +97,7 @@ namespace SharpMediaFoundation.WPF
                 var audioSource = _source as IAudioSource;
                 var audioInfo = audioSource.AudioInfo;
                 elapsed = _waveOut.GetPosition() * 10000L / (audioInfo.SampleRate * audioInfo.Channels);
-                Debug.WriteLine($"Audio {elapsed / 10000d}");
+                //Debug.WriteLine($"Audio {elapsed / 10000d}");
             }
             else
             {
@@ -115,7 +115,7 @@ namespace SharpMediaFoundation.WPF
                 return;
             }
 
-            Debug.WriteLine($"Video {currentTimestamp / 10000d}, next {nextTimestamp / 10000d}");
+            //Debug.WriteLine($"Video {currentTimestamp / 10000d}, next {nextTimestamp / 10000d}");
 
             // immediately start decoding new frame
             this._eventVideo.Set();
