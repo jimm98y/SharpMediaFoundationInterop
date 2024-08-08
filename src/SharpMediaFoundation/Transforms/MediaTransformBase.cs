@@ -70,25 +70,35 @@ namespace SharpMediaFoundation.Transforms
 
             if (outputResult.Value == MF_E_TRANSFORM_STREAM_CHANGE)
             {
+                // the stream change happens every time with the H264/H265 decoder
                 Debug.WriteLine("MFT stream change requested");
                 length = 0;
 
-                IMFMediaType mediaType;
+                IMFMediaType mediaType = null;
                 uint i = 0;
-                while (true)
+                try
                 {
-                    transform.GetOutputAvailableType(streamID, i++, out IMFMediaType mType);
-                    mType.GetGUID(PInvoke.MF_MT_SUBTYPE, out var mSubtype);
-                    if (mSubtype == OutputFormat)
+                    while (true)
                     {
-                        // TODO: log format change
-                        mediaType = mType;
-                        break;
+                        transform.GetOutputAvailableType(streamID, i++, out IMFMediaType mType);
+                        mType.GetGUID(PInvoke.MF_MT_SUBTYPE, out var mSubtype);
+                        if (mSubtype == OutputFormat)
+                        {
+                            mediaType = mType;
+                            break;
+                        }
                     }
+                }
+                catch(Exception ex)
+                {
+                    Debug.WriteLine(ex.Message);
+                    throw new Exception("Unsupported subtype!");
                 }
 
                 transform.SetOutputType(streamID, mediaType, 0);
-                transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
+
+                // because the subtype has not changed, do not flush, otherwise we'd lose frames:
+                //transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
                 dataBuffer[0].dwStatus = 0;
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)

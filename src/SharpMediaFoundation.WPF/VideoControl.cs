@@ -170,9 +170,10 @@ namespace SharpMediaFoundation.WPF
                         this._eventVideo.WaitOne();
                     }
 
-                    if(videoSource.GetVideoSample(out var sample) && sample != null)
+                    if(videoSource.GetVideoSample(out var sample))
                     {
-                        _videoFrameQueue.Enqueue(sample);
+                        if(sample != null)
+                            _videoFrameQueue.Enqueue(sample);
                     }
                     else
                     {
@@ -208,11 +209,14 @@ namespace SharpMediaFoundation.WPF
                         this._eventAudio.WaitOne();
                     }
 
-                    if (audioSource.GetAudioSample(out var sample) && sample != null)
+                    if (audioSource.GetAudioSample(out var sample))
                     {
-                        _waveOut.Enqueue(sample, (uint)sample.Length);
-                        Interlocked.Increment(ref _audioFrames);
-                        ((IAudioSource)_source).ReturnAudioSample(sample);
+                        if (sample != null)
+                        {
+                            _waveOut.Enqueue(sample, (uint)sample.Length);
+                            Interlocked.Increment(ref _audioFrames);
+                            ((IAudioSource)_source).ReturnAudioSample(sample);
+                        }
                     }
                     else
                     {
