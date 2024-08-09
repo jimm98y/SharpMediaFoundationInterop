@@ -75,8 +75,11 @@ namespace SharpMediaFoundation.Transforms
             {
                 if (disposing)
                 {
-                    DestroyTransform(_transform);
-                    _transform = null;
+                    if (_transform != null)
+                    {
+                        DestroyTransform(_transform);
+                        _transform = null;
+                    }
                 }
 
                 _disposedValue = true;

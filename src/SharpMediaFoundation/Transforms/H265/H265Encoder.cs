@@ -14,7 +14,7 @@ namespace SharpMediaFoundation.Transforms.H265
 
         public uint AvgBitrate { get; private set; }
 
-        public H265Encoder(uint width, uint height, uint fpsNom, uint fpsDenom, uint avgBitrate = 8000000)
+        public H265Encoder(uint width, uint height, uint fpsNom, uint fpsDenom, uint avgBitrate = 80000000)
             : base(H265_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
         {
             this.AvgBitrate = avgBitrate;
@@ -37,7 +37,7 @@ namespace SharpMediaFoundation.Transforms.H265
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
             mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MediaUtils.EncodeAttributeValue(Width, Height));
             mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MediaUtils.EncodeAttributeValue(FpsNom, FpsDenom));
-            mediaOutput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, 2);
+            mediaOutput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, (uint)MFVideoInterlaceMode.MFVideoInterlace_MixedInterlaceOrProgressive);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BITRATE, AvgBitrate);
             MediaUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
