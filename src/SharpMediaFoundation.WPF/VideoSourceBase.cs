@@ -10,6 +10,7 @@ using SharpMediaFoundation.Transforms.H264;
 using SharpMediaFoundation.Transforms.H265;
 using SharpMediaFoundation.Utils;
 using System.Threading;
+using System.Collections.Concurrent;
 
 namespace SharpMediaFoundation.WPF
 {
@@ -18,15 +19,17 @@ namespace SharpMediaFoundation.WPF
         public VideoInfo VideoInfo { get; protected set; }
         public AudioInfo AudioInfo { get; protected set; }
 
+        protected virtual bool IsStreaming { get; }
+
         protected IMediaVideoTransform _videoDecoder;
         protected IMediaVideoTransform _nv12Decoder;
         protected IMediaAudioTransform _audioDecoder;
 
-        protected Queue<IList<byte[]>> _videoSampleQueue = new Queue<IList<byte[]>>();
-        protected Queue<byte[]> _videoRenderQueue = new Queue<byte[]>();
+        protected ConcurrentQueue<IList<byte[]>> _videoSampleQueue = new ConcurrentQueue<IList<byte[]>>();
+        protected ConcurrentQueue<byte[]> _videoRenderQueue = new ConcurrentQueue<byte[]>();
 
-        protected Queue<byte[]> _audioSampleQueue = new Queue<byte[]>();
-        protected Queue<byte[]> _audioRenderQueue = new Queue<byte[]>();
+        protected ConcurrentQueue<byte[]> _audioSampleQueue = new ConcurrentQueue<byte[]>();
+        protected ConcurrentQueue<byte[]> _audioRenderQueue = new ConcurrentQueue<byte[]>();
 
         protected byte[] _nv12Buffer;
         protected byte[] _rgbBuffer;
@@ -70,9 +73,17 @@ namespace SharpMediaFoundation.WPF
             }
             else
             {
-                CompletedAudio();
-                sample = null;
-                return false;
+                if (IsStreaming)
+                {
+                    sample = null;
+                    return true;
+                }
+                else
+                {
+                    CompletedAudio();
+                    sample = null;
+                    return false;
+                }
             }
         }
 
@@ -125,9 +136,17 @@ namespace SharpMediaFoundation.WPF
             }
             else
             {
-                CompletedVideo();
-                sample = null;
-                return false;
+                if (IsStreaming)
+                {
+                    sample = null;
+                    return true;
+                }
+                else
+                {
+                    CompletedVideo();
+                    sample = null;
+                    return false;
+                }
             }
         }
 

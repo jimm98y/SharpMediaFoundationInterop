@@ -153,13 +153,13 @@ namespace SharpMediaFoundation.WPF
                 return;
 
             //Debug.WriteLine($"Video {currentTimestamp / 10000d}, next {nextTimestamp / 10000d}");
-            this._eventVideo.Set();
 
             byte[] decoded;
             if (!_videoOut.TryDequeue(out decoded))
                 return;
 
             Interlocked.Increment(ref _videoFrames);
+            this._eventVideo.Set();
 
             _canvas.Lock();
 
@@ -185,87 +185,34 @@ namespace SharpMediaFoundation.WPF
                 await videoSource.InitializeAsync();
 
                 var videoInfo = videoSource.VideoInfo;
-                await Dispatcher.InvokeAsync(() =>
+                if (videoInfo != null)
                 {
-                    _canvas = new WriteableBitmap(
-                        (int)videoInfo.OriginalWidth,
-                        (int)videoInfo.OriginalHeight,
-                        96,
-                        96,
-                        videoInfo.PixelFormat == PixelFormat.BGRA32 ? PixelFormats.Bgra32 : PixelFormats.Bgr24,
-                        null);
-                    this._image.Source = _canvas;
-                });
-                this._videoRect = new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight);
-                this._stopwatch.Restart();
-
-                while(true)
-                {
-                    if (_videoOut.Count > 0)
+                    await Dispatcher.InvokeAsync(() =>
                     {
-                        this._eventVideo.WaitOne();
-                    }
+                        _canvas = new WriteableBitmap(
+                            (int)videoInfo.OriginalWidth,
+                            (int)videoInfo.OriginalHeight,
+                            96,
+                            96,
+                            videoInfo.PixelFormat == PixelFormat.BGRA32 ? PixelFormats.Bgra32 : PixelFormats.Bgr24,
+                            null);
+                        this._image.Source = _canvas;
+                    });
+                    this._videoRect = new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight);
+                    this._stopwatch.Restart();
 
-                    if(videoSource.GetVideoSample(out var sample))
-                    {
-                        if (sample != null)
-                        {
-                            _videoOut.Enqueue(sample);
-                        }
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-
-                Debug.WriteLine($"Video completed {_videoFrames}");
-
-                if (_isLooping && ((_source as IAudioSource) == null || (_source as IAudioSource).AudioInfo == null))
-                {
-                    StartPlaying();
-                }
-            }
-        }
-
-        private async Task AudioRenderThread()
-        {
-            var audioSource = _source as IAudioSource;
-            if(audioSource != null)
-            {
-                await audioSource.InitializeAsync();
-
-                var audioInfo = audioSource.AudioInfo;
-                if(audioInfo == null)
-                {
-                    return;
-                }
-
-                EventHandler<EventArgs> audioCallback = (o, e) => { this._eventAudio.Set(); };
-                try
-                {
-                    lock (_waveSync)
-                    {
-                        this._waveOut = new WaveOut();
-                        this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.Channels, audioInfo.BitsPerSample);
-                        this._waveOut.OnPlaybackCompleted += audioCallback;
-                    }
-
-                    // stream samples
                     while (true)
                     {
-                        if (_waveOut.QueuedFrames > 5) // have a few frames in the queue to prevent stuttering
+                        if (_videoOut.Count > 0)
                         {
-                            this._eventAudio.WaitOne();
+                            this._eventVideo.WaitOne();
                         }
 
-                        if (audioSource.GetAudioSample(out var sample))
+                        if (videoSource.GetVideoSample(out var sample))
                         {
                             if (sample != null)
                             {
-                                _waveOut.Enqueue(sample, (uint)sample.Length);
-                                Interlocked.Increment(ref _audioFrames);
-                                ((IAudioSource)_source).ReturnAudioSample(sample);
+                                _videoOut.Enqueue(sample);
                             }
                         }
                         else
@@ -274,21 +221,75 @@ namespace SharpMediaFoundation.WPF
                         }
                     }
 
-                    Debug.WriteLine($"Audio completed {_audioFrames}");
-                }
-                finally
-                {
-                    lock (_waveSync)
+                    Debug.WriteLine($"Video completed {_videoFrames}");
+
+                    if (_isLooping && ((_source as IAudioSource) == null || (_source as IAudioSource).AudioInfo == null))
                     {
-                        this._waveOut.OnPlaybackCompleted -= audioCallback;
-                        this._waveOut.Dispose();
-                        this._waveOut = null;
+                        StartPlaying();
                     }
                 }
+            }
+        }
 
-                if (_isLooping)
+        private async Task AudioRenderThread()
+        {
+            var audioSource = _source as IAudioSource;
+            if (audioSource != null)
+            {
+                await audioSource.InitializeAsync();
+
+                var audioInfo = audioSource.AudioInfo;
+                if (audioInfo != null)
                 {
-                    StartPlaying();
+                    EventHandler<EventArgs> audioCallback = (o, e) => { this._eventAudio.Set(); };
+                    try
+                    {
+                        lock (_waveSync)
+                        {
+                            this._waveOut = new WaveOut();
+                            this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.Channels, audioInfo.BitsPerSample);
+                            this._waveOut.OnPlaybackCompleted += audioCallback;
+                        }
+
+                        // stream samples
+                        while (true)
+                        {
+                            if (_waveOut.QueuedFrames > 5) // have a few frames in the queue to prevent stuttering
+                            {
+                                this._eventAudio.WaitOne();
+                            }
+
+                            if (audioSource.GetAudioSample(out var sample))
+                            {
+                                if (sample != null)
+                                {
+                                    _waveOut.Enqueue(sample, (uint)sample.Length);
+                                    Interlocked.Increment(ref _audioFrames);
+                                    ((IAudioSource)_source).ReturnAudioSample(sample);
+                                }
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+
+                        Debug.WriteLine($"Audio completed {_audioFrames}");
+                    }
+                    finally
+                    {
+                        lock (_waveSync)
+                        {
+                            this._waveOut.OnPlaybackCompleted -= audioCallback;
+                            this._waveOut.Dispose();
+                            this._waveOut = null;
+                        }
+                    }
+
+                    if (_isLooping)
+                    {
+                        StartPlaying();
+                    }
                 }
             }
         }

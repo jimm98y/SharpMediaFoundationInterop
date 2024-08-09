@@ -1,6 +1,7 @@
 ﻿using SharpMediaFoundation.Transforms.H264;
 using SharpMediaFoundation.Transforms.H265;
 using SharpMediaFoundation.Utils;
+using SharpMp4;
 using SharpRTSPClient;
 
 namespace SharpMediaFoundation.WPF
@@ -11,34 +12,52 @@ namespace SharpMediaFoundation.WPF
         private string _uri;
         private string _userName;
         private string _password;
+        private SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1);
+
+        protected override bool IsStreaming { get { return true; } }
 
         public RtspSource(string uri, string userName = null, string password = null)
         {
             this._uri = uri ?? throw new ArgumentNullException(nameof(uri));
             this._userName = userName;
             this._password = password;
+            this._isLowLatency = true;
         }
 
         public async override Task InitializeAsync()
         {
-            // TODO audio
-            VideoInfo = await CreateClient(_uri, _userName, _password);
+
+            await _semaphoreSlim.WaitAsync();
+            try
+            {
+                if (VideoInfo == null || _videoSampleQueue.Count == 0)
+                {
+                    var ret = await CreateClient(_uri, _userName, _password);
+                    VideoInfo = ret.Video;
+                    AudioInfo = ret.Audio;
+                }
+            }
+            finally
+            {
+                _semaphoreSlim.Release();
+            }
         }
 
-        private Task<VideoInfo> CreateClient(string uri, string userName, string password)
+        private async Task<(VideoInfo Video, AudioInfo Audio)> CreateClient(string uri, string userName, string password)
         {
-            var tcs = new TaskCompletionSource<VideoInfo>();
+            var tcsSetupCompleted = new TaskCompletionSource<bool>();
+            VideoInfo videoInfo = null;
+            AudioInfo audioInfo = null;
 
             _rtspClient = new RTSPClient();
             _rtspClient.NewVideoStream += (o, e) =>
             {
-                var videoInfo = new VideoInfo();
-
                 if (e.StreamConfigurationData is H264StreamConfigurationData h264cfg)
                 {
+                    videoInfo = new VideoInfo();
                     _videoSampleQueue.Enqueue(new List<byte[]> { h264cfg.SPS, h264cfg.PPS });
 
-                    var decodedSPS = SharpMp4.H264SpsNalUnit.Parse(h264cfg.SPS);
+                    var decodedSPS = H264SpsNalUnit.Parse(h264cfg.SPS);
                     var dimensions = decodedSPS.CalculateDimensions();
                     videoInfo.OriginalWidth = dimensions.Width;
                     videoInfo.OriginalHeight = dimensions.Height;
@@ -53,9 +72,10 @@ namespace SharpMediaFoundation.WPF
                 }
                 else if (e.StreamConfigurationData is H265StreamConfigurationData h265cfg)
                 {
+                    videoInfo = new VideoInfo(); 
                     _videoSampleQueue.Enqueue(new List<byte[]> { h265cfg.VPS, h265cfg.SPS, h265cfg.PPS });
 
-                    var decodedSPS = SharpMp4.H265SpsNalUnit.Parse(h265cfg.SPS);
+                    var decodedSPS = H265SpsNalUnit.Parse(h265cfg.SPS);
                     var dimensions = decodedSPS.CalculateDimensions();
                     videoInfo.OriginalWidth = dimensions.Width;
                     videoInfo.OriginalHeight = dimensions.Height;
@@ -78,14 +98,52 @@ namespace SharpMediaFoundation.WPF
                     videoInfo.FpsNom = 24000;
                     videoInfo.FpsDenom = 1001;
                 }
+            };
+            _rtspClient.NewAudioStream += (o, e) =>
+            {
+                if (e.StreamConfigurationData is AACStreamConfigurationData aaccfg)
+                {
+                    audioInfo = new AudioInfo();
+                    audioInfo.AudioCodec = "AAC"; 
+                    audioInfo.BitsPerSample = 16;
 
-                tcs.SetResult(videoInfo);
+                    var descriptor = new AudioSpecificConfigDescriptor();
+                    descriptor.SamplingFrequencyIndex = aaccfg.FrequencyIndex;
+                    descriptor.ChannelConfiguration = aaccfg.ChannelConfiguration;
+                    descriptor.ExtensionAudioObjectType = 5; // TODO
+                    descriptor.GaSpecificConfig = true;
+                    descriptor.OriginalAudioObjectType = 2; // AAC
+                    descriptor.OuterSyncExtensionType = 695; // TODO
+                    descriptor.SyncExtensionType = 695; // TODO
+
+                    audioInfo.UserData = descriptor.ToBytes().Result;
+                    audioInfo.Channels = (uint)aaccfg.ChannelConfiguration;
+                    audioInfo.SampleRate = (uint)AudioSpecificConfigDescriptor.SamplingFrequencyMap[aaccfg.FrequencyIndex];
+                }
+                else
+                {
+                    throw new NotSupportedException();
+                }
+            };
+            _rtspClient.SetupMessageCompleted += (o, e) =>
+            {
+                tcsSetupCompleted.SetResult(true);
             };
 
             _rtspClient.ReceivedVideoData += _rtspClient_ReceivedVideoData;
-            _rtspClient.Connect(uri, RTPTransport.TCP, userName, password, MediaRequest.VIDEO_ONLY, false);
+            _rtspClient.ReceivedAudioData += _rtspClient_ReceivedAudioData;
+            _rtspClient.Connect(uri, RTPTransport.TCP, userName, password);
 
-            return tcs.Task;
+            await tcsSetupCompleted.Task;
+            return (videoInfo, audioInfo);
+        }
+
+        private void _rtspClient_ReceivedAudioData(object sender, SimpleDataEventArgs e)
+        {
+            foreach (var sample in e.Data)
+            {
+                _audioSampleQueue.Enqueue(sample.ToArray());
+            }
         }
 
         private void _rtspClient_ReceivedVideoData(object sender, SimpleDataEventArgs e)

@@ -50,11 +50,18 @@ namespace SharpMediaFoundation.Transforms
         private unsafe bool Input(uint streamID, IMFTransform transform, IMFSample sample)
         {
             bool ret = false;
+            const uint MF_E_NOTACCEPTING = 0xC00D36B5;
 
             try
             {
                 MediaUtils.Check(transform.GetInputStatus(streamID, out uint decoderInputFlags));
-                MediaUtils.Check(transform.ProcessInput(streamID, sample, 0));
+                HRESULT inputResult = transform.ProcessInput(streamID, sample, 0);
+                if(inputResult == MF_E_NOTACCEPTING) // after stream change, we have to flush sometimes
+                {
+                    transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
+                    inputResult = transform.ProcessInput(streamID, sample, 0); // try again
+                }
+                MediaUtils.Check(inputResult);
                 ret = true;
             }
             catch (Exception ex)
