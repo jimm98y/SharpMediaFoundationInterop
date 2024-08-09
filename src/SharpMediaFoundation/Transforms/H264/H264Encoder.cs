@@ -14,7 +14,7 @@ namespace SharpMediaFoundation.Transforms.H264
 
         public uint AvgBitrate { get; private set; }
 
-        public H264Encoder(uint width, uint height, uint fpsNom, uint fpsDenom, uint avgBitrate = 80000000)
+        public H264Encoder(uint width, uint height, uint fpsNom, uint fpsDenom, uint avgBitrate = 8000000)
             : base(H264_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
         {
             this.AvgBitrate = avgBitrate;

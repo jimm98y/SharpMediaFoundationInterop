@@ -21,7 +21,7 @@ using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileNam
         {
             screenCapture.Initialize();
 
-            using (var videoEncoder = new H265Encoder(screenCapture.Width, screenCapture.Height, fpsNom, fpsDenom))
+            using (var videoEncoder = new H265Encoder(screenCapture.Width, screenCapture.Height, fpsNom, fpsDenom, 80000000))
             {
                 videoEncoder.Initialize();
 
