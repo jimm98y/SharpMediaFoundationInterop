@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using SharpMediaFoundation.Transforms;
 using SharpMediaFoundation.Utils;
@@ -130,7 +129,7 @@ namespace SharpMediaFoundation.Input
                 }
                 catch (COMException ex)
                 {
-                    Debug.WriteLine(ex.Message);
+                    if (Log.ErrorEnabled) Log.Error(ex.Message);
                     break;
                 }
 

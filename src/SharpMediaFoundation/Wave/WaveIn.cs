@@ -1,7 +1,6 @@
 ﻿using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Media.Audio;
@@ -157,7 +156,7 @@ namespace SharpMediaFoundation.Wave
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine(ex.Message);
+                        if (Log.ErrorEnabled) Log.Error(ex.Message);
                     }
 
                     ret.Add(

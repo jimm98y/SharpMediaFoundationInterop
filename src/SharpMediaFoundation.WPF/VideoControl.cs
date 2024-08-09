@@ -132,7 +132,7 @@ namespace SharpMediaFoundation.WPF
                     var audioInfo = audioSource.AudioInfo;
                     elapsed = _waveOut.GetPosition() * 10000L / (audioInfo.SampleRate * audioInfo.Channels * audioInfo.BitsPerSample / 8);
 
-                    //Debug.WriteLine($"Audio {elapsed / 10000d}");
+                    if (Log.InfoEnabled) Log.Info($"Audio {elapsed / 10000d}");
                 }
                 else
                 {
@@ -145,14 +145,14 @@ namespace SharpMediaFoundation.WPF
 
             if (elapsed < currentTimestamp)
             {
-                Debug.WriteLine("Elapsed time is less than the current frame time!");
+                if (Log.WarnEnabled) Log.Warn("Elapsed time is less than the current frame time!");
                 return;
             }
 
             if(elapsed > currentTimestamp && elapsed < nextTimestamp)
                 return;
 
-            //Debug.WriteLine($"Video {currentTimestamp / 10000d}, next {nextTimestamp / 10000d}");
+            if (Log.InfoEnabled) Log.Info($"Video {currentTimestamp / 10000d}, next {nextTimestamp / 10000d}");
 
             byte[] decoded;
             if (!_videoOut.TryDequeue(out decoded))
@@ -221,7 +221,7 @@ namespace SharpMediaFoundation.WPF
                         }
                     }
 
-                    Debug.WriteLine($"Video completed {_videoFrames}");
+                    if (Log.InfoEnabled) Log.Info($"Video completed {_videoFrames}");
 
                     if (_isLooping && ((_source as IAudioSource) == null || (_source as IAudioSource).AudioInfo == null))
                     {
@@ -274,7 +274,7 @@ namespace SharpMediaFoundation.WPF
                             }
                         }
 
-                        Debug.WriteLine($"Audio completed {_audioFrames}");
+                        if (Log.InfoEnabled) Log.Info($"Audio completed {_audioFrames}");
                     }
                     finally
                     {

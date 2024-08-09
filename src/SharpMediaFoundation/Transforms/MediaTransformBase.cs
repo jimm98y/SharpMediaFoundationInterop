@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using SharpMediaFoundation.Utils;
 using Windows.Win32;
@@ -66,7 +65,7 @@ namespace SharpMediaFoundation.Transforms
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex.Message);
+                if (Log.ErrorEnabled) Log.Error(ex.Message);
             }
 
             return ret;
@@ -84,7 +83,7 @@ namespace SharpMediaFoundation.Transforms
             if (outputResult.Value == MF_E_TRANSFORM_STREAM_CHANGE)
             {
                 // the stream change happens every time with the H264/H265 decoder
-                Debug.WriteLine("MFT stream change requested");
+                if (Log.WarnEnabled) Log.Warn("MFT stream change requested");
                 length = 0;
 
                 IMFMediaType mediaType = null;
@@ -104,7 +103,7 @@ namespace SharpMediaFoundation.Transforms
                 }
                 catch(Exception ex)
                 {
-                    Debug.WriteLine(ex.Message);
+                    if (Log.ErrorEnabled) Log.Error(ex.Message);
                     throw new Exception("Unsupported subtype!");
                 }
 
@@ -116,7 +115,7 @@ namespace SharpMediaFoundation.Transforms
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {
-                //Debug.WriteLine("MFT needs more input");
+                if (Log.DebugEnabled) Log.Debug("MFT needs more input");
                 length = 0;
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
@@ -142,7 +141,7 @@ namespace SharpMediaFoundation.Transforms
                 try
                 {
                     activate.GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR name, out _);
-                    Debug.WriteLine($"Found MFT: {name}");
+                    if (Log.InfoEnabled) Log.Info($"Found MFT: {name}");
                     transform = activate.ActivateObject(typeof(IMFTransform).GUID) as IMFTransform;
                     break;
                 }

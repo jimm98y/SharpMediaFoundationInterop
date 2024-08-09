@@ -199,7 +199,7 @@ namespace SharpMediaFoundation.Input
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex.Message);
+                if (Log.ErrorEnabled) Log.Error(ex.Message);
             }
             finally
             {
@@ -212,7 +212,7 @@ namespace SharpMediaFoundation.Input
                     }
                     catch (Exception eex)
                     {
-                        Debug.WriteLine(eex.Message);
+                        if (Log.ErrorEnabled) Log.Error(eex.Message);
                     }
                 }
             }
@@ -237,7 +237,7 @@ namespace SharpMediaFoundation.Input
                 }
                 catch(Exception ex)
                 {
-                    Debug.WriteLine(ex.Message);
+                    if (Log.ErrorEnabled) Log.Error(ex.Message);
                     break;
                 }
 
@@ -271,7 +271,7 @@ namespace SharpMediaFoundation.Input
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine(ex.Message);
+                        if (Log.ErrorEnabled) Log.Error(ex.Message);
                         break;
                     }
 
