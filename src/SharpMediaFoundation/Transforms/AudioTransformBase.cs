@@ -9,7 +9,7 @@ namespace SharpMediaFoundation.Transforms
     {
         private bool _disposedValue;
         protected long _sampleDuration = 1;
-        private IMFTransform _transform;
+        protected IMFTransform _transform;
         private MFT_OUTPUT_DATA_BUFFER[] _dataBuffer;
 
         public uint OutputSize { get; private set; }
@@ -44,6 +44,16 @@ namespace SharpMediaFoundation.Transforms
         public bool ProcessOutput(ref byte[] buffer, out uint length)
         {
             return ProcessOutput(_transform, _dataBuffer, ref buffer, out length);
+        }
+
+        public virtual bool Drain()
+        {
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_END_OF_STREAM, default);
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_END_STREAMING, default);
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_DRAIN, default);
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, default);
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_START_OF_STREAM, default);
+            return true;
         }
 
         protected virtual void Dispose(bool disposing)

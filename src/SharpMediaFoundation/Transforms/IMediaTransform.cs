@@ -33,6 +33,7 @@ namespace SharpMediaFoundation.Transforms
         void Initialize();
         bool ProcessInput(byte[] data, long timestamp);
         bool ProcessOutput(ref byte[] buffer, out uint length);
+        bool Drain();
     }
 
     public interface IMediaVideoTransform : IMediaTransform, IVideoDescriptor

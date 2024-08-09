@@ -133,10 +133,12 @@ namespace SharpMediaFoundation.WPF
 
         protected virtual void CompletedVideo()
         {
+            _videoDecoder.Drain();
             Interlocked.Exchange(ref _videoFrames, 0);
         }
         protected virtual void CompletedAudio() 
         {
+            _audioDecoder.Drain();
             Interlocked.Exchange(ref _audioFrames, 0);
         }
 
