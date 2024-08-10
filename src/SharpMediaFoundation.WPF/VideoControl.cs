@@ -271,6 +271,10 @@ namespace SharpMediaFoundation.WPF
                                     Interlocked.Increment(ref _audioFrames);
                                     ((IAudioSource)_source).ReturnAudioSample(sample);
                                 }
+                                else
+                                {
+                                    await Task.Delay(10);
+                                }
                             }
                             else
                             {
