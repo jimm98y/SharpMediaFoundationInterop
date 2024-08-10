@@ -214,6 +214,10 @@ namespace SharpMediaFoundation.WPF
                             {
                                 _videoOut.Enqueue(sample);
                             }
+                            else
+                            {
+                                await Task.Delay(10);
+                            }
                         }
                         else
                         {
