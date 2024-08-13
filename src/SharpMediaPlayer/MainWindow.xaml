@@ -30,50 +30,45 @@
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="0" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="1" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="0" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="1" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="0" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="1" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="0" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="1" Looping="True" Mute="True" />
 
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="2" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="3" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="2" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="3" />
-    
-        
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="4" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="5" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="4" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="5" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="2" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="3" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="2" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="3" Looping="True" Mute="True" />
 
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="6" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="7" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="6" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="7" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="4" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="5" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="4" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="5" Looping="True" Mute="True" />
 
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="6" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="0" Grid.Column="7" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="6" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="1" Grid.Column="7" Looping="True" Mute="True" />
 
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="0" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="1" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="0" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="1" Looping="True" Mute="True" />
 
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="2" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="3" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="2" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="3" Looping="True" Mute="True" />
 
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="0" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="1" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="0" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="1" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="4" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="5" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="4" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="5" Looping="True" Mute="True" />
 
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="2" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="3" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="2" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="3" />
-
-
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="4" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="5" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="4" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="5" />
-
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="6" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="7" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="6" />
-        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="7" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="6" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="2" Grid.Column="7" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="6" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Grid.Row="3" Grid.Column="7" Looping="True" Mute="True" />
     </Grid>-->
     
 </Window>

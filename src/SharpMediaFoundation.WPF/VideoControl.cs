@@ -60,6 +60,7 @@ namespace SharpMediaFoundation.WPF
         }
 
         private bool _isLooping = false;
+        private bool _isMute = false;
 
         public bool Looping
         {
@@ -87,6 +88,24 @@ namespace SharpMediaFoundation.WPF
 
         public static readonly DependencyProperty AutoPlayProperty =
             DependencyProperty.Register("AutoPlay", typeof(bool), typeof(VideoControl), new PropertyMetadata(true));
+
+        public bool Mute
+        {
+            get { return (bool)GetValue(MuteProperty); }
+            set { SetValue(MuteProperty, value); }
+        }
+
+        public static readonly DependencyProperty MuteProperty =
+            DependencyProperty.Register("Mute", typeof(bool), typeof(VideoControl), new PropertyMetadata(false, OnMuteChanged));
+
+        private static void OnMuteChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var sender = d as VideoControl;
+            if (sender != null)
+            {
+                sender._isMute = (bool)e.NewValue;
+            }
+        }
 
         static VideoControl()
         {
@@ -267,6 +286,11 @@ namespace SharpMediaFoundation.WPF
                             {
                                 if (sample != null)
                                 {
+                                    if (_isMute)
+                                    {
+                                        Array.Fill<byte>(sample, 0);
+                                    }
+
                                     _waveOut.Enqueue(sample, (uint)sample.Length);
                                     Interlocked.Increment(ref _audioFrames);
                                     ((IAudioSource)_source).ReturnAudioSample(sample);
