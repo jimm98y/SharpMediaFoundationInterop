@@ -235,7 +235,7 @@ namespace SharpMediaFoundation.WPF
                             }
                             else
                             {
-                                await Task.Delay(10);
+                                await Task.Delay(100);
                             }
                         }
                         else
@@ -297,7 +297,7 @@ namespace SharpMediaFoundation.WPF
                                 }
                                 else
                                 {
-                                    await Task.Delay(10);
+                                    await Task.Delay(100);
                                 }
                             }
                             else
@@ -337,8 +337,8 @@ namespace SharpMediaFoundation.WPF
 
             Interlocked.Exchange(ref _videoFrames, 0);
             Interlocked.Exchange(ref _audioFrames, 0);
-            _videoRenderThread = Task.Run(VideoRenderThread);
-            _audioRenderThread = Task.Run(AudioRenderThread);
+            _videoRenderThread = Task.Factory.StartNew(VideoRenderThread, TaskCreationOptions.LongRunning);
+            _audioRenderThread = Task.Factory.StartNew(AudioRenderThread, TaskCreationOptions.LongRunning);
         }
 
         protected virtual void Dispose(bool disposing)
