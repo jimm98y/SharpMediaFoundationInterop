@@ -10,8 +10,6 @@ namespace SharpMediaFoundation.WPF
     {
         private string _path;
 
-        private SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1);
-
         public FileSource(string path)
         {
             this._path = path ?? throw new ArgumentNullException(nameof(path));
@@ -19,19 +17,11 @@ namespace SharpMediaFoundation.WPF
 
         public async override Task InitializeAsync()
         {
-            await _semaphoreSlim.WaitAsync();
-            try
+            if (VideoInfo == null || _videoSampleQueue.Count == 0)
             {
-                if (VideoInfo == null || _videoSampleQueue.Count == 0)
-                {
-                    var ret = await LoadFileAsync(_path);
-                    VideoInfo = ret.Video;
-                    AudioInfo = ret.Audio;
-                }
-            }
-            finally
-            {
-                _semaphoreSlim.Release();
+                var ret = await LoadFileAsync(_path);
+                VideoInfo = ret.Video;
+                AudioInfo = ret.Audio;
             }
         }
 

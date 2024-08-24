@@ -12,7 +12,6 @@ namespace SharpMediaFoundation.WPF
         private string _uri;
         private string _userName;
         private string _password;
-        private SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1);
 
         protected override bool IsStreaming { get { return true; } }
 
@@ -26,20 +25,11 @@ namespace SharpMediaFoundation.WPF
 
         public async override Task InitializeAsync()
         {
-
-            await _semaphoreSlim.WaitAsync();
-            try
+            if (VideoInfo == null || _videoSampleQueue.Count == 0)
             {
-                if (VideoInfo == null || _videoSampleQueue.Count == 0)
-                {
-                    var ret = await CreateClient(_uri, _userName, _password);
-                    VideoInfo = ret.Video;
-                    AudioInfo = ret.Audio;
-                }
-            }
-            finally
-            {
-                _semaphoreSlim.Release();
+                var ret = await CreateClient(_uri, _userName, _password);
+                VideoInfo = ret.Video;
+                AudioInfo = ret.Audio;
             }
         }
 

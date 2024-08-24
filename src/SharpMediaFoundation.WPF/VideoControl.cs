@@ -1,8 +1,8 @@
 ﻿using SharpMediaFoundation.Wave;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,7 +17,7 @@ namespace SharpMediaFoundation.WPF
     public class VideoControl : Control, IDisposable
     {
         private static object _syncRoot = new object();
-        private static List<VideoControl> _controls = new List<VideoControl>();
+        private static VideoControl[] _controls = new VideoControl[0];
         private static Task _renderThread = null;
 
         private object _waveSync = new object();
@@ -123,7 +123,9 @@ namespace SharpMediaFoundation.WPF
         {
             lock (_syncRoot)
             {
-                _controls.Remove(this);
+                var controls = _controls.ToList();
+                controls.Remove(this);
+                _controls = controls.ToArray();
             }
         }
 
@@ -131,7 +133,9 @@ namespace SharpMediaFoundation.WPF
         {
             lock (_syncRoot)
             {
-                _controls.Add(this);
+                var controls = _controls.ToList();
+                controls.Add(this);
+                _controls = controls.ToArray();
             }
 
             var window = Window.GetWindow(this);
@@ -158,16 +162,16 @@ namespace SharpMediaFoundation.WPF
             long elapsed;
             lock (_waveSync)
             {
-                if (_waveOut != null)
-                {
-                    // if we have audio, synchronize it with video
-                    var audioSource = _source as IAudioSource;
-                    var audioInfo = audioSource.AudioInfo;
-                    elapsed = _waveOut.GetPosition() * 10000L / (audioInfo.SampleRate * audioInfo.Channels * audioInfo.BitsPerSample / 8);
+                //if (_waveOut != null)
+                //{
+                //    // if we have audio, synchronize it with video
+                //    var audioSource = _source as IAudioSource;
+                //    var audioInfo = audioSource.AudioInfo;
+                //    elapsed = _waveOut.GetPosition() * 10000L / (audioInfo.SampleRate * audioInfo.Channels * audioInfo.BitsPerSample / 8);
 
-                    if (Log.InfoEnabled) Log.Info($"Audio {elapsed / 10000d}");
-                }
-                else
+                //    if (Log.InfoEnabled) Log.Info($"Audio {elapsed / 10000d}");
+                //}
+                //else
                 {
                     elapsed = _stopwatch.ElapsedMilliseconds * 10L;
                 }
@@ -191,7 +195,7 @@ namespace SharpMediaFoundation.WPF
             if (!_videoOut.TryDequeue(out decoded))
                 return;
 
-            Interlocked.Increment(ref _videoFrames);
+            _videoFrames++;
 
             _canvas.Lock();
 
@@ -244,7 +248,10 @@ namespace SharpMediaFoundation.WPF
             while (true)
             {
                 bool rendered = false;
-                foreach (var control in _controls.ToArray())
+
+                var controls = _controls;
+
+                foreach (var control in controls)
                 {
                     if (control._source is IVideoSource videoSource)
                     {
@@ -282,6 +289,8 @@ namespace SharpMediaFoundation.WPF
                         }
                     }
                 }
+
+                await Task.Delay(1);
             }
         }
 
@@ -324,11 +333,6 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        private void AudioCallback(object sender, EventArgs e)
-        {
-
-        }
-
         private bool RenderAudio(IAudioSource audioSource)
         {
             if (audioSource.GetAudioSample(out var sample))
@@ -360,8 +364,9 @@ namespace SharpMediaFoundation.WPF
                     _source.ReturnVideoSample(sample);
             }
 
-            Interlocked.Exchange(ref _videoFrames, 0);
-            Interlocked.Exchange(ref _audioFrames, 0);
+            _videoFrames = 0;
+            _audioFrames = 0;
+            _stopwatch.Restart();
         }
 
         protected virtual void Dispose(bool disposing)
