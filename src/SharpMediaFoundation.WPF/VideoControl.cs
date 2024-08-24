@@ -3,7 +3,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,7 +18,9 @@ namespace SharpMediaFoundation.WPF
     {
         private static object _syncRoot = new object();
         private static List<VideoControl> _controls = new List<VideoControl>();
+        private static Task _renderThread = null;
 
+        private object _waveSync = new object();
         private WaveOut _waveOut;
 
         private Image _image;
@@ -34,10 +35,6 @@ namespace SharpMediaFoundation.WPF
         private ConcurrentQueue<byte[]> _videoOut = new ConcurrentQueue<byte[]>();
 
         private bool _disposedValue;
-
-        private static Task _renderThread = null;
-
-        private object _waveSync = new object();
 
         private IVideoSource _source = null;
 
