@@ -9,8 +9,8 @@ namespace SharpMediaFoundation
     public partial class MainWindow : Window
     {
         //public IVideoSource Source { get { return new ScreenSource(); } }
-        //public IVideoSource Source { get { return new CameraSource(); } }
-        public IVideoSource Source { get { return new FileSource("frag_bunny.mp4"); } } // H264
+        public IVideoSource Source { get { return new CameraSource(); } }
+        //public IVideoSource Source { get { return new FileSource("frag_bunny.mp4"); } } // H264
         //public IVideoSource Source { get { return new FileSource("test1.mp4"); } } // H265
         //public IVideoSource Source { get { return new RtspSource("rtsp://127.0.0.1:8554", "admin", "password"); } }
 

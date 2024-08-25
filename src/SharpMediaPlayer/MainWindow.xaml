@@ -20,6 +20,34 @@
         <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
         <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
         <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+
     </WrapPanel>-->
     
 </Window>

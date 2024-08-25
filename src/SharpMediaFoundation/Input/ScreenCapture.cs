@@ -130,11 +130,11 @@ namespace SharpMediaFoundation.Input
             D3D11_TEXTURE2D_DESC captureTextureDesc = new()
             {
                 CPUAccessFlags = D3D11_CPU_ACCESS_FLAG.D3D11_CPU_ACCESS_READ,
-                BindFlags = D3D11_BIND_FLAG.D3D11_BIND_RENDER_TARGET | D3D11_BIND_FLAG.D3D11_BIND_SHADER_RESOURCE,
+                BindFlags = D3D11_BIND_FLAG.D3D11_BIND_RENDER_TARGET,
                 Format = DXGI_FORMAT.DXGI_FORMAT_B8G8R8A8_UNORM,
                 Width = Width,
                 Height = Height,
-                MiscFlags = 0,
+                MiscFlags = D3D11_RESOURCE_MISC_FLAG.D3D11_RESOURCE_MISC_SHARED,
                 MipLevels = 1,
                 ArraySize = 1,
                 SampleDesc = { Count = 1, Quality = 0 },
@@ -159,27 +159,46 @@ namespace SharpMediaFoundation.Input
             _stopwatch.Start();
         }
 
+        private IDXGIResource _screenResource;
+
         public unsafe bool ReadSample(byte[] buffer, out long timestamp)
         {
             if (_disposedValue)
                 throw new ObjectDisposedException(nameof(ScreenCapture));
 
             bool ret = false;
-            IDXGIResource screenResource = default;
             timestamp = 0;
 
             try
             {
-                _duplicatedOutput.AcquireNextFrame(ReadTimeoutInMilliseconds, out DXGI_OUTDUPL_FRAME_INFO duplicateFrameInformation, out screenResource);
+                if (_screenResource != null)
+                {
+                    /*
+                    For performance reasons, we recommend that you release the frame just before you call the IDXGIOutputDuplication::AcquireNextFrame 
+                    method to acquire the next frame. When the client does not own the frame, the operating system copies all desktop updates to the surface.
+                    This can result in wasted GPU cycles if the operating system updates the same region for each frame that occurs.
+                     */
+                    try
+                    {
+                        Marshal.ReleaseComObject(_screenResource);
+                        _duplicatedOutput?.ReleaseFrame();
+                    }
+                    catch (Exception eex)
+                    {
+                        if (Log.ErrorEnabled) Log.Error(eex.Message);
+                    }
+                }
+
+                _duplicatedOutput.AcquireNextFrame(ReadTimeoutInMilliseconds, out DXGI_OUTDUPL_FRAME_INFO duplicateFrameInformation, out _screenResource);
                 timestamp = _stopwatch.ElapsedMilliseconds * 10L;
 
-                if (screenResource != null)
+                if (_screenResource != null)
                 {
-                    ID3D11Texture2D screenTexture = (ID3D11Texture2D)screenResource;
+                    ID3D11Texture2D screenTexture = (ID3D11Texture2D)_screenResource;
                     _context.CopyResource(_captureTexture, screenTexture);
 
                     const uint subresource = 0;
-                    _context.Map(_captureTexture, subresource, D3D11_MAP.D3D11_MAP_READ, 0, null);
+                    ((ID3D11DeviceContext3)_context).Map(_captureTexture, subresource, D3D11_MAP.D3D11_MAP_READ, 0, null); 
 
                     _device.ReadFromSubresource((void*)_pData, Width * BYTES_PER_PIXEL, Height, _captureTexture, 0);
                     BitmapUtils.CopyBitmap(
@@ -200,21 +219,6 @@ namespace SharpMediaFoundation.Input
             catch (Exception ex)
             {
                 if (Log.ErrorEnabled) Log.Error(ex.Message);
-            }
-            finally
-            {
-                if (screenResource != null)
-                {
-                    try
-                    {
-                        Marshal.ReleaseComObject(screenResource);
-                        _duplicatedOutput?.ReleaseFrame();
-                    }
-                    catch (Exception eex)
-                    {
-                        if (Log.ErrorEnabled) Log.Error(eex.Message);
-                    }
-                }
             }
 
             return ret;
@@ -316,6 +320,17 @@ namespace SharpMediaFoundation.Input
             {
                 _disposedValue = true;
 
+                var screenResource = _screenResource;
+                if (screenResource != null)
+                {
+                    try
+                    {
+                        Marshal.ReleaseComObject(screenResource);
+                    }
+                    catch (Exception eex)
+                    { }
+                }
+
                 if (_factory != null)
                 {
                     Marshal.ReleaseComObject(_factory);
@@ -324,6 +339,7 @@ namespace SharpMediaFoundation.Input
 
                 if (_duplicatedOutput != null)
                 {
+                    _duplicatedOutput.ReleaseFrame();
                     Marshal.ReleaseComObject(_duplicatedOutput);
                     _duplicatedOutput = null;
                 }
