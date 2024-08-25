@@ -159,24 +159,7 @@ namespace SharpMediaFoundation.WPF
             if (_videoOut.Count == 0)
                 return;
 
-            long elapsed;
-            lock (_waveSync)
-            {
-                //if (_waveOut != null)
-                //{
-                //    // if we have audio, synchronize it with video
-                //    var audioSource = _source as IAudioSource;
-                //    var audioInfo = audioSource.AudioInfo;
-                //    elapsed = _waveOut.GetPosition() * 10000L / (audioInfo.SampleRate * audioInfo.Channels * audioInfo.BitsPerSample / 8);
-
-                //    if (Log.InfoEnabled) Log.Info($"Audio {elapsed / 10000d}");
-                //}
-                //else
-                {
-                    elapsed = _stopwatch.ElapsedMilliseconds * 10L;
-                }
-            }
-
+            long elapsed = _stopwatch.ElapsedMilliseconds * 10L;
             long currentTimestamp = _videoFrames * 10000L / (_source.VideoInfo.FpsNom / _source.VideoInfo.FpsDenom);
             long nextTimestamp = (_videoFrames + 1) * 10000L / (_source.VideoInfo.FpsNom / _source.VideoInfo.FpsDenom);
 
@@ -240,6 +223,9 @@ namespace SharpMediaFoundation.WPF
         {
             _videoOut.Clear();
             _canvas = null;
+
+            if (_isLooping)
+                StartPlaying();
         }
 
 

@@ -29,6 +29,9 @@ namespace SharpMediaFoundation.Transforms
             bool ret = false;
             IMFSample sample = MediaUtils.CreateSample(data, sampleDuration, timestamp);
 
+            // samples are large, so to keep the memory usage low we have to tell GC about large amounts of unmanaged memory being allocated
+            GC.AddMemoryPressure(data.Length); // approximate size
+
             try
             {
                 ret = Input(0, transform, sample);
@@ -36,6 +39,7 @@ namespace SharpMediaFoundation.Transforms
             finally
             {
                 Marshal.ReleaseComObject(sample);
+                GC.RemoveMemoryPressure(data.Length);
             }
 
             return ret;
