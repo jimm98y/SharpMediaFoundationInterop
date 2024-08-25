@@ -89,11 +89,18 @@ namespace SharpMediaFoundation.WPF
                                 .Children.Single((Mp4Box x) => x is AudioSampleEntryBox) as AudioSampleEntryBox;
                         var audioDescriptor = sourceAudioSampleBox.GetAudioSpecificConfigDescriptor();
 
-                        audioInfo.AudioCodec = "AAC"; // TODO
-                        audioInfo.BitsPerSample = 16;
-                        audioInfo.UserData = await audioDescriptor.ToBytes();
-                        audioInfo.Channels = (uint)audioDescriptor.ChannelConfiguration;
-                        audioInfo.SampleRate = (uint)audioDescriptor.GetSamplingFrequency();
+                        if (sourceAudioSampleBox.Type == AudioSampleEntryBox.TYPE3)
+                        {
+                            audioInfo.AudioCodec = "AAC";
+                            audioInfo.BitsPerSample = 16;
+                            audioInfo.UserData = await audioDescriptor.ToBytes();
+                            audioInfo.Channels = (uint)audioDescriptor.ChannelConfiguration;
+                            audioInfo.SampleRate = (uint)audioDescriptor.GetSamplingFrequency();
+                        }
+                        else
+                        {
+                            throw new NotSupportedException();
+                        }
 
                         foreach (var frame in parsedMDAT[audioTrackId][0])
                         {
