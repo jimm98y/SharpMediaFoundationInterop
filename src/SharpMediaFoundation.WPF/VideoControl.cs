@@ -17,8 +17,8 @@ namespace SharpMediaFoundation.WPF
     public class VideoControl : Control, IDisposable
     {
         private static object _syncRoot = new object();
-        private static VideoControl[] _controls = new VideoControl[0];
-        private static Task _renderThread = null;
+        private static VideoControl[] _controls = Array.Empty<VideoControl>();
+        private static Task _decodeThread;
 
         private object _waveSync = new object();
         private WaveOut _waveOut;
@@ -109,7 +109,7 @@ namespace SharpMediaFoundation.WPF
         static VideoControl()
         {
             DefaultStyleKeyProperty.OverrideMetadata(typeof(VideoControl), new FrameworkPropertyMetadata(typeof(VideoControl)));
-            _renderThread = Task.Factory.StartNew(RenderThread, TaskCreationOptions.LongRunning);
+            _decodeThread = Task.Factory.StartNew(DecodeThread, TaskCreationOptions.LongRunning);
         }
 
         public VideoControl()
@@ -219,22 +219,23 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        private async Task UninitializeVideo(IVideoSource videoSource)
+        private Task UninitializeVideo(IVideoSource videoSource)
         {
             _videoOut.Clear();
             _canvas = null;
 
             if (_isLooping)
                 StartPlaying();
+
+            return Task.CompletedTask;
         }
 
 
-        private static async Task RenderThread()
+        private static async Task DecodeThread()
         {
             while (true)
             {
                 bool rendered = false;
-
                 var controls = _controls;
 
                 foreach (var control in controls)
@@ -248,7 +249,7 @@ namespace SharpMediaFoundation.WPF
 
                         if (control._videoOut.Count < 1)
                         {
-                            rendered = control.RenderVideo(videoSource);
+                            rendered = control.DecodeVideo(videoSource);
 
                             if (!rendered)
                             {
@@ -264,9 +265,9 @@ namespace SharpMediaFoundation.WPF
                             await control.InitializeAudio(audioSource);
                         }
 
-                        if (control._waveOut.QueuedFrames < 4)
+                        if (control._waveOut != null && control._waveOut.QueuedFrames < 4)
                         {
-                            rendered = control.RenderAudio(audioSource);
+                            rendered = control.DecodeAudio(audioSource);
 
                             if (!rendered)
                             {
@@ -280,7 +281,7 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        private bool RenderVideo(IVideoSource videoSource)
+        private bool DecodeVideo(IVideoSource videoSource)
         {
             if (videoSource.GetVideoSample(out var sample))
             {
@@ -310,16 +311,18 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        private async Task UninitializeAudio(IAudioSource audioSource)
+        private Task UninitializeAudio(IAudioSource audioSource)
         {
             lock (_waveSync)
             {
                 this._waveOut.Dispose();
                 this._waveOut = null;
             }
+
+            return Task.CompletedTask;
         }
 
-        private bool RenderAudio(IAudioSource audioSource)
+        private bool DecodeAudio(IAudioSource audioSource)
         {
             if (audioSource.GetAudioSample(out var sample))
             {
