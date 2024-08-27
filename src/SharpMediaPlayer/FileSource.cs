@@ -9,6 +9,9 @@ namespace SharpMediaFoundation.WPF
     public class FileSource : VideoSourceBase
     {
         private string _path;
+        private BufferedStream _fs;
+        private FragmentedMp4 _fmp4;
+        private FragmentedMp4Extensions.MdatParserContext _context;
 
         public FileSource(string path)
         {
@@ -17,7 +20,7 @@ namespace SharpMediaFoundation.WPF
 
         public async override Task InitializeAsync()
         {
-            if (VideoInfo == null || _videoSampleQueue.Count == 0)
+            if (VideoInfo == null)
             {
                 var ret = await LoadFileAsync(_path);
                 VideoInfo = ret.Video;
@@ -25,92 +28,140 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
+        protected override bool ReadNextAudio(out byte[] frame)
+        {
+            frame = _fmp4.ReadNextTrack(_context, (int)_context.AudioTrackId).Result?.FirstOrDefault(); // TODO async
+            return frame != null;
+        }
+
+        protected override bool ReadNextVideo(out IList<byte[]> au)
+        {
+            if (_context.Position[_context.VideoTrackId.Value] == 0)
+            {
+                au = _context.VideoNALUs.Concat(_fmp4.ReadNextTrack(_context, (int)_context.VideoTrackId).Result).ToList(); // TODO async
+            }
+            else
+            {
+                au = _fmp4.ReadNextTrack(_context, (int)_context.VideoTrackId).Result; // TODO async
+            }
+            return au != null;
+        }
+
+        protected override void CompletedVideo()
+        {
+            VideoInfo = null;
+            AudioInfo = null;
+            base.CompletedVideo();
+        }
+
+        protected override void CompletedAudio()
+        {
+            VideoInfo = null;
+            AudioInfo = null;
+            base.CompletedAudio();
+        }
+
         private async Task<(VideoInfo Video, AudioInfo Audio)> LoadFileAsync(string fileName)
         {
-            _videoSampleQueue.Clear();
-            _audioSampleQueue.Clear();
-
             VideoInfo videoInfo = new VideoInfo();
             AudioInfo audioInfo = null;
-            using (Stream fs = new BufferedStream(new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read)))
+
+            if (_fmp4 != null)
             {
-                using (var fmp4 = await FragmentedMp4.ParseAsync(fs))
+                _fmp4.Dispose();
+                _fmp4 = null;
+            }
+
+            if (_fs != null)
+            {
+                _fs.Dispose();
+                _fs = null;
+            }
+
+            _fs = new BufferedStream(new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read));
+            _fmp4 = await FragmentedMp4.ParseAsync(_fs);
+
+            var videoTrackBox = _fmp4.FindVideoTracks().FirstOrDefault();
+            var audioTrackBox = _fmp4.FindAudioTracks().FirstOrDefault();
+            _context = await _fmp4.ParseMdatAsync();
+                    
+            var videoTrackId = videoTrackBox.GetTkhd().TrackId;
+            var audioTrackId = audioTrackBox?.GetTkhd().TrackId;
+
+            var vsbox = 
+                videoTrackBox
+                    .GetMdia()
+                    .GetMinf()
+                    .GetStbl()
+                    .GetStsd()
+                    .Children.Single((Mp4Box x) => x is VisualSampleEntryBox) as VisualSampleEntryBox;
+            videoInfo.OriginalWidth = vsbox.Width;
+            videoInfo.OriginalHeight = vsbox.Height;
+            videoInfo.FpsNom = _fmp4.CalculateTimescale(videoTrackBox);
+            videoInfo.FpsDenom = _fmp4.CalculateSampleDuration(videoTrackBox);
+            if (vsbox.Children.FirstOrDefault(x => x is AvcConfigurationBox) != null)
+            {
+                videoInfo.VideoCodec = "H264";
+                videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
+                videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
+            }
+            else if (vsbox.Children.FirstOrDefault(x => x is HevcConfigurationBox) != null)
+            {
+                videoInfo.VideoCodec = "H265";
+                videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
+                videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
+            }
+            else
+            {
+                throw new NotSupportedException();
+            }
+
+            if (audioTrackBox != null)
+            {
+                audioInfo = new AudioInfo();
+
+                var sourceAudioSampleBox =
+                    audioTrackBox
+                        .GetMdia()
+                        .GetMinf()
+                        .GetStbl()
+                        .GetStsd()
+                        .Children.Single((Mp4Box x) => x is AudioSampleEntryBox) as AudioSampleEntryBox;
+                var audioDescriptor = sourceAudioSampleBox.GetAudioSpecificConfigDescriptor();
+
+                if (sourceAudioSampleBox.Type == AudioSampleEntryBox.TYPE3)
                 {
-                    var videoTrackBox = fmp4.FindVideoTracks().FirstOrDefault();
-                    var audioTrackBox = fmp4.FindAudioTracks().FirstOrDefault();
-                    var parsedMDAT = await fmp4.ParseMdatAsync();
-
-                    var videoTrackId = fmp4.FindVideoTrackID().First();
-                    var audioTrackId = fmp4.FindAudioTrackID().FirstOrDefault();
-
-                    var vsbox = 
-                        videoTrackBox
-                            .GetMdia()
-                            .GetMinf()
-                            .GetStbl()
-                            .GetStsd()
-                            .Children.Single((Mp4Box x) => x is VisualSampleEntryBox) as VisualSampleEntryBox;
-                    videoInfo.OriginalWidth = vsbox.Width;
-                    videoInfo.OriginalHeight = vsbox.Height;
-                    videoInfo.FpsNom = fmp4.CalculateTimescale(videoTrackBox);
-                    videoInfo.FpsDenom = fmp4.CalculateSampleDuration(videoTrackBox);
-                    if (vsbox.Children.FirstOrDefault(x => x is AvcConfigurationBox) != null)
-                    {
-                        videoInfo.VideoCodec = "H264";
-                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
-                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
-                    }
-                    else if (vsbox.Children.FirstOrDefault(x => x is HevcConfigurationBox) != null)
-                    {
-                        videoInfo.VideoCodec = "H265";
-                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
-                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
-                    }
-                    else
-                    {
-                        throw new NotSupportedException();
-                    }
-
-                    foreach (var au in parsedMDAT[videoTrackId])
-                    {
-                        _videoSampleQueue.Enqueue(au);
-                    }
-
-                    if (audioTrackBox != null)
-                    {
-                        audioInfo = new AudioInfo();
-
-                        var sourceAudioSampleBox =
-                            audioTrackBox
-                                .GetMdia()
-                                .GetMinf()
-                                .GetStbl()
-                                .GetStsd()
-                                .Children.Single((Mp4Box x) => x is AudioSampleEntryBox) as AudioSampleEntryBox;
-                        var audioDescriptor = sourceAudioSampleBox.GetAudioSpecificConfigDescriptor();
-
-                        if (sourceAudioSampleBox.Type == AudioSampleEntryBox.TYPE3)
-                        {
-                            audioInfo.AudioCodec = "AAC";
-                            audioInfo.BitsPerSample = 16;
-                            audioInfo.UserData = await audioDescriptor.ToBytes();
-                            audioInfo.Channels = (uint)audioDescriptor.ChannelConfiguration;
-                            audioInfo.SampleRate = (uint)audioDescriptor.GetSamplingFrequency();
-                        }
-                        else
-                        {
-                            throw new NotSupportedException();
-                        }
-
-                        foreach (var frame in parsedMDAT[audioTrackId][0])
-                        {
-                            _audioSampleQueue.Enqueue(frame);
-                        }
-                    }
+                    audioInfo.AudioCodec = "AAC";
+                    audioInfo.BitsPerSample = 16;
+                    audioInfo.UserData = await audioDescriptor.ToBytes();
+                    audioInfo.Channels = (uint)audioDescriptor.ChannelConfiguration;
+                    audioInfo.SampleRate = (uint)audioDescriptor.GetSamplingFrequency();
+                }
+                else
+                {
+                    throw new NotSupportedException();
                 }
             }
 
             return (videoInfo, audioInfo);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if(disposing)
+            {
+                if(_fmp4 != null)
+                {
+                    _fmp4.Dispose();
+                    _fmp4 = null;
+                }
+
+                if(_fs != null)
+                {
+                    _fs.Dispose();  
+                    _fs = null;
+                }
+            }
         }
     }
 }

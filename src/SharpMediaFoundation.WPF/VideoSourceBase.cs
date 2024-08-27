@@ -25,10 +25,7 @@ namespace SharpMediaFoundation.WPF
         protected IMediaVideoTransform _nv12Decoder;
         protected IMediaAudioTransform _audioDecoder;
 
-        protected ConcurrentQueue<IList<byte[]>> _videoSampleQueue = new ConcurrentQueue<IList<byte[]>>();
         protected ConcurrentQueue<byte[]> _videoRenderQueue = new ConcurrentQueue<byte[]>();
-
-        protected ConcurrentQueue<byte[]> _audioSampleQueue = new ConcurrentQueue<byte[]>();
         protected ConcurrentQueue<byte[]> _audioRenderQueue = new ConcurrentQueue<byte[]>();
 
         protected byte[] _nv12Buffer;
@@ -45,15 +42,22 @@ namespace SharpMediaFoundation.WPF
 
         public virtual bool GetAudioSample(out byte[] sample)
         {
-            if(_audioDecoder == null)
+            var audioInfo = AudioInfo;
+            if (audioInfo == null)
             {
-                CreateAudioDecoder(AudioInfo);
+                sample = null;
+                return false;
+            }
+
+            if (_audioDecoder == null)
+            {
+                CreateAudioDecoder(audioInfo);
             }
 
             if (_audioRenderQueue.TryDequeue(out sample))
                 return true;
 
-            while (_audioRenderQueue.Count == 0 && _audioSampleQueue.TryDequeue(out var frame))
+            while (_audioRenderQueue.Count == 0 && ReadNextAudio(out var frame))
             {
                 if (_audioDecoder.ProcessInput(frame, 0))
                 {
@@ -87,21 +91,30 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
+        protected abstract bool ReadNextAudio(out byte[] frame);
+
         public virtual bool GetVideoSample(out byte[] sample)
         {
+            var videoInfo = VideoInfo;
+            if (videoInfo == null)
+            {
+                sample = null;
+                return false;
+            }
+
             if (_videoDecoder == null || _nv12Decoder == null)
             {
-                CreateVideoDecoder(VideoInfo);
+                CreateVideoDecoder(videoInfo);
             }
 
             if (_videoRenderQueue.TryDequeue(out sample))
                 return true;
 
-            while (_videoRenderQueue.Count == 0 && _videoSampleQueue.TryDequeue(out var au))
+            while (_videoRenderQueue.Count == 0 && ReadNextVideo(out var au))
             {
                 foreach (var nalu in au)
                 {
-                    long videoTime = _videoFrames * 10000L / (VideoInfo.FpsNom / VideoInfo.FpsDenom);
+                    long videoTime = _videoFrames * 10000L / (videoInfo.FpsNom / videoInfo.FpsDenom);
                     if (_videoDecoder.ProcessInput(nalu, videoTime))
                     {
                         while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out _))
@@ -114,11 +127,11 @@ namespace SharpMediaFoundation.WPF
 
                                 BitmapUtils.CopyBitmap(
                                     _rgbBuffer,
-                                    (int)VideoInfo.Width,
-                                    (int)VideoInfo.Height,
+                                    (int)videoInfo.Width,
+                                    (int)videoInfo.Height,
                                     decoded,
-                                    (int)VideoInfo.OriginalWidth,
-                                    (int)VideoInfo.OriginalHeight,
+                                    (int)videoInfo.OriginalWidth,
+                                    (int)videoInfo.OriginalHeight,
                                     _bytesPerPixel,
                                     true);
 
@@ -149,6 +162,8 @@ namespace SharpMediaFoundation.WPF
                 }
             }
         }
+
+        protected abstract bool ReadNextVideo(out IList<byte[]> au);
 
         protected virtual void CompletedVideo()
         {

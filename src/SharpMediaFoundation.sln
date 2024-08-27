@@ -19,6 +19,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharpScreenCapture", "Sharp
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharpMediaPlayer", "SharpMediaPlayer\SharpMediaPlayer.csproj", "{23E94168-1F83-434E-9889-DEC40F13DF16}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharpMp4", "..\..\SharpMP4\src\SharpMp4\SharpMp4.csproj", "{F8D6728C-6472-449E-9AFD-DAEC00C05558}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,6 +55,10 @@ Global
 		{23E94168-1F83-434E-9889-DEC40F13DF16}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{23E94168-1F83-434E-9889-DEC40F13DF16}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{23E94168-1F83-434E-9889-DEC40F13DF16}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F8D6728C-6472-449E-9AFD-DAEC00C05558}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F8D6728C-6472-449E-9AFD-DAEC00C05558}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F8D6728C-6472-449E-9AFD-DAEC00C05558}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F8D6728C-6472-449E-9AFD-DAEC00C05558}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -7,30 +7,21 @@
         mc:Ignorable="d"
         Title="SharpMediaPlayer" Height="450" Width="800">
 
-    <Grid>
+    <!--<Grid>
         <ctrl:VideoControl Source="{Binding Source}" Looping="True" />
-    </Grid>
+    </Grid>-->
 
-    <!--<WrapPanel Orientation="Horizontal">
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+    <WrapPanel Orientation="Horizontal">
+        <ctrl:VideoControl Source="{Binding Source}" Width="512" Height="384" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="512" Height="384" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="512" Height="384" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="512" Height="384" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="512" Height="384" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="512" Height="384" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="512" Height="384" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="512" Height="384" Looping="True" Mute="True" />
 
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <!--<ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
         <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
         <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
         <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
@@ -48,6 +39,15 @@
         <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
         <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
 
-    </WrapPanel>-->
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />-->
+
+    </WrapPanel>
     
 </Window>
