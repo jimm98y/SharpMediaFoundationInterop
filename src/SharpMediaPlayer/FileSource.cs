@@ -38,7 +38,14 @@ namespace SharpMediaFoundation.WPF
         {
             if (_context.Position[_context.VideoTrackId.Value] == 0)
             {
-                au = _context.VideoNALUs.Concat(_fmp4.ReadNextTrack(_context, (int)_context.VideoTrackId).Result).ToList(); // TODO async
+                var result = _fmp4.ReadNextTrack(_context, (int)_context.VideoTrackId).Result;
+                if (result == null)
+                {
+                    au = null;
+                    return false;
+                }
+
+                au = _context.VideoNALUs.Concat(result).ToList(); // TODO async
             }
             else
             {
