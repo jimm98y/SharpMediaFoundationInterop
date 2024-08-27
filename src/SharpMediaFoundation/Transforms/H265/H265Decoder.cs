@@ -51,9 +51,7 @@ namespace SharpMediaFoundation.Transforms.H265
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
             mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MediaUtils.EncodeAttributeValue(Width, Height));
-            mediaOutput.SetUINT32(PInvoke.MF_MT_COMPRESSED, 0);
             mediaOutput.SetUINT32(PInvoke.MF_MT_DEFAULT_STRIDE, Width);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AVG_BIT_ERROR_RATE, 0);
             mediaOutput.SetUINT32(PInvoke.MF_MT_FIXED_SIZE_SAMPLES, 1);
             mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MediaUtils.EncodeAttributeValue(FpsNom, FpsDenom));
             mediaOutput.SetUINT64(PInvoke.MF_MT_PIXEL_ASPECT_RATIO, MediaUtils.EncodeAttributeValue(1, 1));

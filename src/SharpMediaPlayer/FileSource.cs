@@ -11,6 +11,8 @@ namespace SharpMediaFoundation.WPF
         private string _path;
         private BufferedStream _fs;
         private FragmentedMp4 _fmp4;
+        private bool _initial = true;
+
         private FragmentedMp4Extensions.MdatParserContext _context;
 
         public FileSource(string path)
@@ -36,16 +38,10 @@ namespace SharpMediaFoundation.WPF
 
         protected override bool ReadNextVideo(out IList<byte[]> au)
         {
-            if (_context.Position[_context.VideoTrackId.Value] == 0)
+            if (_initial)
             {
-                var result = _fmp4.ReadNextTrack(_context, (int)_context.VideoTrackId).Result;
-                if (result == null)
-                {
-                    au = null;
-                    return false;
-                }
-
-                au = _context.VideoNALUs.Concat(result).ToList(); // TODO async
+                au = _context.VideoNALUs;
+                _initial = false;
             }
             else
             {
@@ -91,6 +87,7 @@ namespace SharpMediaFoundation.WPF
             var videoTrackBox = _fmp4.FindVideoTracks().FirstOrDefault();
             var audioTrackBox = _fmp4.FindAudioTracks().FirstOrDefault();
             _context = await _fmp4.ParseMdatAsync();
+            _initial = true;
                     
             var videoTrackId = videoTrackBox.GetTkhd().TrackId;
             var audioTrackId = audioTrackBox?.GetTkhd().TrackId;
