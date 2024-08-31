@@ -145,14 +145,20 @@ namespace SharpMediaFoundation.WPF
             _videoSampleQueue.Enqueue(e.Data.Select(x => x.ToArray()).ToList());
         }
 
-        protected override bool ReadNextAudio(out byte[] frame)
+        protected override Task<byte[]> ReadNextAudio()
         {
-            return _audioSampleQueue.TryDequeue(out frame);
+            if (_audioSampleQueue.TryDequeue(out var frame))
+                return Task.FromResult(frame);
+            else
+                return Task.FromResult<byte[]>(null);
         }
 
-        protected override bool ReadNextVideo(out IList<byte[]> au)
+        protected override Task<IList<byte[]>> ReadNextVideo()
         {
-            return _videoSampleQueue.TryDequeue(out au);
+            if (_videoSampleQueue.TryDequeue(out var frame))
+                return Task.FromResult(frame);
+            else
+                return Task.FromResult<IList<byte[]>>(null);
         }
     }
 }

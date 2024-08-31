@@ -30,14 +30,15 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        protected override bool ReadNextAudio(out byte[] frame)
+        protected override async Task<byte[]> ReadNextAudio()
         {
-            frame = _fmp4.ReadNextTrack(_context, (int)_context.AudioTrackId).Result?.FirstOrDefault(); // TODO async
-            return frame != null;
+            var frame = await _fmp4.ReadNextTrack(_context, (int)_context.AudioTrackId);
+            return frame?.FirstOrDefault();
         }
 
-        protected override bool ReadNextVideo(out IList<byte[]> au)
+        protected override async Task<IList<byte[]>> ReadNextVideo()
         {
+            IList<byte[]> au;
             if (_initial)
             {
                 au = _context.VideoNALUs;
@@ -45,9 +46,9 @@ namespace SharpMediaFoundation.WPF
             }
             else
             {
-                au = _fmp4.ReadNextTrack(_context, (int)_context.VideoTrackId).Result; // TODO async
+                au = await _fmp4.ReadNextTrack(_context, (int)_context.VideoTrackId); // TODO async
             }
-            return au != null;
+            return au;
         }
 
         protected override void CompletedVideo()
@@ -68,12 +69,6 @@ namespace SharpMediaFoundation.WPF
         {
             VideoInfo videoInfo = new VideoInfo();
             AudioInfo audioInfo = null;
-
-            if (_fmp4 != null)
-            {
-                _fmp4.Dispose();
-                _fmp4 = null;
-            }
 
             if (_fs != null)
             {
@@ -101,8 +96,8 @@ namespace SharpMediaFoundation.WPF
                     .Children.Single((Mp4Box x) => x is VisualSampleEntryBox) as VisualSampleEntryBox;
             videoInfo.OriginalWidth = vsbox.Width;
             videoInfo.OriginalHeight = vsbox.Height;
-            videoInfo.FpsNom = _fmp4.CalculateTimescale(videoTrackBox);
-            videoInfo.FpsDenom = _fmp4.CalculateSampleDuration(videoTrackBox);
+            videoInfo.FpsNom = _context.CalculateTimescale(videoTrackBox);
+            videoInfo.FpsDenom = _context.CalculateSampleDuration(videoTrackBox);
             if (vsbox.Children.FirstOrDefault(x => x is AvcConfigurationBox) != null)
             {
                 videoInfo.VideoCodec = "H264";
@@ -154,12 +149,6 @@ namespace SharpMediaFoundation.WPF
         {
             if(disposing)
             {
-                if(_fmp4 != null)
-                {
-                    _fmp4.Dispose();
-                    _fmp4 = null;
-                }
-
                 if(_fs != null)
                 {
                     _fs.Dispose();  

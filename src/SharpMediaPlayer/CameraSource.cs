@@ -16,6 +16,8 @@ namespace SharpMediaFoundation.WPF
         private int _bytesPerPixel;
         private int _imageBufferLen;
 
+        public byte[] Empty { get; private set; } = new byte[0];
+
         private ColorConverter _converter;
 
         public VideoInfo VideoInfo { get; private set; }
@@ -25,7 +27,7 @@ namespace SharpMediaFoundation.WPF
             VideoInfo = await OpenAsync();
         }
 
-        public bool GetVideoSample(out byte[] sample)
+        public Task<byte[]> GetVideoSample()
         {
             if (_device.ReadSample(_yuy2Buffer, out _))
             {
@@ -45,14 +47,12 @@ namespace SharpMediaFoundation.WPF
                             _bytesPerPixel,
                             true);
 
-                        sample = decoded;
-                        return true;
+                        return Task.FromResult(decoded);
                     }
                 }
             }
 
-            sample = null;
-            return true; // indicates whether the stream has ended
+            return Task.FromResult(Empty); // indicates whether the stream has ended
         }
 
         private Task<VideoInfo> OpenAsync()
