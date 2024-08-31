@@ -249,7 +249,7 @@ namespace SharpMediaFoundation.WPF
 
                         if (control._videoOut.Count < 1)
                         {
-                            rendered = await control.DecodeVideoAsync(videoSource);
+                            rendered = control.DecodeVideo(videoSource);
 
                             if (!rendered)
                             {
@@ -265,9 +265,9 @@ namespace SharpMediaFoundation.WPF
                             await control.InitializeAudio(audioSource);
                         }
 
-                        if (control._waveOut != null && control._waveOut.QueuedFrames < 4)
+                        if (control._waveOut != null && control._waveOut.QueuedFrames < 10)
                         {
-                            rendered = await control.DecodeAudioAsync(audioSource);
+                            rendered = control.DecodeAudio(audioSource);
 
                             if (!rendered)
                             {
@@ -281,9 +281,9 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        private async Task<bool> DecodeVideoAsync(IVideoSource videoSource)
+        private bool DecodeVideo(IVideoSource videoSource)
         {
-            var sample = await videoSource.GetVideoSample();
+            var sample = videoSource.GetVideoSample();
             if (sample != null)
             {
                 if (sample.Length > 0)
@@ -323,9 +323,9 @@ namespace SharpMediaFoundation.WPF
             return Task.CompletedTask;
         }
 
-        private async Task<bool> DecodeAudioAsync(IAudioSource audioSource)
+        private bool DecodeAudio(IAudioSource audioSource)
         {
-            var sample = await audioSource.GetAudioSample();
+            var sample = audioSource.GetAudioSample();
             if (sample != null)
             {
                 if (sample.Length > 0)

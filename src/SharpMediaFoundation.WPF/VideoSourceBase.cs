@@ -41,7 +41,7 @@ namespace SharpMediaFoundation.WPF
 
         public abstract Task InitializeAsync();
 
-        public virtual async Task<byte[]> GetAudioSample()
+        public virtual byte[] GetAudioSample()
         {
             var audioInfo = AudioInfo;
             if (audioInfo == null)
@@ -57,10 +57,10 @@ namespace SharpMediaFoundation.WPF
             if (_audioRenderQueue.TryDequeue(out var sample))
                 return sample;
 
-            byte[] frame;
-            while (_audioRenderQueue.Count == 0 && (frame = await ReadNextAudio()) != null)
+            IList<byte[]> frame;
+            while (_audioRenderQueue.Count == 0 && (frame = ReadNextAudio()) != null)
             {
-                if (_audioDecoder.ProcessInput(frame, 0))
+                if (_audioDecoder.ProcessInput(frame[0], 0))
                 {
                     while (_audioDecoder.ProcessOutput(ref _pcmBuffer, out var pcmSize))
                     {
@@ -90,9 +90,9 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        protected abstract Task<byte[]> ReadNextAudio();
+        protected abstract IList<byte[]> ReadNextAudio();
 
-        public virtual async Task<byte[]> GetVideoSample()
+        public virtual byte[] GetVideoSample()
         {
             var videoInfo = VideoInfo;
             if (videoInfo == null)
@@ -109,7 +109,7 @@ namespace SharpMediaFoundation.WPF
                 return sample;
 
             IList<byte[]> au;
-            while (_videoRenderQueue.Count == 0 && (au = await ReadNextVideo()) != null)
+            while (_videoRenderQueue.Count == 0 && (au = ReadNextVideo()) != null)
             {
                 foreach (var nalu in au)
                 {
@@ -160,7 +160,7 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        protected abstract Task<IList<byte[]>> ReadNextVideo();
+        protected abstract IList<byte[]> ReadNextVideo();
 
         protected virtual void CompletedVideo()
         {

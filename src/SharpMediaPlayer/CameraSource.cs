@@ -27,7 +27,7 @@ namespace SharpMediaFoundation.WPF
             VideoInfo = await OpenAsync();
         }
 
-        public Task<byte[]> GetVideoSample()
+        public byte[] GetVideoSample()
         {
             if (_device.ReadSample(_yuy2Buffer, out _))
             {
@@ -47,12 +47,12 @@ namespace SharpMediaFoundation.WPF
                             _bytesPerPixel,
                             true);
 
-                        return Task.FromResult(decoded);
+                        return decoded;
                     }
                 }
             }
 
-            return Task.FromResult(Empty); // indicates whether the stream has ended
+            return Empty; // indicates whether the stream has ended
         }
 
         private Task<VideoInfo> OpenAsync()

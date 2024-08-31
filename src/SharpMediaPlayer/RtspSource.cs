@@ -15,7 +15,7 @@ namespace SharpMediaFoundation.WPF
         private string _password;
 
         protected ConcurrentQueue<IList<byte[]>> _videoSampleQueue = new ConcurrentQueue<IList<byte[]>>();
-        protected ConcurrentQueue<byte[]> _audioSampleQueue = new ConcurrentQueue<byte[]>();
+        protected ConcurrentQueue<IList<byte[]>> _audioSampleQueue = new ConcurrentQueue<IList<byte[]>>();
 
         protected override bool IsStreaming { get { return true; } }
 
@@ -136,7 +136,7 @@ namespace SharpMediaFoundation.WPF
         {
             foreach (var sample in e.Data)
             {
-                _audioSampleQueue.Enqueue(sample.ToArray());
+                _audioSampleQueue.Enqueue(new List<byte[]> { sample.ToArray() });
             }
         }
 
@@ -145,20 +145,20 @@ namespace SharpMediaFoundation.WPF
             _videoSampleQueue.Enqueue(e.Data.Select(x => x.ToArray()).ToList());
         }
 
-        protected override Task<byte[]> ReadNextAudio()
+        protected override IList<byte[]> ReadNextAudio()
         {
             if (_audioSampleQueue.TryDequeue(out var frame))
-                return Task.FromResult(frame);
+                return frame;
             else
-                return Task.FromResult<byte[]>(null);
+                return null;
         }
 
-        protected override Task<IList<byte[]>> ReadNextVideo()
+        protected override IList<byte[]> ReadNextVideo()
         {
             if (_videoSampleQueue.TryDequeue(out var frame))
-                return Task.FromResult(frame);
+                return frame;
             else
-                return Task.FromResult<IList<byte[]>>(null);
+                return null;
         }
     }
 }

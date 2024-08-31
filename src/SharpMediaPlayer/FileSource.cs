@@ -30,25 +30,22 @@ namespace SharpMediaFoundation.WPF
             }
         }
 
-        protected override async Task<byte[]> ReadNextAudio()
+        protected override IList<byte[]> ReadNextAudio()
         {
-            var frame = await _fmp4.ReadNextTrack(_context, (int)_context.AudioTrackId);
-            return frame?.FirstOrDefault();
+            return _fmp4.ReadNextTrack(_context, (int)_context.AudioTrackId).Result;
         }
 
-        protected override async Task<IList<byte[]>> ReadNextVideo()
+        protected override IList<byte[]> ReadNextVideo()
         {
-            IList<byte[]> au;
             if (_initial)
             {
-                au = _context.VideoNALUs;
                 _initial = false;
+                return _context.VideoNALUs;
             }
             else
             {
-                au = await _fmp4.ReadNextTrack(_context, (int)_context.VideoTrackId); // TODO async
+                return _fmp4.ReadNextTrack(_context, (int)_context.VideoTrackId).Result; 
             }
-            return au;
         }
 
         protected override void CompletedVideo()
