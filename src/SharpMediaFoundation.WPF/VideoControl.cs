@@ -265,7 +265,7 @@ namespace SharpMediaFoundation.WPF
                             await control.InitializeAudio(audioSource);
                         }
 
-                        if (control._waveOut != null && control._waveOut.QueuedFrames < 10)
+                        if (control._waveOut != null && control._waveOut.QueuedFrames < 5)
                         {
                             rendered = control.DecodeAudio(audioSource);
 
