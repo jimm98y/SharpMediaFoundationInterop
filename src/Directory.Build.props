@@ -7,9 +7,9 @@
 		<Version>0.0.1</Version>
 		<Authors>Lukas Volf</Authors>
 		<Copyright>MIT</Copyright>
-		<PackageProjectUrl>https://github.com/jimm98y/SharpMediaFoundation</PackageProjectUrl>
+		<PackageProjectUrl>https://github.com/jimm98y/SharpMediaFoundationInterop</PackageProjectUrl>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<RepositoryUrl>https://github.com/jimm98y/SharpMediaFoundation</RepositoryUrl>
+		<RepositoryUrl>https://github.com/jimm98y/SharpMediaFoundationInterop</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackageTags>h264;camera;encoder;decoder;aac;wave;h265;desktop-capture;net8</PackageTags>
 		<NeutralLanguage>en-US</NeutralLanguage>

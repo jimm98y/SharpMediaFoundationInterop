@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using SharpMediaFoundation.Transforms;
-using SharpMediaFoundation.Utils;
+using SharpMediaFoundationInterop.Transforms;
+using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation.Input
+namespace SharpMediaFoundationInterop.Input
 {
     public class CaptureDevice
     {

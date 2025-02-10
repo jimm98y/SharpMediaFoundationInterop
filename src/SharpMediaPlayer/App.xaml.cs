@@ -2,7 +2,7 @@
 using System.Data;
 using System.Windows;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundationInterop
 {
     /// <summary>
     /// Interaction logic for App.xaml

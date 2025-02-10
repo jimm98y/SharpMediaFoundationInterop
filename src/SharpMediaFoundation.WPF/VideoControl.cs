@@ -1,4 +1,4 @@
-﻿using SharpMediaFoundation.Wave;
+﻿using SharpMediaFoundationInterop.Wave;
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -11,7 +11,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-namespace SharpMediaFoundation.WPF
+namespace SharpMediaFoundationInterop.WPF
 {
     [TemplatePart(Name = "PART_image", Type = typeof(Image))]
     public class VideoControl : Control, IDisposable

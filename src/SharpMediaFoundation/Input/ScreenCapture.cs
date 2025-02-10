@@ -8,11 +8,11 @@ using Windows.Win32.Foundation;
 using Windows.Win32.UI.HiDpi;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using SharpMediaFoundation.Utils;
-using SharpMediaFoundation.Transforms;
+using SharpMediaFoundationInterop.Utils;
+using SharpMediaFoundationInterop.Transforms;
 using System.Collections.Generic;
 
-namespace SharpMediaFoundation.Input
+namespace SharpMediaFoundationInterop.Input
 {
     public class ScreenDevice
     {

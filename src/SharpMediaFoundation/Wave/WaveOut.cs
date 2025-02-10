@@ -7,7 +7,7 @@ using Windows.Win32;
 using Windows.Win32.Media;
 using Windows.Win32.Media.Audio;
 
-namespace SharpMediaFoundation.Wave
+namespace SharpMediaFoundationInterop.Wave
 {
     public class WaveOutDevice
     {

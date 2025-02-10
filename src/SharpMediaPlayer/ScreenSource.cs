@@ -1,5 +1,5 @@
-﻿using SharpMediaFoundation.Input;
-using SharpMediaFoundation.Utils;
+﻿using SharpMediaFoundationInterop.Input;
+using SharpMediaFoundationInterop.Utils;
 using System.Buffers;
 using System.Windows.Media;
 
@@ -7,7 +7,7 @@ using System.Windows.Media;
 //  this is necessary for the SetProcessDpiAwarenessContext API to work. This API must be called before DuplicateOutput1...
 [assembly: DisableDpiAwareness]
 
-namespace SharpMediaFoundation.WPF
+namespace SharpMediaFoundationInterop.WPF
 {
     public class ScreenSource : IVideoSource
     {

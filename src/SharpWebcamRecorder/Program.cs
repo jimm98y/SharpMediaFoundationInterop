@@ -3,10 +3,10 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using SharpMp4;
-using SharpMediaFoundation.Utils;
-using SharpMediaFoundation.Input;
-using SharpMediaFoundation.Transforms.H265;
-using SharpMediaFoundation.Transforms.Colors;
+using SharpMediaFoundationInterop.Utils;
+using SharpMediaFoundationInterop.Input;
+using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Transforms.Colors;
 
 const string targetFileName = "webcam.mp4";
 const uint fpsNom = 24000;

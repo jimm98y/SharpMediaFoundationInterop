@@ -1,9 +1,9 @@
 ﻿using System;
-using SharpMediaFoundation.Utils;
+using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation.Transforms.H264
+namespace SharpMediaFoundationInterop.Transforms.H264
 {
     public class H264Encoder : VideoTransformBase
     {

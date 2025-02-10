@@ -1,9 +1,9 @@
 ﻿using System.Diagnostics;
 using SharpMp4;
-using SharpMediaFoundation.Input;
-using SharpMediaFoundation.Transforms.H265;
-using SharpMediaFoundation.Transforms.Colors;
-using SharpMediaFoundation.Utils;
+using SharpMediaFoundationInterop.Input;
+using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Transforms.Colors;
+using SharpMediaFoundationInterop.Utils;
 
 const string targetFileName = "screen.mp4";
 const uint fpsNom = 12000;

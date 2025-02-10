@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace SharpMediaFoundation.Transforms
+namespace SharpMediaFoundationInterop.Transforms
 {
     public interface IMediaOutput
     {

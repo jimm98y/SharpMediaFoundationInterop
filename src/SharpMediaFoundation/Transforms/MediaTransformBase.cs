@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
-using SharpMediaFoundation.Utils;
+using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
 using Windows.Win32.System.Com.StructuredStorage;
 
-namespace SharpMediaFoundation.Transforms
+namespace SharpMediaFoundationInterop.Transforms
 {
     /// <summary>
     /// Base media transform.

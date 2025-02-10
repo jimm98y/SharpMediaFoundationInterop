@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-namespace SharpMediaFoundation.Utils
+namespace SharpMediaFoundationInterop.Utils
 {
     public static class BitmapUtils
     {

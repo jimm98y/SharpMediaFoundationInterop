@@ -1,10 +1,10 @@
-﻿using SharpMediaFoundation.Input;
-using SharpMediaFoundation.Transforms.Colors;
-using SharpMediaFoundation.Utils;
+﻿using SharpMediaFoundationInterop.Input;
+using SharpMediaFoundationInterop.Transforms.Colors;
+using SharpMediaFoundationInterop.Utils;
 using System.Buffers;
 using Windows.Win32;
 
-namespace SharpMediaFoundation.WPF
+namespace SharpMediaFoundationInterop.WPF
 {
     public class CameraSource : IVideoSource
     {

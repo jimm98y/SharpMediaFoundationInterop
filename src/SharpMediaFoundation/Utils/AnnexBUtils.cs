@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 
-namespace SharpMediaFoundation.Utils
+namespace SharpMediaFoundationInterop.Utils
 {
     public static class AnnexBUtils
     {

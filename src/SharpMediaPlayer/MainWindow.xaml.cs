@@ -1,7 +1,7 @@
-﻿using SharpMediaFoundation.WPF;
+﻿using SharpMediaFoundationInterop.WPF;
 using System.Windows;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundationInterop
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml

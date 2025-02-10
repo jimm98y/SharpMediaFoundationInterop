@@ -1,9 +1,9 @@
 ﻿using System;
-using SharpMediaFoundation.Utils;
+using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation.Transforms
+namespace SharpMediaFoundationInterop.Transforms
 {
     public abstract class VideoTransformBase : MediaTransformBase, IMediaVideoTransform
     {

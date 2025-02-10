@@ -1,9 +1,9 @@
 ﻿using System;
-using SharpMediaFoundation.Utils;
+using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation.Transforms.AAC
+namespace SharpMediaFoundationInterop.Transforms.AAC
 {
     public class AACEncoder : AudioTransformBase
     {

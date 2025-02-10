@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace SharpMediaFoundation
+namespace SharpMediaFoundationInterop
 {
     public static class Log
     {

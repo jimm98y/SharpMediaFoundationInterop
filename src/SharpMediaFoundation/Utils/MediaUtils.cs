@@ -5,7 +5,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundation.Utils
+namespace SharpMediaFoundationInterop.Utils
 {
     public static class MediaUtils
     {

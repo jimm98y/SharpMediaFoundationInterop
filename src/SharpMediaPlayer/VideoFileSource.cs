@@ -1,10 +1,10 @@
-﻿using SharpMediaFoundation.Transforms.H264;
-using SharpMediaFoundation.Transforms.H265;
-using SharpMediaFoundation.Utils;
+﻿using SharpMediaFoundationInterop.Transforms.H264;
+using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Utils;
 using SharpMp4;
 using System.IO;
 
-namespace SharpMediaFoundation.WPF
+namespace SharpMediaFoundationInterop.WPF
 {
     public class VideoFileSource : VideoSourceBase
     {

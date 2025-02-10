@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 
-namespace SharpMediaFoundation.WPF
+namespace SharpMediaFoundationInterop.WPF
 {
     public enum PixelFormat
     {

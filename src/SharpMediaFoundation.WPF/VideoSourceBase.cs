@@ -3,16 +3,16 @@ using System.Buffers;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.Win32;
-using SharpMediaFoundation.Transforms;
-using SharpMediaFoundation.Transforms.AAC;
-using SharpMediaFoundation.Transforms.Colors;
-using SharpMediaFoundation.Transforms.H264;
-using SharpMediaFoundation.Transforms.H265;
-using SharpMediaFoundation.Utils;
+using SharpMediaFoundationInterop.Transforms;
+using SharpMediaFoundationInterop.Transforms.AAC;
+using SharpMediaFoundationInterop.Transforms.Colors;
+using SharpMediaFoundationInterop.Transforms.H264;
+using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Utils;
 using System.Threading;
 using System.Collections.Concurrent;
 
-namespace SharpMediaFoundation.WPF
+namespace SharpMediaFoundationInterop.WPF
 {
     public abstract class VideoSourceBase : IVideoSource, IAudioSource
     {

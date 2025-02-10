@@ -1,7 +1,7 @@
-﻿<Application x:Class="SharpMediaFoundation.App"
+﻿<Application x:Class="SharpMediaFoundationInterop.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:SharpMediaFoundation"
+             xmlns:local="clr-namespace:SharpMediaFoundationInterop"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
          
