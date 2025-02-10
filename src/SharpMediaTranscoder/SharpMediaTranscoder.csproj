@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SharpMediaFoundation\SharpMediaFoundationInterop.csproj" />
+    <ProjectReference Include="..\SharpMediaFoundationInterop\SharpMediaFoundationInterop.csproj" />
   </ItemGroup>
 
 </Project>

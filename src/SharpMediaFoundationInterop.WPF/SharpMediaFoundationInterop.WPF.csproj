@@ -8,10 +8,6 @@
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\SharpMediaFoundation\SharpMediaFoundationInterop.csproj" />
-  </ItemGroup>
-
 	<ItemGroup>
 		<AssemblyAttribute Include="System.Windows.ThemeInfoAttribute">
 			<_Parameter1>System.Windows.ResourceDictionaryLocation.None</_Parameter1>
@@ -19,5 +15,9 @@
 			<_Parameter2>System.Windows.ResourceDictionaryLocation.SourceAssembly</_Parameter2>
 			<_Parameter2_IsLiteral>true</_Parameter2_IsLiteral>
 		</AssemblyAttribute>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\SharpMediaFoundationInterop\SharpMediaFoundationInterop.csproj" />
 	</ItemGroup>
 </Project>

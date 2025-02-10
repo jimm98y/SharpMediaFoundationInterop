@@ -3,10 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34607.119
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharpMediaFoundationInterop", "SharpMediaFoundation\SharpMediaFoundationInterop.csproj", "{F7EFEAB9-781A-468B-B366-5F226AAB01A7}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharpMediaFoundationInterop.WPF", "SharpMediaFoundation.WPF\SharpMediaFoundationInterop.WPF.csproj", "{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SharpMediaTranscoder", "SharpMediaTranscoder\SharpMediaTranscoder.csproj", "{D302D7E5-EEAD-49F6-B379-7072C978BB8C}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{3B9EE83C-519B-429D-B04F-0757A81CC39B}"
@@ -26,20 +22,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMp4", "SharpMp4\SharpMp4.csproj", "{CBA22B75-ABBA-4E7B-BBF8-DF1BDC6C83F8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMediaFoundationInterop", "SharpMediaFoundationInterop\SharpMediaFoundationInterop.csproj", "{18D02311-D43A-46ED-A772-143E5E05463E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMediaFoundationInterop.WPF", "SharpMediaFoundationInterop.WPF\SharpMediaFoundationInterop.WPF.csproj", "{9D53C94C-179C-4581-906A-C0A4E7B5FB90}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{F7EFEAB9-781A-468B-B366-5F226AAB01A7}.Release|Any CPU.Build.0 = Release|Any CPU
-		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{2C6F7F05-E462-41C0-8CB6-7A09DC7B665B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{D302D7E5-EEAD-49F6-B379-7072C978BB8C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D302D7E5-EEAD-49F6-B379-7072C978BB8C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D302D7E5-EEAD-49F6-B379-7072C978BB8C}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -64,6 +56,14 @@ Global
 		{CBA22B75-ABBA-4E7B-BBF8-DF1BDC6C83F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CBA22B75-ABBA-4E7B-BBF8-DF1BDC6C83F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CBA22B75-ABBA-4E7B-BBF8-DF1BDC6C83F8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{18D02311-D43A-46ED-A772-143E5E05463E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{18D02311-D43A-46ED-A772-143E5E05463E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{18D02311-D43A-46ED-A772-143E5E05463E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{18D02311-D43A-46ED-A772-143E5E05463E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9D53C94C-179C-4581-906A-C0A4E7B5FB90}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D53C94C-179C-4581-906A-C0A4E7B5FB90}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9D53C94C-179C-4581-906A-C0A4E7B5FB90}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9D53C94C-179C-4581-906A-C0A4E7B5FB90}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
