@@ -265,7 +265,7 @@ namespace SharpMediaFoundation.WPF
                             await control.InitializeAudio(audioSource);
                         }
 
-                        if (control._waveOut != null && control._waveOut.QueuedFrames < 4)
+                        if (control._waveOut != null && control._waveOut.QueuedFrames < 5)
                         {
                             rendered = control.DecodeAudio(audioSource);
 
@@ -283,9 +283,10 @@ namespace SharpMediaFoundation.WPF
 
         private bool DecodeVideo(IVideoSource videoSource)
         {
-            if (videoSource.GetVideoSample(out var sample))
+            var sample = videoSource.GetVideoSample();
+            if (sample != null)
             {
-                if (sample != null)
+                if (sample.Length > 0)
                 {
                     _videoOut.Enqueue(sample);
                 }
@@ -324,9 +325,10 @@ namespace SharpMediaFoundation.WPF
 
         private bool DecodeAudio(IAudioSource audioSource)
         {
-            if (audioSource.GetAudioSample(out var sample))
+            var sample = audioSource.GetAudioSample();
+            if (sample != null)
             {
-                if (sample != null)
+                if (sample.Length > 0)
                 {
                     if (_isMute)
                     {

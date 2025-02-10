@@ -20,15 +20,13 @@ namespace SharpMediaFoundation.WPF
         public AudioInfo AudioInfo { get; protected set; }
 
         protected virtual bool IsStreaming { get; }
+        public byte[] Empty { get; private set; } = new byte[0];
 
         protected IMediaVideoTransform _videoDecoder;
         protected IMediaVideoTransform _nv12Decoder;
         protected IMediaAudioTransform _audioDecoder;
 
-        protected ConcurrentQueue<IList<byte[]>> _videoSampleQueue = new ConcurrentQueue<IList<byte[]>>();
         protected ConcurrentQueue<byte[]> _videoRenderQueue = new ConcurrentQueue<byte[]>();
-
-        protected ConcurrentQueue<byte[]> _audioSampleQueue = new ConcurrentQueue<byte[]>();
         protected ConcurrentQueue<byte[]> _audioRenderQueue = new ConcurrentQueue<byte[]>();
 
         protected byte[] _nv12Buffer;
@@ -43,19 +41,26 @@ namespace SharpMediaFoundation.WPF
 
         public abstract Task InitializeAsync();
 
-        public virtual bool GetAudioSample(out byte[] sample)
+        public virtual byte[] GetAudioSample()
         {
-            if(_audioDecoder == null)
+            var audioInfo = AudioInfo;
+            if (audioInfo == null)
             {
-                CreateAudioDecoder(AudioInfo);
+                return null;
             }
 
-            if (_audioRenderQueue.TryDequeue(out sample))
-                return true;
-
-            while (_audioRenderQueue.Count == 0 && _audioSampleQueue.TryDequeue(out var frame))
+            if (_audioDecoder == null)
             {
-                if (_audioDecoder.ProcessInput(frame, 0))
+                CreateAudioDecoder(audioInfo);
+            }
+
+            if (_audioRenderQueue.TryDequeue(out var sample))
+                return sample;
+
+            IList<byte[]> frame;
+            while (_audioRenderQueue.Count == 0 && (frame = ReadNextAudio()) != null)
+            {
+                if (_audioDecoder.ProcessInput(frame[0], 0))
                 {
                     while (_audioDecoder.ProcessOutput(ref _pcmBuffer, out var pcmSize))
                     {
@@ -69,39 +74,46 @@ namespace SharpMediaFoundation.WPF
 
             if (_audioRenderQueue.TryDequeue(out sample))
             {
-                return true;
+                return sample;
             }
             else
             {
                 if (IsStreaming)
                 {
-                    sample = null;
-                    return true;
+                    return Empty;
                 }
                 else
                 {
                     CompletedAudio();
-                    sample = null;
-                    return false;
+                    return null;
                 }
             }
         }
 
-        public virtual bool GetVideoSample(out byte[] sample)
+        protected abstract IList<byte[]> ReadNextAudio();
+
+        public virtual byte[] GetVideoSample()
         {
-            if (_videoDecoder == null || _nv12Decoder == null)
+            var videoInfo = VideoInfo;
+            if (videoInfo == null)
             {
-                CreateVideoDecoder(VideoInfo);
+                return null;
             }
 
-            if (_videoRenderQueue.TryDequeue(out sample))
-                return true;
+            if (_videoDecoder == null || _nv12Decoder == null)
+            {
+                CreateVideoDecoder(videoInfo);
+            }
 
-            while (_videoRenderQueue.Count == 0 && _videoSampleQueue.TryDequeue(out var au))
+            if (_videoRenderQueue.TryDequeue(out var sample))
+                return sample;
+
+            IList<byte[]> au;
+            while (_videoRenderQueue.Count == 0 && (au = ReadNextVideo()) != null)
             {
                 foreach (var nalu in au)
                 {
-                    long videoTime = _videoFrames * 10000L / (VideoInfo.FpsNom / VideoInfo.FpsDenom);
+                    long videoTime = _videoFrames * 10000L / (videoInfo.FpsNom / videoInfo.FpsDenom);
                     if (_videoDecoder.ProcessInput(nalu, videoTime))
                     {
                         while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out _))
@@ -114,11 +126,11 @@ namespace SharpMediaFoundation.WPF
 
                                 BitmapUtils.CopyBitmap(
                                     _rgbBuffer,
-                                    (int)VideoInfo.Width,
-                                    (int)VideoInfo.Height,
+                                    (int)videoInfo.Width,
+                                    (int)videoInfo.Height,
                                     decoded,
-                                    (int)VideoInfo.OriginalWidth,
-                                    (int)VideoInfo.OriginalHeight,
+                                    (int)videoInfo.OriginalWidth,
+                                    (int)videoInfo.OriginalHeight,
                                     _bytesPerPixel,
                                     true);
 
@@ -132,23 +144,23 @@ namespace SharpMediaFoundation.WPF
 
             if (_videoRenderQueue.TryDequeue(out sample))
             {
-                return true;
+                return sample;
             }
             else
             {
                 if (IsStreaming)
                 {
-                    sample = null;
-                    return true;
+                    return Empty;
                 }
                 else
                 {
                     CompletedVideo();
-                    sample = null;
-                    return false;
+                    return null;
                 }
             }
         }
+
+        protected abstract IList<byte[]> ReadNextVideo();
 
         protected virtual void CompletedVideo()
         {

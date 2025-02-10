@@ -7,23 +7,34 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+	<GeneratePackageOnBuild>False</GeneratePackageOnBuild>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="test.heic" />
+  </ItemGroup>
 
   <ItemGroup>
     <Content Include="frag_bunny.mp4">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+	  <Content Include="fragmented_320_1000.mp4">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
+	  <Content Include="test.heic">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Content>
 	<Content Include="test1.mp4" Condition="Exists('test1.mp4')">
 		<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 	</Content>
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="SharpMp4" Version="0.0.7" />
     <PackageReference Include="SharpRTSPClient" Version="0.0.4" />
   </ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\..\..\SharpMP4\src\SharpMp4\SharpMp4.csproj" />
 	  <ProjectReference Include="..\SharpMediaFoundation.WPF\SharpMediaFoundation.WPF.csproj" />
 	</ItemGroup>
 

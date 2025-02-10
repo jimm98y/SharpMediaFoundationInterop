@@ -3,6 +3,7 @@ using SharpMediaFoundation.Transforms.H265;
 using SharpMediaFoundation.Utils;
 using SharpMp4;
 using SharpRTSPClient;
+using System.Collections.Concurrent;
 
 namespace SharpMediaFoundation.WPF
 {
@@ -12,6 +13,9 @@ namespace SharpMediaFoundation.WPF
         private string _uri;
         private string _userName;
         private string _password;
+
+        protected ConcurrentQueue<IList<byte[]>> _videoSampleQueue = new ConcurrentQueue<IList<byte[]>>();
+        protected ConcurrentQueue<IList<byte[]>> _audioSampleQueue = new ConcurrentQueue<IList<byte[]>>();
 
         protected override bool IsStreaming { get { return true; } }
 
@@ -132,13 +136,29 @@ namespace SharpMediaFoundation.WPF
         {
             foreach (var sample in e.Data)
             {
-                _audioSampleQueue.Enqueue(sample.ToArray());
+                _audioSampleQueue.Enqueue(new List<byte[]> { sample.ToArray() });
             }
         }
 
         private void _rtspClient_ReceivedVideoData(object sender, SimpleDataEventArgs e)
         {
             _videoSampleQueue.Enqueue(e.Data.Select(x => x.ToArray()).ToList());
+        }
+
+        protected override IList<byte[]> ReadNextAudio()
+        {
+            if (_audioSampleQueue.TryDequeue(out var frame))
+                return frame;
+            else
+                return null;
+        }
+
+        protected override IList<byte[]> ReadNextVideo()
+        {
+            if (_videoSampleQueue.TryDequeue(out var frame))
+                return frame;
+            else
+                return null;
         }
     }
 }
