@@ -34,8 +34,8 @@
   </ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\..\SharpMP4\src\SharpMp4\SharpMp4.csproj" />
 	  <ProjectReference Include="..\SharpMediaFoundation.WPF\SharpMediaFoundation.WPF.csproj" />
+	  <ProjectReference Include="..\SharpMp4\SharpMp4.csproj" />
 	</ItemGroup>
 
 
