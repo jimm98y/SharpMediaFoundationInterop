@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SharpMediaFoundationInterop\SharpMediaFoundationInteropInterop.csproj" />
+    <ProjectReference Include="..\SharpMediaFoundation\SharpMediaFoundationInterop.csproj" />
   </ItemGroup>
 
 </Project>
