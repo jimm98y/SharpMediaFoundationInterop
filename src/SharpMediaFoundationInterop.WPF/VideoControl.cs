@@ -313,7 +313,7 @@ namespace SharpMediaFoundationInterop.WPF
                 lock (_waveSync)
                 {
                     this._waveOut = new WaveOut();
-                    this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.Channels, audioInfo.BitsPerSample);
+                    this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.ChannelCount, audioInfo.BitsPerSample);
                }
             }
         }

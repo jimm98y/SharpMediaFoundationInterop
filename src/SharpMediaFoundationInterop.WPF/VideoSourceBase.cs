@@ -206,7 +206,7 @@ namespace SharpMediaFoundationInterop.WPF
             // decoders must be created on the same thread as the samples
             if (info.AudioCodec == "AAC")
             {
-                _audioDecoder = new AACDecoder(info.Channels, info.SampleRate, AACDecoder.CreateUserData(info.UserData));
+                _audioDecoder = new AACDecoder(info.ChannelCount, info.SampleRate, AACDecoder.CreateUserData(info.UserData), info.ChannelConfiguration);
                 _audioDecoder.Initialize();
             }
             else

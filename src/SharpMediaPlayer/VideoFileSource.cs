@@ -156,7 +156,8 @@ namespace SharpMediaFoundationInterop.WPF
                         audioInfo.AudioCodec = "AAC";
                         audioInfo.BitsPerSample = 16;
                         audioInfo.UserData = aacTrack.AudioSpecificConfig.ToBytes();
-                        audioInfo.Channels = aacTrack.ChannelConfiguration;
+                        audioInfo.ChannelCount = aacTrack.ChannelCount;
+                        audioInfo.ChannelConfiguration = aacTrack.ChannelConfiguration;
                         audioInfo.SampleRate = aacTrack.SamplingRate;
                     }
                     else

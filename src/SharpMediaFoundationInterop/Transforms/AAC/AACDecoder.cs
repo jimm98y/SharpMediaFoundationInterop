@@ -12,8 +12,9 @@ namespace SharpMediaFoundationInterop.Transforms.AAC
         public override Guid OutputFormat => PInvoke.MFAudioFormat_PCM;
 
         public byte[] UserData { get; private set; }
+        public int ChannelConfiguration { get; set; }
 
-        public AACDecoder(uint channels, uint sampleRate, byte[] userData)
+        public AACDecoder(uint channels, uint sampleRate, byte[] userData, int channelConfiguration)
           : base(1024, channels, sampleRate, 16) // PCM = 16 bit, Float = 32 bit
         {
             if (sampleRate != 44100 && sampleRate != 48000)
@@ -29,6 +30,7 @@ namespace SharpMediaFoundationInterop.Transforms.AAC
             }
 
             UserData = userData;
+            ChannelConfiguration = channelConfiguration;
         }
 
         protected override IMFTransform Create()
@@ -48,9 +50,9 @@ namespace SharpMediaFoundationInterop.Transforms.AAC
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
-            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
+            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, (uint)ChannelConfiguration);
             //mediaInput.SetUINT32(PInvoke.MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION, 0x2A);
-            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 16000 * Channels);
+            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 16000 * (uint)ChannelConfiguration);
             mediaInput.SetUINT32(PInvoke.MF_MT_AAC_PAYLOAD_TYPE, 0); // 0 = Raw, 1 = ADTS
             mediaInput.SetBlob(PInvoke.MF_MT_USER_DATA, UserData);
             MediaUtils.Check(transform.SetInputType(streamId, mediaInput, 0));

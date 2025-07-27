@@ -115,7 +115,7 @@ namespace SharpMediaFoundationInterop.WPF
                     descriptor.SyncExtensionType = 695; // TODO
 
                     audioInfo.UserData = descriptor.ToBytes();
-                    audioInfo.Channels = (uint)aaccfg.ChannelConfiguration;
+                    audioInfo.ChannelCount = (uint)aaccfg.ChannelConfiguration;
                     audioInfo.SampleRate = AudioSpecificConfigDescriptor.SamplingFrequencyMap[(uint)aaccfg.FrequencyIndex];
                 }
                 else

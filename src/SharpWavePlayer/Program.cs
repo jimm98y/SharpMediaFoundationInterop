@@ -24,16 +24,17 @@ using (Stream sourceFileStream = new BufferedStream(new FileStream(sourceFileNam
         var audioDescriptor = sourceAudioSampleBox.GetAudioSpecificConfigDescriptor();
 
         byte[] audioSpecificConfig = await audioDescriptor.ToBytes();
-        uint channels = (uint)audioDescriptor.ChannelConfiguration;
+        uint channelCount = sourceAudioSampleBox.ChannelCount;
+        int channelConfiguration = audioDescriptor.ChannelConfiguration;
         uint sampleRate = (uint)audioDescriptor.GetSamplingFrequency();
-        using (var audioDecoder = new AACDecoder(channels, sampleRate, AACDecoder.CreateUserData(audioSpecificConfig)))
+        using (var audioDecoder = new AACDecoder(channelCount, sampleRate, AACDecoder.CreateUserData(audioSpecificConfig), channelConfiguration))
         {
             audioDecoder.Initialize();
 
             byte[] pcmBuffer = new byte[audioDecoder.OutputSize];
             using (var waveOut = new WaveOut())
             {
-                waveOut.Initialize(sampleRate, channels, 16);
+                waveOut.Initialize(sampleRate, channelCount, 16);
 
                 foreach (var audioFrame in sourceParsedMdat[sourceAudioTrackId].First())
                 {
