@@ -11,10 +11,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Remove="test.heic" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <Content Include="bunny.mp4">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="frag_bunny.mp4">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -34,8 +33,8 @@
   </ItemGroup>
 
 	<ItemGroup>
+	  <ProjectReference Include="..\..\..\SharpMP4BoxGenerator\src\SharpMP4\SharpMP4.csproj" />
 	  <ProjectReference Include="..\SharpMediaFoundationInterop.WPF\SharpMediaFoundationInterop.WPF.csproj" />
-	  <ProjectReference Include="..\SharpMp4\SharpMp4.csproj" />
 	</ItemGroup>
 
 

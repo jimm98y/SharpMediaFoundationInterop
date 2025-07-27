@@ -1,7 +1,12 @@
-﻿using SharpMediaFoundationInterop.Transforms.H264;
+﻿using SharpH264;
+using SharpH265;
+using SharpISOBMFF;
+using SharpISOBMFF.Extensions;
+using SharpMediaFoundationInterop.Transforms.H264;
 using SharpMediaFoundationInterop.Transforms.H265;
 using SharpMediaFoundationInterop.Utils;
-using SharpMp4;
+using SharpMP4.Readers;
+using SharpMP4.Tracks;
 using System.IO;
 
 namespace SharpMediaFoundationInterop.WPF
@@ -10,10 +15,11 @@ namespace SharpMediaFoundationInterop.WPF
     {
         private string _path;
         private BufferedStream _fs;
-        private FragmentedMp4 _fmp4;
         private bool _initial = true;
 
-        private FragmentedMp4Extensions.MdatParserContext _context;
+        private Mp4Reader _reader;
+        private ITrack _videoTrack;
+        private ITrack _audioTrack;
 
         public VideoFileSource(string path)
         {
@@ -32,20 +38,37 @@ namespace SharpMediaFoundationInterop.WPF
 
         protected override IList<byte[]> ReadNextAudio()
         {
-            return _fmp4.ReadNextTrackAsync(_context, (int)_context.AudioTrackId).Result;
+            if (_audioTrack != null)
+            {
+                var sample = _reader.ReadSample(_audioTrack.TrackID);
+                if (sample != null)
+                {
+                    IEnumerable<byte[]> units = _reader.ParseSample(_audioTrack.TrackID, sample.Data);
+                    return units.ToList();
+                }
+            }
+            return null;
         }
 
         protected override IList<byte[]> ReadNextVideo()
         {
-            if (_initial)
+            if (_videoTrack != null)
             {
-                _initial = false;
-                return _context.VideoNALUs;
+                if (_initial)
+                {
+                    _initial = false;
+                    var videoUnits = _videoTrack.GetContainerSamples();
+                    return videoUnits.ToList();
+                }
+
+                var sample = _reader.ReadSample(_videoTrack.TrackID);
+                if (sample != null)
+                {
+                    IEnumerable<byte[]> units = _reader.ParseSample(_videoTrack.TrackID, sample.Data);
+                    return units.ToList();
+                }
             }
-            else
-            {
-                return _fmp4.ReadNextTrackAsync(_context, (int)_context.VideoTrackId).Result;
-            }
+            return null;
         }
 
         protected override void CompletedVideo()
@@ -62,7 +85,7 @@ namespace SharpMediaFoundationInterop.WPF
             base.CompletedAudio();
         }
 
-        private async Task<(VideoInfo Video, AudioInfo Audio)> LoadFileAsync(string fileName)
+        private Task<(VideoInfo Video, AudioInfo Audio)> LoadFileAsync(string fileName)
         {
             VideoInfo videoInfo = new VideoInfo();
             AudioInfo audioInfo = null;
@@ -74,67 +97,67 @@ namespace SharpMediaFoundationInterop.WPF
             }
 
             _fs = new BufferedStream(new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read));
-            _fmp4 = await FragmentedMp4.ParseAsync(_fs);
+            var mp4 = new Container();
+            mp4.Read(new IsoStream(_fs));
 
-            var videoTrackBox = _fmp4.FindVideoTracks()?.FirstOrDefault();
-            var audioTrackBox = _fmp4.FindAudioTracks()?.FirstOrDefault();
+            _reader = new Mp4Reader();
+            _reader.Parse(mp4);
+            IEnumerable<ITrack> inputTracks = _reader.GetTracks();
 
-            if (videoTrackBox != null || audioTrackBox != null)
+            _videoTrack = inputTracks.FirstOrDefault(t => t.HandlerType == HandlerTypes.Video);
+            _audioTrack = inputTracks.FirstOrDefault(t => t.HandlerType == HandlerTypes.Sound);
+
+            if (_videoTrack != null || _audioTrack != null)
             {
-                _context = await _fmp4.ParseMdatAsync();
                 _initial = true;
 
-                var videoTrackId = videoTrackBox?.GetTkhd().TrackId;
-                var audioTrackId = audioTrackBox?.GetTkhd().TrackId;
+                if (_videoTrack != null)
+                {
+                    if (_videoTrack is H264Track h264Track)
+                    {
+                        videoInfo.VideoCodec = "H264";
 
-                var vsbox =
-                    videoTrackBox
-                        .GetMdia()
-                        .GetMinf()
-                        .GetStbl()
-                        .GetStsd()
-                        .Children.Single((Mp4Box x) => x is VisualSampleEntryBox) as VisualSampleEntryBox;
-                videoInfo.OriginalWidth = vsbox.Width;
-                videoInfo.OriginalHeight = vsbox.Height;
-                videoInfo.FpsNom = _context.CalculateTimescale(videoTrackBox);
-                videoInfo.FpsDenom = _context.CalculateSampleDuration(videoTrackBox);
-                if (vsbox.Children.FirstOrDefault(x => x is AvcConfigurationBox) != null)
-                {
-                    videoInfo.VideoCodec = "H264";
-                    videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
-                    videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
-                }
-                else if (vsbox.Children.FirstOrDefault(x => x is HevcConfigurationBox) != null)
-                {
-                    videoInfo.VideoCodec = "H265";
-                    videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
-                    videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
-                }
-                else
-                {
-                    throw new NotSupportedException();
+                        var dimensions = h264Track.Sps.First().Value.CalculateDimensions();
+                        videoInfo.OriginalWidth = dimensions.Width;
+                        videoInfo.OriginalHeight = dimensions.Height;
+
+                        videoInfo.FpsNom = h264Track.Timescale;
+                        videoInfo.FpsDenom = (uint)h264Track.DefaultSampleDuration;
+
+                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
+                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
+                    }
+                    else if (_videoTrack is H265Track h265Track)
+                    {
+                        videoInfo.VideoCodec = "H265";
+
+                        var dimensions = h265Track.Sps.First().Value.CalculateDimensions();
+                        videoInfo.OriginalWidth = dimensions.Width;
+                        videoInfo.OriginalHeight = dimensions.Height;
+
+                        videoInfo.FpsNom = h265Track.Timescale;
+                        videoInfo.FpsDenom = (uint)h265Track.DefaultSampleDuration;
+
+                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
+                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
+                    }
+                    else
+                    {
+                        throw new NotSupportedException();
+                    }
                 }
 
-                if (audioTrackBox != null)
+                if (_audioTrack != null)
                 {
                     audioInfo = new AudioInfo();
 
-                    var sourceAudioSampleBox =
-                        audioTrackBox
-                            .GetMdia()
-                            .GetMinf()
-                            .GetStbl()
-                            .GetStsd()
-                            .Children.Single((Mp4Box x) => x is AudioSampleEntryBox) as AudioSampleEntryBox;
-                    var audioDescriptor = sourceAudioSampleBox.GetAudioSpecificConfigDescriptor();
-
-                    if (sourceAudioSampleBox.Type == AudioSampleEntryBox.TYPE3)
+                    if (_audioTrack is AACTrack aacTrack)
                     {
                         audioInfo.AudioCodec = "AAC";
                         audioInfo.BitsPerSample = 16;
-                        audioInfo.UserData = await audioDescriptor.ToBytes();
-                        audioInfo.Channels = (uint)audioDescriptor.ChannelConfiguration;
-                        audioInfo.SampleRate = (uint)audioDescriptor.GetSamplingFrequency();
+                        audioInfo.UserData = aacTrack.AudioSpecificConfig.ToBytes();
+                        audioInfo.Channels = aacTrack.ChannelConfiguration;
+                        audioInfo.SampleRate = aacTrack.SamplingRate;
                     }
                     else
                     {
@@ -147,7 +170,7 @@ namespace SharpMediaFoundationInterop.WPF
                 throw new NotSupportedException();
             }
 
-            return (videoInfo, audioInfo);
+            return Task.FromResult((videoInfo, audioInfo));
         }
 
         protected override void Dispose(bool disposing)
