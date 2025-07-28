@@ -1,7 +1,9 @@
-﻿using SharpH264;
+﻿using SharpAV1;
+using SharpH264;
 using SharpH265;
 using SharpISOBMFF;
 using SharpISOBMFF.Extensions;
+using SharpMediaFoundationInterop.Transforms.AV1;
 using SharpMediaFoundationInterop.Transforms.H264;
 using SharpMediaFoundationInterop.Transforms.H265;
 using SharpMediaFoundationInterop.Utils;
@@ -140,6 +142,20 @@ namespace SharpMediaFoundationInterop.WPF
 
                         videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
                         videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
+                    }
+                    else if (_videoTrack is AV1Track av1Track)
+                    {
+                        videoInfo.VideoCodec = "AV1";
+
+                        var dimensions = av1Track.SequenceHeaderObu.CalculateDimensions();
+                        videoInfo.OriginalWidth = dimensions.Width;
+                        videoInfo.OriginalHeight = dimensions.Height;
+
+                        videoInfo.FpsNom = av1Track.Timescale;
+                        videoInfo.FpsDenom = (uint)av1Track.DefaultSampleDuration;
+
+                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, AV1Decoder.AV1_RES_MULTIPLE);
+                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, AV1Decoder.AV1_RES_MULTIPLE);
                     }
                     else
                     {

@@ -11,6 +11,7 @@ using SharpMediaFoundationInterop.Transforms.H265;
 using SharpMediaFoundationInterop.Utils;
 using System.Threading;
 using System.Collections.Concurrent;
+using SharpMediaFoundationInterop.Transforms.AV1;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -184,6 +185,11 @@ namespace SharpMediaFoundationInterop.WPF
             else if (info.VideoCodec == "H265")
             {
                 _videoDecoder = new H265Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
+                _videoDecoder.Initialize();
+            }
+            else if (info.VideoCodec == "AV1")
+            {
+                _videoDecoder = new AV1Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
                 _videoDecoder.Initialize();
             }
             else

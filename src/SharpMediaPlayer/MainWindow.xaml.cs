@@ -12,6 +12,7 @@ namespace SharpMediaFoundationInterop
         //public IVideoSource Source { get { return new CameraSource(); } }
         //public IVideoSource Source { get { return new ImageFileSource("test.heic"); } } // heic
         //public IVideoSource Source { get { return new VideoFileSource("frag_bunny.mp4"); } } // H264
+        //public IVideoSource Source { get { return new VideoFileSource("C:\\Temp\\002.mp4"); } } // AV1
         public IVideoSource Source { get { return new VideoFileSource("bunny.mp4"); } } // H264
         //public IVideoSource Source { get { return new VideoFileSource("test1.mp4"); } } // H265
         //public IVideoSource Source { get { return new VideoFileSource("fragmented_320_1000.mp4"); } } // H264
@@ -21,6 +22,9 @@ namespace SharpMediaFoundationInterop
         {
             InitializeComponent();
             this.DataContext = this;
+
+            SharpISOBMFF.Log.SinkDebug = (m, e) => { };
+            SharpISOBMFF.Log.SinkInfo = (m, e) => { };
         }
     }
 }
