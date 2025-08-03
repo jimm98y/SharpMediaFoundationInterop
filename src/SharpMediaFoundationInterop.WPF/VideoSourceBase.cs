@@ -187,6 +187,11 @@ namespace SharpMediaFoundationInterop.WPF
                 _videoDecoder = new H265Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
                 _videoDecoder.Initialize();
             }
+            else if (info.VideoCodec == "H266")
+            {
+                // H266 is as of 8/3/2025 not supported by Media Foundation
+                throw new NotSupportedException();
+            }
             else if (info.VideoCodec == "AV1")
             {
                 _videoDecoder = new AV1Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
