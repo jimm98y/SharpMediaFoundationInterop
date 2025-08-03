@@ -28,12 +28,9 @@
 	</Content>
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="SharpRTSPClient" Version="0.0.4" />
-  </ItemGroup>
-
 	<ItemGroup>
 	  <ProjectReference Include="..\..\..\SharpMP4BoxGenerator\src\SharpMP4\SharpMP4.csproj" />
+	  <ProjectReference Include="..\..\..\SharpRealTimeStreaming\src\SharpRTSPClient\SharpRTSPClient.csproj" />
 	  <ProjectReference Include="..\SharpMediaFoundationInterop.WPF\SharpMediaFoundationInterop.WPF.csproj" />
 	</ItemGroup>
 

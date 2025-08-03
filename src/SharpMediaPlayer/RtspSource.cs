@@ -87,6 +87,22 @@ namespace SharpMediaFoundationInterop.WPF
 
                     videoInfo.VideoCodec = "H265";
                 }
+                else if (e.StreamConfigurationData is H266StreamConfigurationData h266cfg)
+                {
+                    // H266 is as of 8/3/2025 not supported by Media Foundation
+                    throw new NotSupportedException();
+                }
+                else if(e.StreamType == "AV1")
+                {
+                    videoInfo = new VideoInfo();
+                    
+                    //videoInfo.OriginalWidth = 1280;
+                    //videoInfo.OriginalHeight = 720;
+                    //videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, 1);
+                    //videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, 1);
+
+                    videoInfo.VideoCodec = "AV1";
+                }
                 else
                 {
                     throw new NotSupportedException();

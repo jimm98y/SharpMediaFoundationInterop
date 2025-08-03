@@ -26,6 +26,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMediaFoundationInterop
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpMP4", "..\..\SharpMP4BoxGenerator\src\SharpMP4\SharpMP4.csproj", "{BA94815A-1C87-F271-A2E5-05458F7A07BC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpRTSPClient", "..\..\SharpRealTimeStreaming\src\SharpRTSPClient\SharpRTSPClient.csproj", "{A0408782-2365-41B6-570A-9846A6E62875}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -64,6 +66,10 @@ Global
 		{BA94815A-1C87-F271-A2E5-05458F7A07BC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BA94815A-1C87-F271-A2E5-05458F7A07BC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BA94815A-1C87-F271-A2E5-05458F7A07BC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A0408782-2365-41B6-570A-9846A6E62875}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A0408782-2365-41B6-570A-9846A6E62875}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A0408782-2365-41B6-570A-9846A6E62875}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A0408782-2365-41B6-570A-9846A6E62875}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
