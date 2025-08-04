@@ -129,6 +129,14 @@ namespace SharpMediaFoundationInterop.WPF
                     audioInfo.ChannelCount = (uint)aaccfg.ChannelConfiguration;
                     audioInfo.SampleRate = AudioSpecificConfigDescriptor.SamplingFrequencyMap[(uint)aaccfg.FrequencyIndex];
                 }
+                else if(e.StreamType == "OPUS")
+                {
+                    audioInfo = new AudioInfo();
+                    audioInfo.AudioCodec = "OPUS";
+                    audioInfo.BitsPerSample = 16;
+                    audioInfo.ChannelCount = 2;
+                    audioInfo.SampleRate = 48000;
+                }
                 else
                 {
                     throw new NotSupportedException();

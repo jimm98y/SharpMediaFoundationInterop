@@ -12,6 +12,7 @@ using SharpMediaFoundationInterop.Utils;
 using System.Threading;
 using System.Collections.Concurrent;
 using SharpMediaFoundationInterop.Transforms.AV1;
+using SharpMediaFoundationInterop.Transforms.Opus;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -218,6 +219,11 @@ namespace SharpMediaFoundationInterop.WPF
             if (info.AudioCodec == "AAC")
             {
                 _audioDecoder = new AACDecoder(info.ChannelCount, info.SampleRate, AACDecoder.CreateUserData(info.UserData), info.ChannelConfiguration);
+                _audioDecoder.Initialize();
+            }
+            else if (info.AudioCodec == "OPUS")
+            {
+                _audioDecoder = new OpusDecoder(info.ChannelCount, info.SampleRate);
                 _audioDecoder.Initialize();
             }
             else

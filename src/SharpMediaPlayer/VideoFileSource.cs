@@ -176,6 +176,14 @@ namespace SharpMediaFoundationInterop.WPF
                         audioInfo.ChannelConfiguration = aacTrack.ChannelConfiguration;
                         audioInfo.SampleRate = aacTrack.SamplingRate;
                     }
+                    else if(_audioTrack is OpusTrack opusTrack)
+                    {
+                        audioInfo.AudioCodec = "OPUS";
+                        audioInfo.BitsPerSample = 16;
+                        audioInfo.ChannelCount = opusTrack.ChannelCount;
+                        audioInfo.ChannelConfiguration = opusTrack.ChannelCount;
+                        audioInfo.SampleRate = opusTrack.SamplingRate;
+                    }
                     else
                     {
                         throw new NotSupportedException();
