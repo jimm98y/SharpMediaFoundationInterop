@@ -1,42 +1,40 @@
 ﻿using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using SharpMp4;
 using SharpMediaFoundationInterop.Wave;
 using SharpMediaFoundationInterop.Transforms.AAC;
+using SharpISOBMFF;
+using SharpMP4.Readers;
+using System.Collections.Generic;
+using SharpMP4.Tracks;
+using SharpISOBMFF.Extensions;
 
 const string sourceFileName = "frag_bunny.mp4";
 
-using (Stream sourceFileStream = new BufferedStream(new FileStream(sourceFileName, FileMode.Open, FileAccess.Read, FileShare.Read)))
+using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName, FileMode.Open, FileAccess.Read, FileShare.Read)))
 {
-    using (var sourceFile = await FragmentedMp4.ParseAsync(sourceFileStream))
+    var mp4 = new Container();
+    mp4.Read(new IsoStream(inputFileStream));
+
+    Mp4Reader inputReader = new Mp4Reader();
+    inputReader.Parse(mp4);
+    IEnumerable<ITrack> inputTracks = inputReader.GetTracks();
+    AACTrack aacTrack = inputTracks.OfType<AACTrack>().First();
+
+    using (var audioDecoder = new AACDecoder(aacTrack.ChannelCount, aacTrack.SamplingRate, AACDecoder.CreateUserData(aacTrack.AudioSpecificConfig.ToBytes()), aacTrack.ChannelConfiguration))
     {
-        var sourceAudioTrackBox = sourceFile.FindAudioTracks().FirstOrDefault();
-        var sourceParsedMdat = await sourceFile.ParseMdatAsync();
-        var sourceAudioTrackId = sourceFile.FindAudioTrackID().First();
-        var sourceAudioSampleBox =
-            sourceAudioTrackBox
-                .GetMdia()
-                .GetMinf()
-                .GetStbl()
-                .GetStsd()
-                .Children.Single((Mp4Box x) => x is AudioSampleEntryBox) as AudioSampleEntryBox;
-        var audioDescriptor = sourceAudioSampleBox.GetAudioSpecificConfigDescriptor();
+        audioDecoder.Initialize();
 
-        byte[] audioSpecificConfig = await audioDescriptor.ToBytes();
-        uint channelCount = sourceAudioSampleBox.ChannelCount;
-        int channelConfiguration = audioDescriptor.ChannelConfiguration;
-        uint sampleRate = (uint)audioDescriptor.GetSamplingFrequency();
-        using (var audioDecoder = new AACDecoder(channelCount, sampleRate, AACDecoder.CreateUserData(audioSpecificConfig), channelConfiguration))
+        byte[] pcmBuffer = new byte[audioDecoder.OutputSize];
+        using (var waveOut = new WaveOut())
         {
-            audioDecoder.Initialize();
+            waveOut.Initialize(aacTrack.SamplingRate, aacTrack.ChannelCount, 16);
 
-            byte[] pcmBuffer = new byte[audioDecoder.OutputSize];
-            using (var waveOut = new WaveOut())
+            Mp4Sample sample;
+            while ((sample = inputReader.ReadSample(aacTrack.TrackID)) != null)
             {
-                waveOut.Initialize(sampleRate, channelCount, 16);
-
-                foreach (var audioFrame in sourceParsedMdat[sourceAudioTrackId].First())
+                IEnumerable<byte[]> audioFrames = inputReader.ParseSample(aacTrack.TrackID, sample.Data);
+                foreach (var audioFrame in audioFrames)
                 {
                     if (audioDecoder.ProcessInput(audioFrame, 0))
                     {
@@ -44,7 +42,7 @@ using (Stream sourceFileStream = new BufferedStream(new FileStream(sourceFileNam
                         {
                             waveOut.Enqueue(pcmBuffer, pcmSize);
 
-                            while(waveOut.QueuedFrames > 250)
+                            while (waveOut.QueuedFrames > 250)
                             {
                                 await Task.Delay(50);
                             }

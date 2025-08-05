@@ -1,31 +1,33 @@
 ﻿using System.Diagnostics;
-using SharpMp4;
 using SharpMediaFoundationInterop.Input;
 using SharpMediaFoundationInterop.Transforms.H265;
 using SharpMediaFoundationInterop.Transforms.Colors;
 using SharpMediaFoundationInterop.Utils;
+using SharpMP4.Tracks;
+using SharpMP4.Builders;
 
 const string targetFileName = "screen.mp4";
 const uint fpsNom = 12000;
 const uint fpsDenom = 1001;
 Stopwatch stopwatch = new Stopwatch();
 
-using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileName, FileMode.Create, FileAccess.Write, FileShare.Read)))
+using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMode.Create, FileAccess.Write, FileShare.Read)))
 {
-    using (FragmentedMp4Builder targetFile = new FragmentedMp4Builder(new SingleStreamOutput(targetFileStream)))
+    IMp4Builder outputBuilder = new Mp4Builder(new SingleStreamOutput(output));
+
+    var targetVideoTrack = new H265Track();
+    outputBuilder.AddTrack(targetVideoTrack);
+
+    using (var screenCapture = new ScreenCapture())
     {
-        var targetVideoTrack = new H265Track();
-        targetFile.AddTrack(targetVideoTrack);
+        screenCapture.Initialize();
 
-        using (var screenCapture = new ScreenCapture())
+        using (var videoEncoder = new H265Encoder(screenCapture.Width, screenCapture.Height, fpsNom, fpsDenom, 80000000))
         {
-            screenCapture.Initialize();
+            videoEncoder.Initialize();
 
-            using (var videoEncoder = new H265Encoder(screenCapture.Width, screenCapture.Height, fpsNom, fpsDenom, 80000000))
+            using (var colorConverter = new ColorConverter(screenCapture.OutputFormat, videoEncoder.InputFormat, screenCapture.Width, screenCapture.Height))
             {
-                videoEncoder.Initialize();
-
-                ColorConverter colorConverter = new ColorConverter(screenCapture.OutputFormat, videoEncoder.InputFormat, screenCapture.Width, screenCapture.Height);
                 colorConverter.Initialize();
 
                 var rgbaBuffer = new byte[screenCapture.OutputSize];
@@ -36,6 +38,7 @@ using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileNam
                 stopwatch.Start();
                 long lastframe = 0;
                 long frameDuration = 1000 * fpsDenom / fpsNom;
+
                 while (!Console.KeyAvailable)
                 {
                     if (stopwatch.ElapsedTicks - lastframe < frameDuration)
@@ -46,7 +49,7 @@ using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileNam
 
                     lastframe = stopwatch.ElapsedTicks;
 
-                    if(screenCapture.ReadSample(rgbaBuffer, out var timestamp))
+                    if (screenCapture.ReadSample(rgbaBuffer, out var timestamp))
                     {
                         if (colorConverter.ProcessInput(rgbaBuffer, timestamp))
                         {
@@ -59,7 +62,7 @@ using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileNam
                                         var targetAU = AnnexBUtils.ParseNalu(naluBuffer, length);
                                         foreach (var targetNALU in targetAU)
                                         {
-                                            await targetVideoTrack.ProcessSampleAsync(targetNALU);
+                                            outputBuilder.ProcessTrackSample(targetVideoTrack.TrackID, targetNALU);
                                         }
                                     }
                                 }
@@ -70,7 +73,6 @@ using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileNam
             }
         }
 
-        await targetVideoTrack.FlushAsync();
-        await targetFile.FlushAsync();
+        outputBuilder.FinalizeMedia();
     }
 }

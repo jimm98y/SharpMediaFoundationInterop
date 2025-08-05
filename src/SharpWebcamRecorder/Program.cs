@@ -2,32 +2,34 @@
 using System.IO;
 using System.Threading.Tasks;
 using System.Diagnostics;
-using SharpMp4;
 using SharpMediaFoundationInterop.Utils;
 using SharpMediaFoundationInterop.Input;
 using SharpMediaFoundationInterop.Transforms.H265;
 using SharpMediaFoundationInterop.Transforms.Colors;
+using SharpMP4.Builders;
+using SharpMP4.Tracks;
 
 const string targetFileName = "webcam.mp4";
 const uint fpsNom = 24000;
 const uint fpsDenom = 1001;
 Stopwatch stopwatch = new Stopwatch();
 
-using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileName, FileMode.Create, FileAccess.Write, FileShare.Read)))
+using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMode.Create, FileAccess.Write, FileShare.Read)))
 {
-    using (FragmentedMp4Builder targetFile = new FragmentedMp4Builder(new SingleStreamOutput(targetFileStream)))
-    {
-        var targetVideoTrack = new H265Track();
-        targetFile.AddTrack(targetVideoTrack);
-                
-        using (var camera = new DeviceCapture())
-        {
-            camera.Initialize();
-            using (var videoEncoder = new H265Encoder(camera.Width, camera.Height, fpsNom, fpsDenom))
-            {
-                videoEncoder.Initialize();
+    IMp4Builder outputBuilder = new Mp4Builder(new SingleStreamOutput(output));
 
-                ColorConverter colorConverter = new ColorConverter(camera.OutputFormat, videoEncoder.InputFormat, camera.Width, camera.Height);
+    var targetVideoTrack = new H265Track();
+    outputBuilder.AddTrack(targetVideoTrack);
+                
+    using (var camera = new DeviceCapture())
+    {
+        camera.Initialize();
+        using (var videoEncoder = new H265Encoder(camera.Width, camera.Height, fpsNom, fpsDenom))
+        {
+            videoEncoder.Initialize();
+
+            using (var colorConverter = new ColorConverter(camera.OutputFormat, videoEncoder.InputFormat, camera.Width, camera.Height))
+            { 
                 colorConverter.Initialize();
 
                 var yuy2Buffer = new byte[camera.OutputSize];
@@ -38,6 +40,7 @@ using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileNam
                 stopwatch.Start();
                 long lastframe = 0;
                 long frameDuration = 1000 * fpsDenom / fpsNom;
+
                 while (!Console.KeyAvailable)
                 {
                     if (stopwatch.ElapsedTicks - lastframe < frameDuration)
@@ -61,7 +64,7 @@ using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileNam
                                         var targetAU = AnnexBUtils.ParseNalu(naluBuffer, length);
                                         foreach (var targetNALU in targetAU)
                                         {
-                                            await targetVideoTrack.ProcessSampleAsync(targetNALU);
+                                            outputBuilder.ProcessTrackSample(targetVideoTrack.TrackID, targetNALU);
                                         }
                                     }
                                 }
@@ -72,7 +75,6 @@ using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileNam
             }
         }
 
-        await targetVideoTrack.FlushAsync();
-        await targetFile.FlushAsync();
+        outputBuilder.FinalizeMedia();
     }
 }
