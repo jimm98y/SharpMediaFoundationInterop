@@ -223,7 +223,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
             else if (info.AudioCodec == "OPUS")
             {
-                _audioDecoder = new OpusDecoder(info.ChannelCount, info.SampleRate);
+                _audioDecoder = new OpusDecoder(960, info.ChannelCount, info.SampleRate);
                 _audioDecoder.Initialize();
             }
             else

@@ -8,9 +8,9 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
     public class OpusDecoder : AudioTransformBase
     {
         public override Guid InputFormat => PInvoke.MFAudioFormat_Opus;
-        public override Guid OutputFormat => PInvoke.MFAudioFormat_PCM;
+        public override Guid OutputFormat => PInvoke.MFAudioFormat_Float;
 
-        public OpusDecoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000) : base(sampleDuration, channels, sampleRate, 16)
+        public OpusDecoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000, uint bitsPerSample = 16) : base(sampleDuration, channels, sampleRate, bitsPerSample)
         {
         }
 

@@ -7,10 +7,10 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
 {
     public class OpusEncoder : AudioTransformBase
     {
-        public override Guid InputFormat => PInvoke.MFAudioFormat_PCM;
+        public override Guid InputFormat => PInvoke.MFAudioFormat_Float;
         public override Guid OutputFormat => PInvoke.MFAudioFormat_Opus;
 
-        public OpusEncoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000) : base(sampleDuration, channels, sampleRate, 16)
+        public OpusEncoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000, uint bitsPerSample = 16) : base(sampleDuration, channels, sampleRate, bitsPerSample)
         {
         }
 
@@ -32,7 +32,6 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 16000 * Channels);
             MediaUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             IMFMediaType mediaInput;
@@ -40,7 +39,7 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
             mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
-            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
+            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_FLOAT_SAMPLES_PER_SECOND, SampleRate);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
             MediaUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
