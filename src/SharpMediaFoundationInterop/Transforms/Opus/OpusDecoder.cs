@@ -39,9 +39,9 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 384000);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_CHANNEL_MASK, 3);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BLOCK_ALIGNMENT, 8);
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, SampleRate * (BitsPerSample / 8) * Channels);
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_CHANNEL_MASK, 3); // see https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ksmedia/ns-ksmedia-waveformatextensible
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BLOCK_ALIGNMENT, Channels * (BitsPerSample / 8));
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
