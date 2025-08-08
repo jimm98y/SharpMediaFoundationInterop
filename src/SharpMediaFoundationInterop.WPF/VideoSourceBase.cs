@@ -68,22 +68,23 @@ namespace SharpMediaFoundationInterop.WPF
                     {
                         if (_audioDecoder is OpusDecoder)
                         {
-                            byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize / 2);
-                            for (int i = 0; i < decoded.Length / 2; i++)
+                            byte[] decoded = new byte[(int)pcmSize];
+                            for (int i = 0; i < pcmSize / 4; i++)
                             {
                                 float ieeeFloat = BitConverter.ToSingle(_pcmBuffer, i * 4);
                                 ieeeFloat = Math.Clamp(ieeeFloat, -1.0f, 1.0f);                                
-                                short pcm = (short)(ieeeFloat * 32767);
-                                byte[] outSample = BitConverter.GetBytes(pcm);
-                                decoded[i * 2] = outSample[0];
-                                decoded[i * 2 + 1] = outSample[1];
+                                int pcm = (int)(ieeeFloat * int.MaxValue);
+                                decoded[i * 4 + 0] = (byte)((pcm & 0x000000FF) >> 0);
+                                decoded[i * 4 + 1] = (byte)((pcm & 0x0000FF00) >> 8);
+                                decoded[i * 4 + 2] = (byte)((pcm & 0x00FF0000) >> 16);
+                                decoded[i * 4 + 3] = (byte)((pcm & 0xFF000000) >> 24);
                             }
                             _audioRenderQueue.Enqueue(decoded);
                             Interlocked.Increment(ref _audioFrames);
                         }
                         else
                         {
-                            byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize);
+                            byte[] decoded = new byte[(int)pcmSize];
                             Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
                             _audioRenderQueue.Enqueue(decoded);
                             Interlocked.Increment(ref _audioFrames);
@@ -241,7 +242,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
             else if (info.AudioCodec == "OPUS")
             {
-                _audioDecoder = new OpusDecoder(0, info.ChannelCount, info.SampleRate);
+                _audioDecoder = new OpusDecoder(960, info.ChannelCount, info.SampleRate, info.BitsPerSample);
                 _audioDecoder.Initialize();
             }
             else
@@ -258,9 +259,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public void ReturnAudioSample(byte[] decoded)
-        {
-            ArrayPool<byte>.Shared.Return(decoded);
-        }
+        {  }
 
         protected virtual void Dispose(bool disposing)
         {

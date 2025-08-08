@@ -133,7 +133,7 @@ namespace SharpMediaFoundationInterop.WPF
                 {
                     audioInfo = new AudioInfo();
                     audioInfo.AudioCodec = "OPUS";
-                    audioInfo.BitsPerSample = 16;
+                    audioInfo.BitsPerSample = 32;
                     audioInfo.ChannelCount = 2;
                     audioInfo.SampleRate = 48000;
                 }

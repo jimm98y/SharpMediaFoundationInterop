@@ -10,7 +10,7 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
         public override Guid InputFormat => PInvoke.MFAudioFormat_Float;
         public override Guid OutputFormat => PInvoke.MFAudioFormat_Opus;
 
-        public OpusEncoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000, uint bitsPerSample = 32) : base(sampleDuration, channels, sampleRate, 32)
+        public OpusEncoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000, uint bitsPerSample = 32) : base(sampleDuration, channels, sampleRate, bitsPerSample)
         {
         }
 
