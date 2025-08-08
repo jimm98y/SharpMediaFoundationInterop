@@ -10,7 +10,7 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
         public override Guid InputFormat => PInvoke.MFAudioFormat_Opus;
         public override Guid OutputFormat => PInvoke.MFAudioFormat_Float;
 
-        public OpusDecoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000, uint bitsPerSample = 32) : base(sampleDuration, channels, sampleRate, bitsPerSample)
+        public OpusDecoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000, uint bitsPerSample = 32) : base(sampleDuration, channels, sampleRate, 32) // Opus is always 32 bit
         {
         }
 
@@ -32,7 +32,6 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
-            mediaInput.SetDouble(PInvoke.MF_MT_AUDIO_FLOAT_SAMPLES_PER_SECOND, SampleRate);
             MediaUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
             IMFMediaType mediaOutput;
@@ -40,7 +39,7 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, SampleRate * (BitsPerSample / 8) * Channels);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_CHANNEL_MASK, 3); // see https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ksmedia/ns-ksmedia-waveformatextensible
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_CHANNEL_MASK, 1 + 2); // left + right = stereo, see https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ksmedia/ns-ksmedia-waveformatextensible
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BLOCK_ALIGNMENT, Channels * (BitsPerSample / 8));
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);

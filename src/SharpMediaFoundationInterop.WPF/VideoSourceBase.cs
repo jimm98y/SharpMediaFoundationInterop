@@ -66,10 +66,28 @@ namespace SharpMediaFoundationInterop.WPF
                 {
                     while (_audioDecoder.ProcessOutput(ref _pcmBuffer, out var pcmSize))
                     {
-                        byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize);
-                        Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
-                        _audioRenderQueue.Enqueue(decoded);
-                        Interlocked.Increment(ref _audioFrames);
+                        if (_audioDecoder is OpusDecoder)
+                        {
+                            byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize / 2);
+                            for (int i = 0; i < decoded.Length / 2; i++)
+                            {
+                                float ieeeFloat = BitConverter.ToSingle(_pcmBuffer, i * 4);
+                                ieeeFloat = Math.Clamp(ieeeFloat, -1.0f, 1.0f);                                
+                                short pcm = (short)(ieeeFloat * 32767);
+                                byte[] outSample = BitConverter.GetBytes(pcm);
+                                decoded[i * 2] = outSample[0];
+                                decoded[i * 2 + 1] = outSample[1];
+                            }
+                            _audioRenderQueue.Enqueue(decoded);
+                            Interlocked.Increment(ref _audioFrames);
+                        }
+                        else
+                        {
+                            byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize);
+                            Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
+                            _audioRenderQueue.Enqueue(decoded);
+                            Interlocked.Increment(ref _audioFrames);
+                        }
                     }
                 }
             }
@@ -223,7 +241,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
             else if (info.AudioCodec == "OPUS")
             {
-                _audioDecoder = new OpusDecoder(960, info.ChannelCount, info.SampleRate);
+                _audioDecoder = new OpusDecoder(0, info.ChannelCount, info.SampleRate);
                 _audioDecoder.Initialize();
             }
             else
