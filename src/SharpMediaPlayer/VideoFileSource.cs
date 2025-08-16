@@ -186,7 +186,9 @@ namespace SharpMediaFoundationInterop.WPF
                     }
                     else
                     {
-                        throw new NotSupportedException();
+                        //throw new NotSupportedException();
+                        // no audio
+                        audioInfo = null;
                     }
                 }
             }
