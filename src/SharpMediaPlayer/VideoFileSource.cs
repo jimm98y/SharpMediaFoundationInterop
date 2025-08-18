@@ -19,7 +19,7 @@ namespace SharpMediaFoundationInterop.WPF
         private BufferedStream _fs;
         private bool _initial = true;
 
-        private Mp4Reader _reader;
+        private VideoReader _reader;
         private ITrack _videoTrack;
         private ITrack _audioTrack;
 
@@ -102,7 +102,7 @@ namespace SharpMediaFoundationInterop.WPF
             var mp4 = new Container();
             mp4.Read(new IsoStream(_fs));
 
-            _reader = new Mp4Reader();
+            _reader = new VideoReader();
             _reader.Parse(mp4);
             IEnumerable<ITrack> inputTracks = _reader.GetTracks();
 
