@@ -11,6 +11,8 @@ using SharpMediaFoundationInterop.Transforms.H265;
 using SharpMediaFoundationInterop.Utils;
 using System.Threading;
 using System.Collections.Concurrent;
+using SharpMediaFoundationInterop.Transforms.AV1;
+using SharpMediaFoundationInterop.Transforms.Opus;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -64,10 +66,29 @@ namespace SharpMediaFoundationInterop.WPF
                 {
                     while (_audioDecoder.ProcessOutput(ref _pcmBuffer, out var pcmSize))
                     {
-                        byte[] decoded = ArrayPool<byte>.Shared.Rent((int)pcmSize);
-                        Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
-                        _audioRenderQueue.Enqueue(decoded);
-                        Interlocked.Increment(ref _audioFrames);
+                        if (_audioDecoder is OpusDecoder)
+                        {
+                            byte[] decoded = new byte[(int)pcmSize];
+                            for (int i = 0; i < pcmSize / 4; i++)
+                            {
+                                float ieeeFloat = BitConverter.ToSingle(_pcmBuffer, i * 4);
+                                ieeeFloat = Math.Clamp(ieeeFloat, -1.0f, 1.0f);                                
+                                int pcm = (int)(ieeeFloat * int.MaxValue);
+                                decoded[i * 4 + 0] = (byte)((pcm & 0x000000FF) >> 0);
+                                decoded[i * 4 + 1] = (byte)((pcm & 0x0000FF00) >> 8);
+                                decoded[i * 4 + 2] = (byte)((pcm & 0x00FF0000) >> 16);
+                                decoded[i * 4 + 3] = (byte)((pcm & 0xFF000000) >> 24);
+                            }
+                            _audioRenderQueue.Enqueue(decoded);
+                            Interlocked.Increment(ref _audioFrames);
+                        }
+                        else
+                        {
+                            byte[] decoded = new byte[(int)pcmSize];
+                            Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
+                            _audioRenderQueue.Enqueue(decoded);
+                            Interlocked.Increment(ref _audioFrames);
+                        }
                     }
                 }
             }
@@ -186,6 +207,16 @@ namespace SharpMediaFoundationInterop.WPF
                 _videoDecoder = new H265Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
                 _videoDecoder.Initialize();
             }
+            else if (info.VideoCodec == "H266")
+            {
+                // H266 is as of 8/3/2025 not supported by Media Foundation
+                throw new NotSupportedException();
+            }
+            else if (info.VideoCodec == "AV1")
+            {
+                _videoDecoder = new AV1Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
+                _videoDecoder.Initialize();
+            }
             else
             {
                 throw new NotSupportedException();
@@ -206,7 +237,12 @@ namespace SharpMediaFoundationInterop.WPF
             // decoders must be created on the same thread as the samples
             if (info.AudioCodec == "AAC")
             {
-                _audioDecoder = new AACDecoder(info.Channels, info.SampleRate, AACDecoder.CreateUserData(info.UserData));
+                _audioDecoder = new AACDecoder(info.ChannelCount, info.SampleRate, AACDecoder.CreateUserData(info.UserData), info.ChannelConfiguration);
+                _audioDecoder.Initialize();
+            }
+            else if (info.AudioCodec == "OPUS")
+            {
+                _audioDecoder = new OpusDecoder(960, info.ChannelCount, info.SampleRate, info.BitsPerSample);
                 _audioDecoder.Initialize();
             }
             else
@@ -223,9 +259,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public void ReturnAudioSample(byte[] decoded)
-        {
-            ArrayPool<byte>.Shared.Return(decoded);
-        }
+        {  }
 
         protected virtual void Dispose(bool disposing)
         {

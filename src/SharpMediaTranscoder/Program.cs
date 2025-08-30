@@ -1,74 +1,78 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using SharpMp4;
+using SharpH264;
+using SharpISOBMFF;
 using SharpMediaFoundationInterop.Transforms.H264;
 using SharpMediaFoundationInterop.Transforms.H265;
 using SharpMediaFoundationInterop.Utils;
+using SharpMP4.Builders;
+using SharpMP4.Readers;
+using SharpMP4.Tracks;
 
 const string sourceFileName = "frag_bunny.mp4";
 const string targetFileName = "frag_bunny_out.mp4";
 
-using (Stream sourceFileStream = new BufferedStream(new FileStream(sourceFileName, FileMode.Open, FileAccess.Read, FileShare.Read)))
+using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName, FileMode.Open, FileAccess.Read, FileShare.Read)))
 {
-    using (var sourceFile = await FragmentedMp4.ParseAsync(sourceFileStream))
+    var mp4 = new Container();
+    mp4.Read(new IsoStream(inputFileStream));
+
+    VideoReader inputReader = new VideoReader();
+    inputReader.Parse(mp4);
+    IEnumerable<ITrack> inputTracks = inputReader.GetTracks();
+    H264Track inputVideoTrack = inputTracks.OfType<H264Track>().First();
+    AACTrack inputAudioTrack = inputTracks.OfType<AACTrack>().First();
+
+    var dimensions = inputVideoTrack.Sps.First().Value.CalculateDimensions();
+
+    using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMode.Create, FileAccess.Write, FileShare.Read)))
     {
-        var sourceVideoTrackBox = sourceFile.FindVideoTracks().FirstOrDefault();
-        var sourceParsedMdat = await sourceFile.ParseMdatAsync();
-        var sourceVideoTrackId = sourceFile.FindVideoTrackID().First();
-        var sourceVisualSampleBox =
-            sourceVideoTrackBox
-                .GetMdia()
-                .GetMinf()
-                .GetStbl()
-                .GetStsd()
-                .Children.Single((Mp4Box x) => x is VisualSampleEntryBox) as VisualSampleEntryBox;
-        var sourceOriginalWidth = sourceVisualSampleBox.Width;
-        var sourceOriginalHeight = sourceVisualSampleBox.Height;
-        var sourceFpsNom = sourceFile.CalculateTimescale(sourceVideoTrackBox);
-        var sourceFpsDenom = sourceFile.CalculateSampleDuration(sourceVideoTrackBox);
+        IMp4Builder outputBuilder = new Mp4Builder(new SingleStreamOutput(output));
+        var targetVideoTrack = new H265Track();
+        outputBuilder.AddTrack(targetVideoTrack);
 
-        using (Stream targetFileStream = new BufferedStream(new FileStream(targetFileName, FileMode.Create, FileAccess.Write, FileShare.Read)))
+        var targetAudioTrack = inputAudioTrack.Clone();
+        outputBuilder.AddTrack(targetAudioTrack);
+
+        using (var videoDecoder = new H264Decoder(dimensions.Width, dimensions.Height, inputVideoTrack.Timescale, (uint)inputVideoTrack.DefaultSampleDuration))
         {
-            using (FragmentedMp4Builder targetFile = new FragmentedMp4Builder(new SingleStreamOutput(targetFileStream)))
+            videoDecoder.Initialize();
+            using (var videoEncoder = new H265Encoder(dimensions.Width, dimensions.Height, inputVideoTrack.Timescale, (uint)inputVideoTrack.DefaultSampleDuration))
             {
-                var targetVideoTrack = new H265Track();
-                targetFile.AddTrack(targetVideoTrack);
+                videoEncoder.Initialize();
 
-                if (sourceVisualSampleBox.Children.FirstOrDefault(x => x is AvcConfigurationBox) != null)
+                var nv12Buffer = new byte[videoDecoder.OutputSize];
+                var naluBuffer = new byte[videoEncoder.OutputSize];
+
+                byte[] croppedNV12 = new byte[dimensions.Width * dimensions.Height * 3 / 2];
+
+                var videoUnits = inputVideoTrack.GetContainerSamples();
+                foreach (var unit in videoUnits)
                 {
-                    using (var videoDecoder = new H264Decoder(sourceOriginalWidth, sourceOriginalHeight, sourceFpsNom, sourceFpsDenom))
+                    videoDecoder.ProcessInput(unit, 0);
+                }
+
+                MediaSample sample = null;
+                while ((sample = inputReader.ReadSample(inputVideoTrack.TrackID)) != null)
+                {
+                    IEnumerable<byte[]> units = inputReader.ParseSample(inputVideoTrack.TrackID, sample.Data);
+                    foreach (var sourceNALU in units)
                     {
-                        videoDecoder.Initialize();
-                        using (var videoEncoder = new H265Encoder(sourceOriginalWidth, sourceOriginalHeight, sourceFpsNom, sourceFpsDenom))
+                        if (videoDecoder.ProcessInput(sourceNALU, 0))
                         {
-                            videoEncoder.Initialize();
-
-                            var nv12Buffer = new byte[videoDecoder.OutputSize];
-                            var naluBuffer = new byte[videoEncoder.OutputSize];
-
-                            byte[] croppedNV12 = new byte[sourceOriginalWidth * sourceOriginalHeight * 3 / 2];
-
-                            foreach (var sourceAU in sourceParsedMdat[sourceVideoTrackId])
+                            while (videoDecoder.ProcessOutput(ref nv12Buffer, out _))
                             {
-                                foreach (var sourceNALU in sourceAU)
+                                // crop the green border from decoded H264
+                                BitmapUtils.CopyNV12Bitmap(nv12Buffer, (int)videoDecoder.Width, (int)videoDecoder.Height, croppedNV12, (int)dimensions.Width, (int)dimensions.Height, false);
+                                if (videoEncoder.ProcessInput(croppedNV12, 0))
                                 {
-                                    if (videoDecoder.ProcessInput(sourceNALU, 0))
+                                    while (videoEncoder.ProcessOutput(ref naluBuffer, out var length))
                                     {
-                                        while (videoDecoder.ProcessOutput(ref nv12Buffer, out _))
+                                        var targetAU = AnnexBUtils.ParseNalu(naluBuffer, length);
+                                        foreach (var targetNALU in targetAU)
                                         {
-                                            // crop the green border from decoded H264
-                                            BitmapUtils.CopyNV12Bitmap(nv12Buffer, (int)videoDecoder.Width, (int)videoDecoder.Height, croppedNV12, sourceOriginalWidth, sourceOriginalHeight, false);
-                                            if (videoEncoder.ProcessInput(croppedNV12, 0))
-                                            {
-                                                while (videoEncoder.ProcessOutput(ref naluBuffer, out var length))
-                                                {
-                                                    var targetAU = AnnexBUtils.ParseNalu(naluBuffer, length);
-                                                    foreach (var targetNALU in targetAU)
-                                                    {
-                                                        await targetVideoTrack.ProcessSampleAsync(targetNALU);
-                                                    }
-                                                }
-                                            }
+                                            outputBuilder.ProcessTrackSample(targetVideoTrack.TrackID, targetNALU);
                                         }
                                     }
                                 }
@@ -77,9 +81,13 @@ using (Stream sourceFileStream = new BufferedStream(new FileStream(sourceFileNam
                     }
                 }
 
-                await targetVideoTrack.FlushAsync();
-                await targetFile.FlushAsync();
+                while ((sample = inputReader.ReadSample(inputAudioTrack.TrackID)) != null)
+                {
+                    outputBuilder.ProcessTrackSample(targetAudioTrack.TrackID, sample.Data, sample.Duration);
+                }
             }
         }
+
+        outputBuilder.FinalizeMedia();
     }
 }

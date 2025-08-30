@@ -1,9 +1,15 @@
-﻿using SharpMediaFoundationInterop.Transforms.H264;
+﻿using SharpAV1;
+using SharpH264;
+using SharpH265;
+using SharpH26X;
+using SharpISOBMFF;
+using SharpISOBMFF.Extensions;
+using SharpMediaFoundationInterop.Transforms.H264;
 using SharpMediaFoundationInterop.Transforms.H265;
 using SharpMediaFoundationInterop.Utils;
-using SharpMp4;
 using SharpRTSPClient;
 using System.Collections.Concurrent;
+using System.IO;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -51,7 +57,7 @@ namespace SharpMediaFoundationInterop.WPF
                     videoInfo = new VideoInfo();
                     _videoSampleQueue.Enqueue(new List<byte[]> { h264cfg.SPS, h264cfg.PPS });
 
-                    var decodedSPS = H264SpsNalUnit.Parse(h264cfg.SPS);
+                    var decodedSPS = ParseH264SPS(h264cfg.SPS);
                     var dimensions = decodedSPS.CalculateDimensions();
                     videoInfo.OriginalWidth = dimensions.Width;
                     videoInfo.OriginalHeight = dimensions.Height;
@@ -69,7 +75,7 @@ namespace SharpMediaFoundationInterop.WPF
                     videoInfo = new VideoInfo(); 
                     _videoSampleQueue.Enqueue(new List<byte[]> { h265cfg.VPS, h265cfg.SPS, h265cfg.PPS });
 
-                    var decodedSPS = H265SpsNalUnit.Parse(h265cfg.SPS);
+                    var decodedSPS = ParseH265SPS(h265cfg.SPS);
                     var dimensions = decodedSPS.CalculateDimensions();
                     videoInfo.OriginalWidth = dimensions.Width;
                     videoInfo.OriginalHeight = dimensions.Height;
@@ -81,6 +87,16 @@ namespace SharpMediaFoundationInterop.WPF
                     videoInfo.FpsDenom = (uint)timescale.FrameTick;
 
                     videoInfo.VideoCodec = "H265";
+                }
+                else if (e.StreamConfigurationData is H266StreamConfigurationData h266cfg)
+                {
+                    // H266 is as of 8/3/2025 not supported by Media Foundation
+                    throw new NotSupportedException();
+                }
+                else if(e.StreamType == "AV1")
+                {
+                    videoInfo = new VideoInfo();
+                    videoInfo.VideoCodec = "AV1";
                 }
                 else
                 {
@@ -101,18 +117,25 @@ namespace SharpMediaFoundationInterop.WPF
                     audioInfo.AudioCodec = "AAC"; 
                     audioInfo.BitsPerSample = 16;
 
-                    var descriptor = new AudioSpecificConfigDescriptor();
-                    descriptor.SamplingFrequencyIndex = aaccfg.FrequencyIndex;
-                    descriptor.ChannelConfiguration = aaccfg.ChannelConfiguration;
-                    descriptor.ExtensionAudioObjectType = 5; // TODO
-                    descriptor.GaSpecificConfig = true;
-                    descriptor.OriginalAudioObjectType = 2; // AAC
-                    descriptor.OuterSyncExtensionType = 695; // TODO
+                    var descriptor = new AudioSpecificConfig();
+                    descriptor.SamplingFrequencyIndex = (byte)aaccfg.FrequencyIndex;
+                    descriptor.ChannelConfiguration = (byte)aaccfg.ChannelConfiguration;
+                    descriptor.ExtensionAudioObjectType = new GetAudioObjectType() { AudioObjectTypeExt = 5 }; // TODO
+                    descriptor.AudioObjectType = new GetAudioObjectType() { AudioObjectType = 2 }; // TODO simplify API
+                    descriptor._GASpecificConfig = new GASpecificConfig((int)AudioSpecificConfigDescriptor.SamplingFrequencyMap[(uint)aaccfg.FrequencyIndex], aaccfg.ChannelConfiguration, 2);
                     descriptor.SyncExtensionType = 695; // TODO
 
-                    audioInfo.UserData = descriptor.ToBytes().Result;
-                    audioInfo.Channels = (uint)aaccfg.ChannelConfiguration;
-                    audioInfo.SampleRate = (uint)AudioSpecificConfigDescriptor.SamplingFrequencyMap[aaccfg.FrequencyIndex];
+                    audioInfo.UserData = descriptor.ToBytes();
+                    audioInfo.ChannelCount = (uint)aaccfg.ChannelConfiguration;
+                    audioInfo.SampleRate = AudioSpecificConfigDescriptor.SamplingFrequencyMap[(uint)aaccfg.FrequencyIndex];
+                }
+                else if(e.StreamType == "OPUS")
+                {
+                    audioInfo = new AudioInfo();
+                    audioInfo.AudioCodec = "OPUS";
+                    audioInfo.BitsPerSample = 32;
+                    audioInfo.ChannelCount = 2;
+                    audioInfo.SampleRate = 48000;
                 }
                 else
                 {
@@ -121,28 +144,100 @@ namespace SharpMediaFoundationInterop.WPF
             };
             _rtspClient.SetupMessageCompleted += (o, e) =>
             {
-                tcsSetupCompleted.SetResult(true);
+                if (videoInfo != null && videoInfo.Width > 0 && videoInfo.Height > 0)
+                {
+                    tcsSetupCompleted.SetResult(true);
+                }
             };
 
-            _rtspClient.ReceivedVideoData += _rtspClient_ReceivedVideoData;
-            _rtspClient.ReceivedAudioData += _rtspClient_ReceivedAudioData;
+            _rtspClient.ReceivedVideoData += (o, e) =>
+            {
+                var sample = e.Data.Select(x => x.ToArray()).ToList();
+                if (videoInfo.VideoCodec == "AV1" && videoInfo.Width == 0 || videoInfo.Height == 0)
+                {
+                    foreach (var unit in sample)
+                    {
+                        int obuHeader = unit[0];
+                        int obuType = (obuHeader & 0x78) >> 3;
+                        if (obuType == 1)
+                        {
+                            AV1Context context = new AV1Context();
+                            MemoryStream ms = new MemoryStream(unit);
+                            using (AomStream aomStream = new AomStream(ms))
+                            {
+                                context.Read(aomStream, unit.Length);
+                            }
+                            uint width = (uint)(context._MaxFrameWidthMinus1 + 1);
+                            uint height = (uint)(context._MaxFrameHeightMinus1 + 1);
+                            videoInfo.OriginalWidth = width;
+                            videoInfo.OriginalHeight = height;
+                            videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, 1);
+                            videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, 1);
+                            tcsSetupCompleted.SetResult(true);
+                            break;
+                        }
+                    }
+                }
+                _videoSampleQueue.Enqueue(sample);
+            };
+            _rtspClient.ReceivedAudioData += (o, e) =>
+            {
+                foreach (var sample in e.Data)
+                {
+                    _audioSampleQueue.Enqueue(new List<byte[]> { sample.ToArray() });
+                }
+            };
             _rtspClient.Connect(uri, RTPTransport.TCP, userName, password);
 
             await tcsSetupCompleted.Task;
+
             return (videoInfo, audioInfo);
         }
 
-        private void _rtspClient_ReceivedAudioData(object sender, SimpleDataEventArgs e)
+        private SharpH265.SeqParameterSetRbsp ParseH265SPS(byte[] sample)
         {
-            foreach (var sample in e.Data)
+            SharpH265.H265Context context = new SharpH265.H265Context();
+            using (ItuStream stream = new ItuStream(new MemoryStream(sample)))
             {
-                _audioSampleQueue.Enqueue(new List<byte[]> { sample.ToArray() });
+                ulong ituSize = 0;
+                var nu = new SharpH265.NalUnit((uint)sample.Length);
+                context.NalHeader = nu;
+                ituSize += nu.Read(context, stream);
+
+                if (nu.NalUnitHeader.NalUnitType == SharpH265.H265NALTypes.SPS_NUT)
+                {
+                    context.SeqParameterSetRbsp = new SharpH265.SeqParameterSetRbsp();
+                    context.SeqParameterSetRbsp.Read(context, stream);
+                    return context.SeqParameterSetRbsp;
+                }
+                else
+                {
+                    throw new InvalidDataException($"Expected SPS NAL unit, but found: {nu.NalUnitHeader.NalUnitType}");
+                }
             }
         }
 
-        private void _rtspClient_ReceivedVideoData(object sender, SimpleDataEventArgs e)
+        private SharpH264.SeqParameterSetRbsp ParseH264SPS(byte[] sample)
         {
-            _videoSampleQueue.Enqueue(e.Data.Select(x => x.ToArray()).ToList());
+            SharpH264.H264Context context = new SharpH264.H264Context();
+            using (ItuStream stream = new ItuStream(new MemoryStream(sample)))
+            {
+                ulong ituSize = 0;
+                var nu = new SharpH264.NalUnit((uint)sample.Length);
+                context.NalHeader = nu;
+                ituSize += nu.Read(context, stream);
+
+                if (nu.NalUnitType == SharpH264.H264NALTypes.SPS)
+                {
+                    context.SeqParameterSetRbsp = new SharpH264.SeqParameterSetRbsp();
+                    context.SeqParameterSetRbsp.Read(context, stream);
+                    return context.SeqParameterSetRbsp;
+                }
+                else
+                {
+                    throw new InvalidDataException($"Expected SPS NAL unit, but found: {nu.NalUnitType}");
+                }
+            }
         }
 
         protected override IList<byte[]> ReadNextAudio()

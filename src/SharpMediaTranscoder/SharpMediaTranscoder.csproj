@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="SharpMp4" Version="0.0.7" />
+    <PackageReference Include="SharpMP4" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup>

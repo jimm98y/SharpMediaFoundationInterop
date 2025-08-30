@@ -1,6 +1,7 @@
-﻿using SharpMediaFoundationInterop.Transforms.H265;
+﻿using SharpISOBMFF;
+using SharpMediaFoundationInterop.Transforms.H265;
 using SharpMediaFoundationInterop.Utils;
-using SharpMp4;
+using SharpMP4.Readers;
 using System.IO;
 
 namespace SharpMediaFoundationInterop.WPF
@@ -9,10 +10,9 @@ namespace SharpMediaFoundationInterop.WPF
     {
         private string _path;
         private BufferedStream _fs;
-        private FragmentedMp4 _fmp4;
         private bool _initial = true;
 
-        private FragmentedMp4Extensions.MdatParserContext _context;
+        private ImageReader _reader;
 
         public ImageFileSource(string path)
         {
@@ -30,28 +30,25 @@ namespace SharpMediaFoundationInterop.WPF
 
         protected override IList<byte[]> ReadNextAudio()
         {
-            return _fmp4.ReadNextTrackAsync(_context, (int)_context.AudioTrackId).Result;
+            return null;
         }
 
         protected override IList<byte[]> ReadNextVideo()
         {
-            if (_initial)
+            if (_reader.Track != null)
             {
-                _initial = false;
-                return _context.VideoNALUs;
-            }
-            else
-            {
-                if (_context.VideoTrack != null)
+                if (_initial)
                 {
-                    return _fmp4.ReadNextTrackAsync(_context, (int)_context.VideoTrackId).Result;
+                    _initial = false;
+                    var videoUnits = _reader.Track.GetContainerSamples();
+                    return videoUnits.ToList();
                 }
-                else
-                {
-                    // image
-                    return _fmp4.ReadNextImageAsync(_context).Result;
-                }
+
+                var sample = _reader.ReadSample();
+                IEnumerable<byte[]> units = _reader.ParseSample(sample.Data);
+                return units.ToList();
             }
+            return null;
         }
 
         protected override void CompletedVideo()
@@ -68,7 +65,7 @@ namespace SharpMediaFoundationInterop.WPF
             base.CompletedAudio();
         }
 
-        private async Task<(VideoInfo Video, AudioInfo Audio)> LoadFileAsync(string fileName)
+        private Task<(VideoInfo Video, AudioInfo Audio)> LoadFileAsync(string fileName)
         {
             VideoInfo videoInfo = new VideoInfo();
 
@@ -79,22 +76,14 @@ namespace SharpMediaFoundationInterop.WPF
             }
 
             _fs = new BufferedStream(new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read));
-            _fmp4 = await FragmentedMp4.ParseAsync(_fs);
+            var mp4 = new Container();
+            mp4.Read(new IsoStream(_fs));
 
-            var hevcCfg = _fmp4.GetMeta().GetIprp().GetIpco()
-                .Children.Single((Mp4Box x) => x is HevcConfigurationBox) as HevcConfigurationBox;
+            _reader = new ImageReader();
+            _reader.Parse(mp4);         
 
-            _context = new FragmentedMp4Extensions.MdatParserContext()
-            {
-                VideoNALUs = hevcCfg.HevcDecoderConfigurationRecord.NalArrays.SelectMany(x => x.NalUnits).ToList()
-            };
-            _context.Mdat[0] = _fmp4.Children.FirstOrDefault(x => x is MdatBox) as MdatBox;
-
-            var ispe = _fmp4.GetMeta().GetIprp().GetIpco()
-                .Children.FirstOrDefault((Mp4Box x) => x is IspeBox) as IspeBox;
-
-            videoInfo.OriginalWidth = (uint)ispe.ImageWidth;
-            videoInfo.OriginalHeight = (uint)ispe.ImageHeight;
+            videoInfo.OriginalWidth = _reader.Ispe.ImageWidth;
+            videoInfo.OriginalHeight = _reader.Ispe.ImageHeight;
             videoInfo.FpsNom = 1;
             videoInfo.FpsDenom = 1;
 
@@ -102,7 +91,9 @@ namespace SharpMediaFoundationInterop.WPF
             videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
             videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
 
-            return (videoInfo, null);
+            VideoInfo = videoInfo;
+
+            return Task.FromResult<(VideoInfo Video, AudioInfo Audio)>((videoInfo, null));
         }
 
         protected override void Dispose(bool disposing)

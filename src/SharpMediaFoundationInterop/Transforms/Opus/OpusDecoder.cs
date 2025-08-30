@@ -1,39 +1,20 @@
-﻿using System;
-using System.Linq;
-using SharpMediaFoundationInterop.Utils;
+﻿using SharpMediaFoundationInterop.Utils;
+using System;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
-namespace SharpMediaFoundationInterop.Transforms.AAC
+namespace SharpMediaFoundationInterop.Transforms.Opus
 {
-    public class AACDecoder : AudioTransformBase
+    public class OpusDecoder : AudioTransformBase
     {
-        public override Guid InputFormat => PInvoke.MFAudioFormat_AAC;
-        public override Guid OutputFormat => PInvoke.MFAudioFormat_PCM;
+        public override Guid InputFormat => PInvoke.MFAudioFormat_Opus;
+        public override Guid OutputFormat => PInvoke.MFAudioFormat_Float;
 
-        public byte[] UserData { get; private set; }
-        public int ChannelConfiguration { get; set; }
-
-        public AACDecoder(uint channels, uint sampleRate, byte[] userData, int channelConfiguration)
-          : base(1024, channels, sampleRate, 16) // PCM = 16 bit, Float = 32 bit
+        public OpusDecoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000, uint bitsPerSample = 32) : base(sampleDuration, channels, sampleRate, bitsPerSample) 
         {
-            if (sampleRate != 44100 && sampleRate != 48000)
-            {
-                throw new ArgumentException(
-                    $"MediaFoundation AAC encoder does not support sample rate {sampleRate} Hz. " +
-                    $"The only supported sample rates are 44100 and 48000 Hz.");
-            }
-
-            if (userData == null)
-            {
-                throw new ArgumentNullException(nameof(userData));
-            }
-
-            UserData = userData;
-            ChannelConfiguration = channelConfiguration;
         }
 
-        protected override IMFTransform Create()
+        protected unsafe override IMFTransform Create()
         {
             const uint streamId = 0;
 
@@ -48,22 +29,25 @@ namespace SharpMediaFoundationInterop.Transforms.AAC
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
             mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
-            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
+            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
-            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, (uint)ChannelConfiguration);
-            //mediaInput.SetUINT32(PInvoke.MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION, 0x2A);
-            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 16000 * (uint)ChannelConfiguration);
-            mediaInput.SetUINT32(PInvoke.MF_MT_AAC_PAYLOAD_TYPE, 0); // 0 = Raw, 1 = ADTS
-            mediaInput.SetBlob(PInvoke.MF_MT_USER_DATA, UserData);
+            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
+            mediaInput.SetUINT32(PInvoke.MF_MT_ALL_SAMPLES_INDEPENDENT, 1);
+            mediaInput.SetUINT32(PInvoke.MF_MT_COMPRESSED, 1);
+            mediaInput.SetDouble(PInvoke.MF_MT_AUDIO_FLOAT_SAMPLES_PER_SECOND, SampleRate);
             MediaUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
             IMFMediaType mediaOutput;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, SampleRate * (BitsPerSample / 8) * Channels);
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_CHANNEL_MASK, 1 + 2); // left + right = stereo, see https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ksmedia/ns-ksmedia-waveformatextensible
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BLOCK_ALIGNMENT, Channels * (BitsPerSample / 8));
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_VALID_BITS_PER_SAMPLE, BitsPerSample);
             MediaUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
@@ -71,12 +55,6 @@ namespace SharpMediaFoundationInterop.Transforms.AAC
             transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_START_OF_STREAM, default);
 
             return transform;
-        }
-
-        public static byte[] CreateUserData(byte[] audioSpecificConfig)
-        {
-            var b = new byte[] { 0x00, 0x00, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-            return b.Concat(audioSpecificConfig).ToArray();
         }
     }
 }

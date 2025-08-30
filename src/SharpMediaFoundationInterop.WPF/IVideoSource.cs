@@ -24,10 +24,11 @@ namespace SharpMediaFoundationInterop.WPF
     public class AudioInfo
     {
         public string AudioCodec { get; set; }
-        public uint Channels { get; set; }
+        public uint ChannelCount { get; set; }
         public uint SampleRate { get; set; }
         public byte[] UserData { get; set; }
         public uint BitsPerSample { get; set; }
+        public int ChannelConfiguration { get; set; }
     }
 
     public interface IVideoSource : IDisposable

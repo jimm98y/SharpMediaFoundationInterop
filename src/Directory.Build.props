@@ -4,14 +4,14 @@
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 		<Nullable>disable</Nullable>
 		<Title>$(ProjectName)</Title>
-		<Version>0.0.1</Version>
+		<Version>0.0.2</Version>
 		<Authors>Lukas Volf</Authors>
 		<Copyright>MIT</Copyright>
 		<PackageProjectUrl>https://github.com/jimm98y/SharpMediaFoundationInterop</PackageProjectUrl>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<RepositoryUrl>https://github.com/jimm98y/SharpMediaFoundationInterop</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
-		<PackageTags>h264;camera;encoder;decoder;aac;wave;h265;desktop-capture;net8</PackageTags>
+		<PackageTags>h264;h265;av1;aac;wave;opus;camera;encoder;decoder;desktop-capture;net8</PackageTags>
 		<NeutralLanguage>en-US</NeutralLanguage>
 		<AssemblyVersion>$(Version)</AssemblyVersion>
 		<FileVersion>$(Version)</FileVersion>

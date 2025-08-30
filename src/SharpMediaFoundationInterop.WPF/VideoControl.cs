@@ -180,14 +180,20 @@ namespace SharpMediaFoundationInterop.WPF
 
             _videoFrames++;
 
-            _canvas.Lock();
+            var videoInfo = _source.VideoInfo;
+            if(videoInfo == null)
+            {
+                return;
+            }
+
+            _canvas.Lock();           
 
             // TODO: bitmap stride?
             Marshal.Copy(
                 decoded,
                 0,
                 _canvas.BackBuffer,
-                (int)(_source.VideoInfo.OriginalWidth * _source.VideoInfo.OriginalHeight * (_source.VideoInfo.PixelFormat == PixelFormat.BGRA32 ? 4 : 3))
+                (int)(videoInfo.OriginalWidth * videoInfo.OriginalHeight * (videoInfo.PixelFormat == PixelFormat.BGRA32 ? 4 : 3))
             );
 
             _canvas.AddDirtyRect(_videoRect);
@@ -307,7 +313,7 @@ namespace SharpMediaFoundationInterop.WPF
                 lock (_waveSync)
                 {
                     this._waveOut = new WaveOut();
-                    this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.Channels, audioInfo.BitsPerSample);
+                    this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.ChannelCount, audioInfo.BitsPerSample);
                }
             }
         }
