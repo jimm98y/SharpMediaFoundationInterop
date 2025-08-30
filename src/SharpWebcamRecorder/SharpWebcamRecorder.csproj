@@ -9,7 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\SharpMP4BoxGenerator\src\SharpMP4\SharpMP4.csproj" />
+    <PackageReference Include="SharpMP4" Version="0.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\SharpMediaFoundationInterop\SharpMediaFoundationInterop.csproj" />
   </ItemGroup>
 

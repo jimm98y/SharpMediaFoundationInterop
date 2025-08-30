@@ -16,7 +16,7 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
     var mp4 = new Container();
     mp4.Read(new IsoStream(inputFileStream));
 
-    Mp4Reader inputReader = new Mp4Reader();
+    VideoReader inputReader = new VideoReader();
     inputReader.Parse(mp4);
     IEnumerable<ITrack> inputTracks = inputReader.GetTracks();
     AACTrack aacTrack = inputTracks.OfType<AACTrack>().First();
@@ -30,7 +30,7 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
         {
             waveOut.Initialize(aacTrack.SamplingRate, aacTrack.ChannelCount, 16);
 
-            Mp4Sample sample;
+            MediaSample sample;
             while ((sample = inputReader.ReadSample(aacTrack.TrackID)) != null)
             {
                 IEnumerable<byte[]> audioFrames = inputReader.ParseSample(aacTrack.TrackID, sample.Data);

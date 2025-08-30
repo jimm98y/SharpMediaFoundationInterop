@@ -18,7 +18,7 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
     var mp4 = new Container();
     mp4.Read(new IsoStream(inputFileStream));
 
-    Mp4Reader inputReader = new Mp4Reader();
+    VideoReader inputReader = new VideoReader();
     inputReader.Parse(mp4);
     IEnumerable<ITrack> inputTracks = inputReader.GetTracks();
     H264Track inputVideoTrack = inputTracks.OfType<H264Track>().First();
@@ -53,7 +53,7 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
                     videoDecoder.ProcessInput(unit, 0);
                 }
 
-                Mp4Sample sample = null;
+                MediaSample sample = null;
                 while ((sample = inputReader.ReadSample(inputVideoTrack.TrackID)) != null)
                 {
                     IEnumerable<byte[]> units = inputReader.ParseSample(inputVideoTrack.TrackID, sample.Data);

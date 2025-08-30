@@ -29,8 +29,6 @@
   </ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\..\SharpMP4BoxGenerator\src\SharpMP4\SharpMP4.csproj" />
-	  <ProjectReference Include="..\..\..\SharpRealTimeStreaming\src\SharpRTSPClient\SharpRTSPClient.csproj" />
 	  <ProjectReference Include="..\SharpMediaFoundationInterop.WPF\SharpMediaFoundationInterop.WPF.csproj" />
 	</ItemGroup>
 
@@ -81,6 +79,10 @@
 			<Visible>False</Visible>
 			<Link>%(Filename)%(Extension)</Link>
 		</None>
+	</ItemGroup>
+	<ItemGroup>
+	  <PackageReference Include="SharpMP4" Version="0.1.0" />
+	  <PackageReference Include="SharpRTSPClient" Version="0.1.4" />
 	</ItemGroup>
 
 </Project>
