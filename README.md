@@ -161,7 +161,7 @@ foreach (var pcmFrame in pcmFrames)
    }
 }
 ```
-## ScreenCapture
+## Screen capture
 Captures your screen using the [DuplicateOutput1](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_5/nf-dxgi1_5-idxgioutput5-duplicateoutput1) API. Start by enumerating the screens:
 ```cs
 var screens = ScreenCapture.Enumerate();
@@ -188,7 +188,7 @@ if (screenCapture.ReadSample(buffer, out var timestamp))
    // captured screen is in the buffer
 }
 ```
-## DeviceCapture
+## Device capture
 Captures any Media Foundation device such as a webcam. Start by enumerating the devices:
 ```cs
 var devices = DeviceCapture.Enumerate();
@@ -270,5 +270,5 @@ Demonstrates how to capture the screen and encode it into H265 MP4.
 ### SharpWavePlayer
 Shows how to play AAC audio from a MP4 file.
 
-### SharpWebcamRecoredr
+### SharpWebcamRecorder
 Shows how to capture video from a webcam and record it into H265 MP4.
