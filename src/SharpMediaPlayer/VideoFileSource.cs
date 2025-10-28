@@ -172,7 +172,7 @@ namespace SharpMediaFoundationInterop.WPF
                         audioInfo.AudioCodec = "AAC";
                         audioInfo.BitsPerSample = 16;
                         audioInfo.UserData = aacTrack.AudioSpecificConfig.ToBytes();
-                        audioInfo.ChannelCount = aacTrack.ChannelCount;
+                        audioInfo.ChannelCount = aacTrack.ChannelConfiguration == 1 ? 1u : aacTrack.ChannelCount; // ChannelConfiguration = 1 means mono even though ChannelCount = 2
                         audioInfo.ChannelConfiguration = aacTrack.ChannelConfiguration;
                         audioInfo.SampleRate = aacTrack.SamplingRate;
                     }
