@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="SharpMP4" Version="0.1.3" />
+    <PackageReference Include="SharpMP4" Version="0.2.0" />
   </ItemGroup>
 
   <ItemGroup>
