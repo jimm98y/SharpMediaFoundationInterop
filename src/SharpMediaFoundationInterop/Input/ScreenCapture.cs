@@ -117,8 +117,7 @@ namespace SharpMediaFoundationInterop.Input
             IDXGIOutput outputEn;
             adapter.EnumOutputs(outputID, out outputEn);
 
-            DXGI_OUTPUT_DESC outputDescription;
-            outputEn.GetDesc(&outputDescription);
+            DXGI_OUTPUT_DESC outputDescription = outputEn.GetDesc();
             _output = outputEn;
 
             // TODO: rotation support
@@ -145,9 +144,9 @@ namespace SharpMediaFoundationInterop.Input
             // in WPF app, this call requires [assembly: DisableDpiAwareness] attribute and app.manifest with Windows 10 compatibility
             PInvoke.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-            ID3D11Texture2D captureTexture;
-            _device.CreateTexture2D(&captureTextureDesc, null, out captureTexture);
-            _captureTexture = captureTexture;
+            ID3D11Texture2D_unmanaged* captureTexture;
+            _device.CreateTexture2D(&captureTextureDesc, null, &captureTexture);
+            _captureTexture = (ID3D11Texture2D)Marshal.GetObjectForIUnknown((nint)captureTexture);
 
             // TODO https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/error-when-dda-capable-app-is-against-gpu
             IDXGIOutputDuplication duplicatedOutput;
@@ -279,8 +278,7 @@ namespace SharpMediaFoundationInterop.Input
                         break;
                     }
 
-                    DXGI_OUTPUT_DESC outputDescription;
-                    outputEn.GetDesc(&outputDescription);
+                    DXGI_OUTPUT_DESC outputDescription = outputEn.GetDesc();
 
                     var screenDevice = new ScreenDevice(
                             adapterID,

@@ -121,16 +121,16 @@ namespace SharpMediaFoundationInterop.Transforms
                     while (true)
                     {
                         Guid guid;
-                        PROPVARIANT variant = default;
-                        mediaType.GetItemByIndex(i++, &guid, ref variant);
+                        PROPVARIANT_unmanaged variant = default;
+                        mediaType.GetItemByIndex(i++, &guid, &variant);
                         
                         if(guid == PInvoke.MF_MT_GEOMETRIC_APERTURE ||
                             guid == PInvoke.MF_MT_PAN_SCAN_APERTURE ||
                             guid == PInvoke.MF_MT_MINIMUM_DISPLAY_APERTURE)
                         {
-                            mediaType.GetBlobSize(&guid, out var blobSize);
+                            mediaType.GetBlobSize(&guid, out uint blobSize);
                             byte[] blob = new byte[blobSize];
-                            mediaType.GetBlob(guid, blob, &blobSize);
+                            mediaType.GetBlob(&guid, blob, blobSize);
                             log.AppendLine($"Blob {guid}: {Convert.ToHexString(blob)}");
                         }
                         else
@@ -164,8 +164,8 @@ namespace SharpMediaFoundationInterop.Transforms
                     while (true)
                     {
                         Guid guid;
-                        PROPVARIANT variant = default;
-                        attributes.GetItemByIndex(i++, &guid, ref variant);
+                        PROPVARIANT_unmanaged variant = default;
+                        attributes.GetItemByIndex(i++, &guid, &variant);
                         log.AppendLine($"{guid}: {variant.Anonymous.Anonymous.Anonymous.uhVal}");
                     }
                 }
@@ -219,22 +219,25 @@ namespace SharpMediaFoundationInterop.Transforms
             return ret;
         }
 
-        public static IMFTransform CreateTransform(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
+        public static unsafe IMFTransform CreateTransform(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
         {
             IMFTransform transform = default;
 
-            foreach (IMFActivate activate in FindTransforms(category, flags, input, output))
+            MediaUtils.Check(PInvoke.MFTEnumEx(category, flags, input, output, out IMFActivate_unmanaged** activates, out uint activateCount));
+
+            for (int i = 0; i < activateCount; i++)
             {
                 try
                 {
-                    activate.GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR name, out _);
+                    activates[i]->GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR name, out _);
                     if (Log.InfoEnabled) Log.Info($"Found MFT: {name}");
-                    transform = activate.ActivateObject(typeof(IMFTransform).GUID) as IMFTransform;
+                    void* ptr = activates[i]->ActivateObject(typeof(IMFTransform).GUID);
+                    transform = (IMFTransform)Marshal.GetObjectForIUnknown((nint)ptr);
                     break;
                 }
                 finally
                 {
-                    Marshal.ReleaseComObject(activate);
+                    activates[i]->Release();
                 }
             }
 
@@ -244,19 +247,6 @@ namespace SharpMediaFoundationInterop.Transforms
         public static void DestroyTransform(IMFTransform transform)
         {
             Marshal.ReleaseComObject(transform);
-        }
-
-        public static IEnumerable<IMFActivate> FindTransforms(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
-        {
-            MediaUtils.Check(PInvoke.MFTEnumEx(category, flags, input, output, out IMFActivate[] activates, out uint activateCount));
-
-            if (activateCount > 0)
-            {
-                foreach (IMFActivate activate in activates)
-                {
-                    yield return activate;
-                }
-            }
         }
     }
 }

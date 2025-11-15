@@ -97,6 +97,31 @@ namespace SharpMediaFoundationInterop.Utils
             return ret;
         }
 
+        public static unsafe bool CopyBuffer(IMFMediaBuffer_unmanaged* buffer, byte[] sampleBytes, out uint sampleSize)
+        {
+            bool ret = false;
+            try
+            {
+                uint maxLength = default;
+                uint currentLength = default;
+                byte* data = default;
+                buffer->Lock(&data, &maxLength, &currentLength);
+                sampleSize = currentLength;
+                if (sampleBytes != null)
+                {
+                    Marshal.Copy((nint)data, sampleBytes, 0, (int)currentLength);
+                }
+                ret = true;
+            }
+            finally
+            {
+                buffer->SetCurrentLength(0);
+                buffer->Unlock();
+            }
+
+            return ret;
+        }
+
         public static long CalculateSampleDuration(uint fpsNom, uint fpsDenom)
         {
             Check(PInvoke.MFFrameRateToAverageTimePerFrame(fpsNom, fpsDenom, out ulong sampleDuration));

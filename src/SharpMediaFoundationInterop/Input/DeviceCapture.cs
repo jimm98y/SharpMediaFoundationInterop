@@ -85,12 +85,12 @@ namespace SharpMediaFoundationInterop.Input
 
         private static unsafe bool ReadSample(IMFSourceReader pReader, ref byte[] sampleBytes, out uint actualStreamIndex, out uint dwStreamFlags, out long timestamp, out uint sampleSize)
         {
-            IMFSample sample;
+            IMFSample_unmanaged* sample;
             uint lactualStreamIndex;
             uint ldwStreamFlags;
             long ltimestamp;
 
-            pReader.ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, &lactualStreamIndex, &ldwStreamFlags, &ltimestamp, out sample);
+            pReader.ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, &lactualStreamIndex, &ldwStreamFlags, &ltimestamp, &sample);
 
             actualStreamIndex = lactualStreamIndex;
             dwStreamFlags = ldwStreamFlags;
@@ -98,12 +98,12 @@ namespace SharpMediaFoundationInterop.Input
 
             if (sample != null)
             {
-                sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
+                sample->ConvertToContiguousBuffer(out IMFMediaBuffer_unmanaged* buffer);
                 bool ret =  MediaUtils.CopyBuffer(buffer, sampleBytes, out sampleSize);
                 GC.AddMemoryPressure(sampleSize); // samples are large, so to keep the memory usage low we have to tell GC about large amounts of unmanaged memory being allocated
                 
-                Marshal.ReleaseComObject(sample);
-                Marshal.ReleaseComObject(buffer);
+                sample->Release();
+                buffer->Release();
                 GC.RemoveMemoryPressure(sampleSize);
                 return ret;
             }
@@ -149,15 +149,15 @@ namespace SharpMediaFoundationInterop.Input
             return pReader;
         }
 
-        private static IMFMediaSource GetCaptureDevice(string symbolicLink)
+        private static unsafe IMFMediaSource GetCaptureDevice(string symbolicLink)
         {
-            MediaUtils.Check(PInvoke.MFCreateAttributes(out var pConfig, 1));
+            MediaUtils.Check(PInvoke.MFCreateAttributes(out IMFAttributes pConfig, 1));
             pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-            MediaUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out var devices, out _));
+            MediaUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out IMFActivate_unmanaged** devices, out uint devicesCount));
             int deviceIndex;
-            for (deviceIndex = 0; deviceIndex < devices.Length; deviceIndex++)
+            for (deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
             {
-                devices[deviceIndex].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, out PWSTR sLink, out _);
+                devices[deviceIndex]->GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, out PWSTR sLink, out _);
                 if (string.IsNullOrEmpty(symbolicLink))
                 {
                     // we take the first device available
@@ -167,32 +167,33 @@ namespace SharpMediaFoundationInterop.Input
                 {
                     break;
                 }
-                else if (deviceIndex == devices.Length - 1)
+                else if (deviceIndex == devicesCount - 1)
                 {
                     throw new Exception($"Device {symbolicLink} was not found!");
                 }
             }
-            var device = (IMFMediaSource)devices[deviceIndex].ActivateObject(typeof(IMFMediaSource).GUID);
-            for (deviceIndex = 0; deviceIndex < devices.Length; deviceIndex++)
+            void* device = devices[deviceIndex]->ActivateObject(typeof(IMFMediaSource).GUID);
+            for (deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
             {
-                Marshal.ReleaseComObject(devices[deviceIndex]);
+                devices[deviceIndex]->Release();
             }
             Marshal.ReleaseComObject(pConfig);
-            return device;
+
+            return (IMFMediaSource)Marshal.GetObjectForIUnknown((nint)device);
         }
 
-        public static CaptureDevice[] Enumerate()
+        public static unsafe CaptureDevice[] Enumerate()
         {
             List<CaptureDevice> ret = new List<CaptureDevice>();
             MediaUtils.Check(PInvoke.MFCreateAttributes(out var pConfig, 1));
             pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-            MediaUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out var devices, out _));
-            for (int i = 0; i < devices.Length; i++)
+            MediaUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out IMFActivate_unmanaged** devices, out uint devicesCount));
+            for (int i = 0; i < devicesCount; i++)
             {
-                devices[i].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, out PWSTR name, out _);
-                devices[i].GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, out PWSTR symbolicLink, out _);
+                devices[i]->GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, out PWSTR name, out _);
+                devices[i]->GetAllocatedString(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, out PWSTR symbolicLink, out _);
                 ret.Add(new CaptureDevice(name.ToString(), symbolicLink.ToString()));
-                Marshal.ReleaseComObject(devices[i]);
+                devices[i]->Release();
             }
             Marshal.ReleaseComObject(pConfig);
             return ret.ToArray();
