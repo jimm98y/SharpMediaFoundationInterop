@@ -124,7 +124,7 @@ namespace SharpMediaFoundationInterop.Wave
                     }
                     catch (Exception ex)
                     {
-                        if (Log.ErrorEnabled) Log.Error(ex.Message);
+                        if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
                     }
 
                     ret.Add(

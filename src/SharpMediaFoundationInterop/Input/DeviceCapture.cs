@@ -86,12 +86,12 @@ namespace SharpMediaFoundationInterop.Input
 
         private static unsafe bool ReadSample(IMFSourceReader pReader, ref byte[] sampleBytes, out uint actualStreamIndex, out uint dwStreamFlags, out long timestamp, out uint sampleSize)
         {
-            IMFSample_unmanaged* sample;
+            IMFSample sample;
             uint lactualStreamIndex;
             uint ldwStreamFlags;
             long ltimestamp;
 
-            pReader.ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, &lactualStreamIndex, &ldwStreamFlags, &ltimestamp, &sample);
+            pReader.ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, out lactualStreamIndex, out ldwStreamFlags, out ltimestamp, out sample);
 
             actualStreamIndex = lactualStreamIndex;
             dwStreamFlags = ldwStreamFlags;
@@ -99,12 +99,12 @@ namespace SharpMediaFoundationInterop.Input
 
             if (sample != null)
             {
-                sample->ConvertToContiguousBuffer(out IMFMediaBuffer_unmanaged* buffer);
+                sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
                 bool ret =  MediaUtils.CopyBuffer(buffer, sampleBytes, out sampleSize);
                 GC.AddMemoryPressure(sampleSize); // samples are large, so to keep the memory usage low we have to tell GC about large amounts of unmanaged memory being allocated
-                
-                sample->Release();
-                buffer->Release();
+
+                Marshal.ReleaseComObject(sample);
+                Marshal.ReleaseComObject(buffer);
                 GC.RemoveMemoryPressure(sampleSize);
                 return ret;
             }
@@ -128,7 +128,7 @@ namespace SharpMediaFoundationInterop.Input
                 }
                 catch (COMException ex)
                 {
-                    if (Log.ErrorEnabled) Log.Error(ex.Message);
+                    if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
                     break;
                 }
 
@@ -236,7 +236,7 @@ namespace SharpMediaFoundationInterop.Input
         public static unsafe CaptureDevice[] Enumerate()
         {
             List<CaptureDevice> ret = new List<CaptureDevice>();
-            MediaUtils.Check(PInvoke.MFCreateAttributes(out var pConfig, 1));
+            MediaUtils.Check(PInvoke.MFCreateAttributes(out IMFAttributes pConfig, 1));
             pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
             MediaUtils.Check(PInvoke.MFEnumDeviceSources(pConfig, out IMFActivate_unmanaged** devices, out uint devicesCount));
             for (int i = 0; i < devicesCount; i++)

@@ -144,11 +144,7 @@ namespace SharpMediaFoundationInterop.Input
             // in WPF app, this call requires [assembly: DisableDpiAwareness] attribute and app.manifest with Windows 10 compatibility
             PInvoke.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-            ID3D11Texture2D_unmanaged* captureTexture;
-            _device.CreateTexture2D(&captureTextureDesc, null, &captureTexture);
-            _captureTexture = (ID3D11Texture2D)Marshal.GetObjectForIUnknown((nint)captureTexture);
-            captureTexture->Release();
-            captureTexture = null;
+            _device.CreateTexture2D(captureTextureDesc, null, out _captureTexture);
 
             // TODO https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/error-when-dda-capable-app-is-against-gpu
             IDXGIOutputDuplication duplicatedOutput;
@@ -184,9 +180,9 @@ namespace SharpMediaFoundationInterop.Input
                         Marshal.ReleaseComObject(_screenResource);
                         _duplicatedOutput?.ReleaseFrame();
                     }
-                    catch (Exception eex)
+                    catch (Exception ex)
                     {
-                        if (Log.ErrorEnabled) Log.Error(eex.Message);
+                        if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
                     }
                 }
 
@@ -219,7 +215,7 @@ namespace SharpMediaFoundationInterop.Input
             }
             catch (Exception ex)
             {
-                if (Log.ErrorEnabled) Log.Error(ex.Message);
+                if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
             }
 
             return ret;
@@ -242,7 +238,7 @@ namespace SharpMediaFoundationInterop.Input
                 }
                 catch(Exception ex)
                 {
-                    if (Log.ErrorEnabled) Log.Error(ex.Message);
+                    if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
                     break;
                 }
 
@@ -276,7 +272,7 @@ namespace SharpMediaFoundationInterop.Input
                     }
                     catch (Exception ex)
                     {
-                        if (Log.ErrorEnabled) Log.Error(ex.Message);
+                        if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
                         break;
                     }
 
@@ -327,8 +323,10 @@ namespace SharpMediaFoundationInterop.Input
                     {
                         Marshal.ReleaseComObject(screenResource);
                     }
-                    catch (Exception eex)
-                    { }
+                    catch (Exception ex)
+                    {
+                        if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
+                    }
                 }
 
                 if (_factory != null)

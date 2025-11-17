@@ -72,7 +72,7 @@ namespace SharpMediaFoundationInterop.Transforms
             }
             catch (Exception ex)
             {
-                if (Log.ErrorEnabled) Log.Error(ex.Message);
+                if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
             }
 
             return ret;
@@ -110,7 +110,7 @@ namespace SharpMediaFoundationInterop.Transforms
                 }
                 catch(Exception ex)
                 {
-                    if (Log.ErrorEnabled) Log.Error(ex.Message);
+                    if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
                     throw new Exception("Unsupported subtype!");
                 }
 
@@ -142,6 +142,7 @@ namespace SharpMediaFoundationInterop.Transforms
                 }
                 catch (Exception ex)
                 {
+                    if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
                 }
 
                 // 206b4fc8-fcf9-4c51-afe3-9764369e33a0 MF_SA_D3D11_AWARE
@@ -172,6 +173,7 @@ namespace SharpMediaFoundationInterop.Transforms
                 }
                 catch (Exception ex)
                 {
+                    if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
                 }
 
                 // https://www.magnumdb.com/search?q=f7e34c9a-42e8-4714-b74b-cb29d72c35e5
