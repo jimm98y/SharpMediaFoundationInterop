@@ -147,6 +147,8 @@ namespace SharpMediaFoundationInterop.Input
             ID3D11Texture2D_unmanaged* captureTexture;
             _device.CreateTexture2D(&captureTextureDesc, null, &captureTexture);
             _captureTexture = (ID3D11Texture2D)Marshal.GetObjectForIUnknown((nint)captureTexture);
+            captureTexture->Release();
+            captureTexture = null;
 
             // TODO https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/error-when-dda-capable-app-is-against-gpu
             IDXGIOutputDuplication duplicatedOutput;

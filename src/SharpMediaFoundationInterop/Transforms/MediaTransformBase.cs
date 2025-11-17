@@ -6,6 +6,7 @@ using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
+using Windows.Win32.System.Com;
 using Windows.Win32.System.Com.StructuredStorage;
 
 namespace SharpMediaFoundationInterop.Transforms
@@ -225,15 +226,21 @@ namespace SharpMediaFoundationInterop.Transforms
 
             MediaUtils.Check(PInvoke.MFTEnumEx(category, flags, input, output, out IMFActivate_unmanaged** activates, out uint activateCount));
 
-            for (int i = 0; i < activateCount; i++)
+            for (uint i = 0; i < activateCount; i++)
             {
                 try
                 {
                     activates[i]->GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR name, out _);
                     if (Log.InfoEnabled) Log.Info($"Found MFT: {name}");
-                    void* ptr = activates[i]->ActivateObject(typeof(IMFTransform).GUID);
+                    IUnknown* ptr = (IUnknown*)activates[i]->ActivateObject(typeof(IMFTransform).GUID);
                     transform = (IMFTransform)Marshal.GetObjectForIUnknown((nint)ptr);
+                    ptr->Release();
+                    ptr = null;
                     break;
+                }
+                catch (Exception ex)
+                {
+                    if (Log.InfoEnabled) Log.Info($"Unable to activate MFT: {ex.Message}");
                 }
                 finally
                 {

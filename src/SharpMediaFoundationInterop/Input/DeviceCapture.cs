@@ -6,6 +6,7 @@ using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
+using Windows.Win32.System.Com;
 
 namespace SharpMediaFoundationInterop.Input
 {
@@ -131,6 +132,53 @@ namespace SharpMediaFoundationInterop.Input
                     break;
                 }
 
+                // check for the target format and if it's MJPG, skip it
+                nativeMediaType.GetGUID(PInvoke.MF_MT_SUBTYPE, out var targetFormat);
+                if (
+                    targetFormat != PInvoke.MFVideoFormat_RGB24 &&
+                    targetFormat != PInvoke.MFVideoFormat_RGB32 &&
+                    targetFormat != PInvoke.MFVideoFormat_RGB555 &&
+                    targetFormat != PInvoke.MFVideoFormat_RGB565 &&
+                    targetFormat != PInvoke.MFVideoFormat_RGB8 &&
+                    targetFormat != PInvoke.MFVideoFormat_A2R10G10B10 &&
+                    targetFormat != PInvoke.MFVideoFormat_A16B16G16R16F &&
+
+                    targetFormat != PInvoke.MFVideoFormat_AI44 &&
+                    targetFormat != PInvoke.MFVideoFormat_AYUV &&
+                    targetFormat != PInvoke.MFVideoFormat_I420 &&
+                    targetFormat != PInvoke.MFVideoFormat_IYUV &&
+                    targetFormat != PInvoke.MFVideoFormat_NV11 &&
+                    targetFormat != PInvoke.MFVideoFormat_NV12 &&
+                    targetFormat != PInvoke.MFVideoFormat_NV21 &&
+                    targetFormat != PInvoke.MFVideoFormat_UYVY &&
+                    targetFormat != PInvoke.MFVideoFormat_Y41P &&
+                    targetFormat != PInvoke.MFVideoFormat_Y41T &&
+                    targetFormat != PInvoke.MFVideoFormat_Y42T &&
+                    targetFormat != PInvoke.MFVideoFormat_YUY2 &&
+                    targetFormat != PInvoke.MFVideoFormat_YVU9 &&
+                    targetFormat != PInvoke.MFVideoFormat_YV12 &&
+                    targetFormat != PInvoke.MFVideoFormat_YVYU &&
+
+                    //targetFormat != PInvoke.MFVideoFormat_I422 &&
+                    //targetFormat != PInvoke.MFVideoFormat_I444 &&
+                    targetFormat != PInvoke.MFVideoFormat_P010 &&
+                    targetFormat != PInvoke.MFVideoFormat_P016 &&
+                    targetFormat != PInvoke.MFVideoFormat_P210 &&
+                    targetFormat != PInvoke.MFVideoFormat_P216 &&
+                    targetFormat != PInvoke.MFVideoFormat_v210 &&
+                    targetFormat != PInvoke.MFVideoFormat_v216 &&
+                    targetFormat != PInvoke.MFVideoFormat_v410 &&
+                    targetFormat != PInvoke.MFVideoFormat_Y210 &&
+                    targetFormat != PInvoke.MFVideoFormat_Y216 &&
+                    targetFormat != PInvoke.MFVideoFormat_Y410 &&
+                    targetFormat != PInvoke.MFVideoFormat_Y416 &&
+
+                    targetFormat != PInvoke.MFVideoFormat_L8 &&
+                    targetFormat != PInvoke.MFVideoFormat_L16 &&
+                    targetFormat != PInvoke.MFVideoFormat_D16                     
+                    )
+                    continue;
+
                 nativeMediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out ulong currentFrameSize);
                 if (currentFrameSize > frameSize)
                 {
@@ -172,14 +220,17 @@ namespace SharpMediaFoundationInterop.Input
                     throw new Exception($"Device {symbolicLink} was not found!");
                 }
             }
-            void* device = devices[deviceIndex]->ActivateObject(typeof(IMFMediaSource).GUID);
+            IUnknown* device = (IUnknown*)devices[deviceIndex]->ActivateObject(typeof(IMFMediaSource).GUID);
             for (deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
             {
                 devices[deviceIndex]->Release();
             }
             Marshal.ReleaseComObject(pConfig);
 
-            return (IMFMediaSource)Marshal.GetObjectForIUnknown((nint)device);
+            var ret = (IMFMediaSource)Marshal.GetObjectForIUnknown((nint)device);
+            device->Release();
+            device = null;
+            return ret;
         }
 
         public static unsafe CaptureDevice[] Enumerate()
