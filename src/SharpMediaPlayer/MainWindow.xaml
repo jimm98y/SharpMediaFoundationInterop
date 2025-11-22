@@ -8,7 +8,23 @@
         Title="SharpMediaPlayer" Height="450" Width="800">
 
     <Grid>
-        <ctrl:VideoControl Source="{Binding Source}" Looping="True" />
+        <TabControl>
+            <TabItem Header="MP4">
+                <ctrl:VideoControl Source="{Binding MP4Source}" Looping="True" />
+            </TabItem>
+            <TabItem Header="Screen">
+                <ctrl:VideoControl Source="{Binding ScreenSource}" Looping="True" />
+            </TabItem>
+            <TabItem Header="Camera">
+                <ctrl:VideoControl Source="{Binding CameraSource}" Looping="True" />
+            </TabItem>
+            <!--<TabItem Header="HEIC">
+                <ctrl:VideoControl Source="{Binding HeicSource}" Looping="True" />
+            </TabItem>-->
+            <!--<TabItem Header="RTSP">
+                <ctrl:VideoControl Source="{Binding RtspSource}" Looping="True" />
+            </TabItem>-->
+        </TabControl>        
     </Grid>
 
     <!--<WrapPanel Orientation="Horizontal">

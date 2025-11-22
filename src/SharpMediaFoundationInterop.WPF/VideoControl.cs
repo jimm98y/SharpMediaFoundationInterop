@@ -123,7 +123,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             lock (_syncRoot)
             {
-                var controls = _controls.ToList();
+                var controls = _controls.ToHashSet();
                 controls.Remove(this);
                 _controls = controls.ToArray();
             }
@@ -133,7 +133,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             lock (_syncRoot)
             {
-                var controls = _controls.ToList();
+                var controls = _controls.ToHashSet();
                 controls.Add(this);
                 _controls = controls.ToArray();
             }
@@ -156,7 +156,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         private void CompositionTarget_Rendering(object sender, EventArgs e)
         {
-            if (_videoOut.Count == 0)
+            if (_canvas == null || _videoOut.Count == 0)
                 return;
 
             long elapsed = _stopwatch.ElapsedMilliseconds * 10L;
@@ -211,17 +211,23 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 await Dispatcher.InvokeAsync(() =>
                 {
-                    _canvas = new WriteableBitmap(
-                        (int)videoInfo.OriginalWidth,
-                        (int)videoInfo.OriginalHeight,
-                        96,
-                        96,
-                        videoInfo.PixelFormat == PixelFormat.BGRA32 ? PixelFormats.Bgra32 : PixelFormats.Bgr24,
-                        null);
-                    this._image.Source = _canvas;
+                    var image = this._image;
+                    if (image != null)
+                    {
+                        var canvas = new WriteableBitmap(
+                            (int)videoInfo.OriginalWidth,
+                            (int)videoInfo.OriginalHeight,
+                            96,
+                            96,
+                            videoInfo.PixelFormat == PixelFormat.BGRA32 ? PixelFormats.Bgra32 : PixelFormats.Bgr24,
+                            null);
+                        image.Source = canvas;
+                        this._canvas = canvas;
+
+                        this._videoRect = new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight);
+                        this._stopwatch.Restart();
+                    }
                 });
-                this._videoRect = new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight);
-                this._stopwatch.Restart();
             }
         }
 
