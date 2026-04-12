@@ -18,15 +18,6 @@ namespace SharpMediaFoundationInterop
         {
             InitializeComponent();
             this.DataContext = this;
-
-            SharpH26X.Log.SinkDebug = (o, e) => { };
-            SharpH26X.Log.SinkInfo = (o, e) => { };
-            SharpAV1.Log.SinkInfo = (o, e) => { };
-            SharpAV1.Log.SinkDebug = (o, e) => { };
-            SharpISOBMFF.Log.SinkInfo = (o, e) => { };
-            SharpISOBMFF.Log.SinkDebug = (o, e) => { };
-            SharpMP4.Log.SinkInfo = (o, e) => { };
-            SharpMP4.Log.SinkDebug = (o, e) => { };
         }
     }
 }
