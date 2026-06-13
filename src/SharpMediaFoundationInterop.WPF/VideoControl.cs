@@ -1,10 +1,12 @@
 using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Transforms.AAC;
 using SharpMediaFoundationInterop.Transforms.AV1;
+using SharpMediaFoundationInterop.Transforms.Colors;
 using SharpMediaFoundationInterop.Transforms.H264;
 using SharpMediaFoundationInterop.Transforms.H265;
 using SharpMediaFoundationInterop.Transforms.Opus;
 using SharpMediaFoundationInterop.Wave;
+using Windows.Win32;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -17,6 +19,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using SharpMediaFoundationInterop.Utils;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -47,6 +50,8 @@ namespace SharpMediaFoundationInterop.WPF
 
         private uint _displayWidth;
         private uint _displayHeight;
+        private uint _originalDisplayWidth;
+        private uint _originalDisplayHeight;
 
         private long _videoPtsStart = -1;
         private volatile bool _clockResetNeeded;
@@ -268,6 +273,8 @@ namespace SharpMediaFoundationInterop.WPF
         {
             _displayWidth = source.VideoWidth;
             _displayHeight = source.VideoHeight;
+            _originalDisplayWidth = source.OriginalVideoWidth;
+            _originalDisplayHeight = source.OriginalVideoHeight;
 
             CanSeek = source.CanSeek;
             Duration = source.Duration > 0 ? source.Duration / 10_000_000.0 : 0.0;
@@ -276,7 +283,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (source.HasVideo)
             {
                 _bitmap = new WriteableBitmap(
-                    (int)_displayWidth, (int)_displayHeight, 96, 96, PixelFormats.Bgra32, null);
+                    (int)_displayWidth, (int)_displayHeight, 96, 96, PixelFormats.Bgr24, null);
                 _fullRect = new Int32Rect(0, 0, (int)_displayWidth, (int)_displayHeight);
                 if (_image != null) _image.Source = _bitmap;
             }
@@ -336,7 +343,7 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 if (_bgraPool.Count > 0) return _bgraPool.Pop();
             }
-            return new byte[_displayWidth * _displayHeight * 4];
+            return new byte[_displayWidth * _displayHeight * 3];
         }
 
         private void ReturnBgra(byte[] buf)
@@ -355,10 +362,19 @@ namespace SharpMediaFoundationInterop.WPF
 
         private void DecodeLoop(IVideoPlayerSource source, CancellationToken token)
         {
-            int frameByteSize = (int)(_displayWidth * _displayHeight * 4);
+            int frameByteSize = (int)(_displayWidth * _displayHeight * 3);
 
             IMediaVideoTransform videoDecoder = source.HasVideo ? CreateVideoDecoder(source) : null;
             videoDecoder?.Initialize();
+
+            IMediaVideoTransform colorConverter = null;
+            if (videoDecoder != null)
+            {
+                colorConverter = new Transforms.Colors.ColorConverter(
+                    PInvoke.MFVideoFormat_NV12, PInvoke.MFVideoFormat_RGB24,
+                    videoDecoder.Width, videoDecoder.Height);
+                colorConverter.Initialize();
+            }
 
             IMediaAudioTransform audioDecoder = source.HasAudio ? CreateAudioDecoder(source) : null;
             audioDecoder?.Initialize();
@@ -372,6 +388,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             byte[] videoCompBuf = source.HasVideo ? new byte[2 * 1024 * 1024] : null;
             byte[] nv12Buf = source.HasVideo ? new byte[videoDecoder.OutputSize] : null;
+            byte[] rgbBuf = colorConverter != null ? new byte[colorConverter.OutputSize] : null;
             byte[] audioCompBuf = source.HasAudio ? new byte[64 * 1024] : null;
             byte[] pcmBuf = source.HasAudio ? new byte[audioDecoder.OutputSize] : null;
 
@@ -416,10 +433,25 @@ namespace SharpMediaFoundationInterop.WPF
                         {
                             while (videoDecoder.ProcessOutput(ref nv12Buf, out _) && !token.IsCancellationRequested)
                             {
-                                byte[] bgra = RentBgra();
-                                ConvertNV12ToBgra(nv12Buf, (int)videoDecoder.Width, (int)videoDecoder.Height,
-                                    (int)_displayWidth, (int)_displayHeight, bgra);
-                                _frameQueue.Enqueue(new DecodedFrame(bgra, frameByteSize, videoTs));
+                                if (colorConverter.ProcessInput(nv12Buf, videoTs))
+                                {
+                                    while (colorConverter.ProcessOutput(ref rgbBuf, out uint rgbLen) && !token.IsCancellationRequested)
+                                    {
+                                        byte[] pooled = RentBgra();
+                                        // Copy only the visible rows; rgbBuf may include decoder height-padding rows.
+                                        BitmapUtils.CopyBitmap(
+                                            rgbBuf,
+                                            (int)_originalDisplayWidth,
+                                            (int)_originalDisplayHeight,
+                                            pooled,
+                                            (int)_displayWidth,
+                                            (int)_displayHeight,
+                                            3,
+                                            true);
+
+                                        _frameQueue.Enqueue(new DecodedFrame(pooled, frameByteSize, videoTs));
+                                    }
+                                }
                             }
                         }
                         worked = true;
@@ -449,6 +481,7 @@ namespace SharpMediaFoundationInterop.WPF
                         _waveOut?.Reset();
 
                         videoDecoder?.Flush();
+                        colorConverter?.Flush();
                         audioDecoder?.Flush();
 
                         source.Seek(0);
@@ -465,6 +498,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
 
             videoDecoder?.Dispose();
+            colorConverter?.Dispose();
             audioDecoder?.Dispose();
         }
 
@@ -589,38 +623,5 @@ namespace SharpMediaFoundationInterop.WPF
             return result;
         }
 
-        private static unsafe void ConvertNV12ToBgra(
-            byte[] nv12, int strideW, int strideH, int displayW, int displayH, byte[] bgra)
-        {
-            fixed (byte* pSrc = nv12, pDst = bgra)
-            {
-                byte* pUV = pSrc + strideW * strideH;
-                for (int row = 0; row < displayH; row++)
-                {
-                    byte* yRow = pSrc + row * strideW;
-                    byte* uvRow = pUV + (row >> 1) * strideW;
-                    byte* dRow = pDst + row * displayW * 4;
-
-                    for (int col = 0; col < displayW; col++)
-                    {
-                        int y = yRow[col];
-                        int uvBase = col & ~1;
-                        int u = uvRow[uvBase] - 128;
-                        int v = uvRow[uvBase + 1] - 128;
-
-                        int c = (y - 16) * 298;
-                        int r = (c + 409 * v + 128) >> 8;
-                        int g = (c - 100 * u - 208 * v + 128) >> 8;
-                        int b = (c + 516 * u + 128) >> 8;
-
-                        byte* px = dRow + col * 4;
-                        px[0] = b < 0 ? (byte)0 : b > 255 ? (byte)255 : (byte)b;
-                        px[1] = g < 0 ? (byte)0 : g > 255 ? (byte)255 : (byte)g;
-                        px[2] = r < 0 ? (byte)0 : r > 255 ? (byte)255 : (byte)r;
-                        px[3] = 255;
-                    }
-                }
-            }
-        }
     }
 }

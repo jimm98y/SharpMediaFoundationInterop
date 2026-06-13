@@ -49,6 +49,9 @@ namespace SharpMediaFoundationInterop
         public bool HasVideo { get; private set; }
         public uint VideoWidth { get; private set; }
         public uint VideoHeight { get; private set; }
+        public uint OriginalVideoWidth { get; private set; }
+        public uint OriginalVideoHeight { get; private set; }
+
         public uint FpsNom { get; private set; }
         public uint FpsDenom { get; private set; }
         public string VideoCodec { get; private set; }
@@ -82,49 +85,52 @@ namespace SharpMediaFoundationInterop
             OpenFile(); // Resets all state and file position to the beginning.
             if (timestamp == 0) return true;
 
-            // Skip video samples to the target position.
+            // Video decoders (MFTs) require starting from a keyframe (random-access point).
+            // Scan forward to find the last keyframe at or before the requested timestamp,
+            // then use that as the actual seek target for both video and audio.
+            long seekTimestamp = timestamp;
+
             if (HasVideo)
             {
-                if (FpsDenom > 0)
+                long lastKeyframeAccumulated = 0;
+                long accumulated = 0;
+                while (accumulated * 10_000_000L / _videoTimescale <= timestamp)
                 {
-                    long frameCount = timestamp * _videoTimescale / 10_000_000L / FpsDenom;
-                    for (long i = 0; i < frameCount; i++)
-                    {
-                        if (_reader.ReadSample(_videoTrack.TrackID) == null) break;
-                    }
-                    _videoAccumulated = frameCount * FpsDenom;
+                    var s = _reader.ReadSample(_videoTrack.TrackID);
+                    if (s == null) break;
+                    if (s.IsRandomAccessPoint)
+                        lastKeyframeAccumulated = accumulated;
+                    accumulated += FpsDenom > 0 ? FpsDenom : AdvanceVideo(s.Duration);
                 }
-                else
+                seekTimestamp = lastKeyframeAccumulated * 10_000_000L / _videoTimescale;
+
+                accumulated = 0;
+                while (accumulated < lastKeyframeAccumulated)
                 {
-                    // Per-sample durations (no DefaultSampleDuration): skip sample by sample.
-                    while (_videoAccumulated * 10_000_000L / _videoTimescale < timestamp)
-                    {
-                        var s = _reader.ReadSample(_videoTrack.TrackID);
-                        if (s == null) break;
-                        _videoAccumulated += AdvanceVideo(s.Duration);
-                    }
+                    var s = _reader.ReadSample(_videoTrack.TrackID);
+                    if (s == null) break;
+                    accumulated += FpsDenom > 0 ? FpsDenom : AdvanceVideo(s.Duration);
                 }
-                _videoSampleTs = _videoAccumulated * 10_000_000L / _videoTimescale;
+                _videoAccumulated = lastKeyframeAccumulated;
+                _videoSampleTs = seekTimestamp;
                 _pendingVideoUnits.Clear();
             }
 
-            // Skip audio samples to the target position.
+            // Skip audio to the keyframe timestamp (same position as video for A/V sync).
             if (HasAudio)
             {
-                while (_audioAccumulated * 10_000_000L / _audioTimescale < timestamp)
+                while (_audioAccumulated * 10_000_000L / _audioTimescale < seekTimestamp)
                 {
                     var sample = _reader.ReadSample(_audioTrack.TrackID);
                     if (sample == null) break;
-                    if(_audioTrack is AACTrack aac)
-                    {
-                        if (sample.Duration != 1024) continue;
-                    }
+                    if (_audioTrack is AACTrack && sample.Duration != 1024)
+                        continue;
                     _audioAccumulated += (long)sample.Duration;
                 }
                 _pendingAudioUnits.Clear();
             }
 
-            Debug.WriteLine($"Seeked to {timestamp} (video ts={_videoAccumulated * 10_000_000L / _videoTimescale}, audio ts={_audioAccumulated * 10_000_000L / _audioTimescale})");
+            Debug.WriteLine($"Seeked to {timestamp} → keyframe at {seekTimestamp} (video ts={_videoAccumulated * 10_000_000L / _videoTimescale}, audio ts={_audioAccumulated * 10_000_000L / _audioTimescale})");
 
             return true;
         }
@@ -313,6 +319,8 @@ namespace SharpMediaFoundationInterop
                 var dims = h264.Sps.First().Value.CalculateDimensions();
                 VideoWidth  = dims.Width;
                 VideoHeight = dims.Height;
+                OriginalVideoWidth  = MediaUtils.RoundToMultipleOf(dims.Width, H264Decoder.H264_RES_MULTIPLE); 
+                OriginalVideoHeight = MediaUtils.RoundToMultipleOf(dims.Height, H264Decoder.H264_RES_MULTIPLE);
                 FpsNom      = h264.Timescale;
                 FpsDenom    = (uint)h264.DefaultSampleDuration;
                 VideoCodec  = "H264";
@@ -323,6 +331,8 @@ namespace SharpMediaFoundationInterop
                 var dims = h265.Sps.First().Value.CalculateDimensions();
                 VideoWidth  = dims.Width;
                 VideoHeight = dims.Height;
+                OriginalVideoWidth = MediaUtils.RoundToMultipleOf(dims.Width, H265Decoder.H265_RES_MULTIPLE);
+                OriginalVideoHeight = MediaUtils.RoundToMultipleOf(dims.Height, H265Decoder.H265_RES_MULTIPLE);
                 FpsNom      = h265.Timescale;
                 FpsDenom    = (uint)h265.DefaultSampleDuration;
                 VideoCodec  = "H265";
@@ -333,6 +343,8 @@ namespace SharpMediaFoundationInterop
                 var dims = av1.SequenceHeaderObu.CalculateDimensions();
                 VideoWidth  = dims.Width;
                 VideoHeight = dims.Height;
+                OriginalVideoWidth = MediaUtils.RoundToMultipleOf(dims.Width, AV1Decoder.AV1_RES_MULTIPLE);
+                OriginalVideoHeight = MediaUtils.RoundToMultipleOf(dims.Height, AV1Decoder.AV1_RES_MULTIPLE);
                 FpsNom      = av1.Timescale;
                 FpsDenom    = (uint)av1.DefaultSampleDuration;
                 VideoCodec  = "AV1";

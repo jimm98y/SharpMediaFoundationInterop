@@ -8,6 +8,8 @@ namespace SharpMediaFoundationInterop.WPF
         bool HasVideo { get; }
         uint VideoWidth { get; }
         uint VideoHeight { get; }
+        uint OriginalVideoWidth { get; }
+        uint OriginalVideoHeight { get; }
         uint FpsNom { get; }
         uint FpsDenom { get; }
         string VideoCodec { get; }  // "H264", "H265", "AV1"
