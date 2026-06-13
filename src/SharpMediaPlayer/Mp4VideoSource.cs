@@ -12,6 +12,7 @@ using SharpMP4.Readers;
 using SharpMP4.Tracks;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 
@@ -114,10 +115,16 @@ namespace SharpMediaFoundationInterop
                 {
                     var sample = _reader.ReadSample(_audioTrack.TrackID);
                     if (sample == null) break;
+                    if(_audioTrack is AACTrack aac)
+                    {
+                        if (sample.Duration != 1024) continue;
+                    }
                     _audioAccumulated += (long)sample.Duration;
                 }
                 _pendingAudioUnits.Clear();
             }
+
+            Debug.WriteLine($"Seeked to {timestamp} (video ts={_videoAccumulated * 10_000_000L / _videoTimescale}, audio ts={_audioAccumulated * 10_000_000L / _audioTimescale})");
 
             return true;
         }

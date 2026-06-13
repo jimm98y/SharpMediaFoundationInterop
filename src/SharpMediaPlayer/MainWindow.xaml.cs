@@ -9,7 +9,7 @@ namespace SharpMediaFoundationInterop
 
         public MainWindow()
         {
-            string filePath = File.Exists("test1.mp4") ? "test1.mp4" : "frag_bunny.mp4";
+            string filePath = File.Exists("t.mp4") ? "t.mp4" : "frag_bunny.mp4";
             MP4Source = new Mp4VideoSource(filePath);
             MP4Source.Initialize();
 
