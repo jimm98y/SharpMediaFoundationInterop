@@ -289,9 +289,6 @@ namespace SharpMediaFoundationInterop.WPF
 
         private void StopPlayback()
         {
-            // Suppress slider ValueChanged callbacks while we tear down state.
-            _updatingSlider = true;
-
             CompositionTarget.Rendering -= OnRendering;
             _cts?.Cancel();
             _decodeThread?.Join(2000);
@@ -314,9 +311,6 @@ namespace SharpMediaFoundationInterop.WPF
 
             _bitmap = null;
             if (_image != null) _image.Source = null;
-
-            if (_positionSlider != null) _positionSlider.Value = 0;
-            _updatingSlider = false;
         }
 
         private void DrainFrameQueue()

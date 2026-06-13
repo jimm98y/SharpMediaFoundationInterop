@@ -26,7 +26,8 @@ namespace SharpMediaFoundationInterop
         private ITrack _audioTrack;
 
         // Timescales extracted during initialization
-        private uint _videoTimescale;
+        private uint _videoTimescale;     // normalized ITrack.Timescale (consistent with FpsDenom)
+        private uint _videoMdhdTimescale; // actual mdhd.Timescale (used for raw trun/sample.Duration values)
         private uint _audioTimescale;
 
         // Buffered NALUs/frames within the current sample
@@ -138,7 +139,7 @@ namespace SharpMediaFoundationInterop
             if (sample == null) { length = 0; timestamp = 0; return false; }
 
             _videoSampleTs = _videoAccumulated * 10_000_000L / _videoTimescale;
-            _videoAccumulated += FpsDenom;
+            _videoAccumulated += AdvanceVideo(sample.Duration);
 
             var units = _reader.ParseSample(_videoTrack.TrackID, sample.Data).ToList();
             if (units.Count == 0) { length = 0; timestamp = _videoSampleTs; return true; }
@@ -220,8 +221,21 @@ namespace SharpMediaFoundationInterop
             if (HasVideo) ExtractVideoInfo();
             if (HasAudio) ExtractAudioInfo();
 
-            if (Duration == 0 && HasVideo && _videoTimescale > 0)
-                Duration = ComputeFragmentedDuration(container, _videoTrack.TrackID, _videoTimescale, FpsDenom);
+            if (HasVideo)
+            {
+                // For fragmented MP4, SharpMP4 normalises ITrack.Timescale/DefaultSampleDuration by a
+                // constant factor (observed: 256) but leaves MediaSample.Duration in raw mdhd units.
+                // Read the actual mdhd timescale so we can correctly convert raw trun durations to 100ns.
+                var mdhd = moov?.Children.OfType<TrackBox>()
+                    .Where(t => t.Children.OfType<TrackHeaderBox>().Any(h => h.TrackID == _videoTrack.TrackID))
+                    .SelectMany(t => t.Children.OfType<MediaBox>())
+                    .SelectMany(m => m.Children.OfType<MediaHeaderBox>())
+                    .FirstOrDefault();
+                _videoMdhdTimescale = (mdhd != null && mdhd.Timescale > 0) ? mdhd.Timescale : _videoTimescale;
+            }
+
+            if (Duration == 0 && HasVideo && _videoMdhdTimescale > 0)
+                Duration = ComputeFragmentedDuration(container, _videoTrack.TrackID, _videoMdhdTimescale, FpsDenom);
 
             _pendingVideoUnits.Clear();
             _pendingAudioUnits.Clear();
@@ -323,6 +337,17 @@ namespace SharpMediaFoundationInterop
             {
                 HasAudio = false;
             }
+        }
+
+        // Returns the number of _videoTimescale ticks to advance for one video sample.
+        // FpsDenom is normalized (consistent with _videoTimescale). rawSampleDuration is in
+        // _videoMdhdTimescale units; we normalise it by the same ratio when FpsDenom is absent.
+        private long AdvanceVideo(long rawSampleDuration)
+        {
+            if (FpsDenom > 0) return FpsDenom;
+            if (_videoMdhdTimescale > 0 && _videoMdhdTimescale != _videoTimescale && rawSampleDuration > 0)
+                return rawSampleDuration * _videoTimescale / _videoMdhdTimescale;
+            return rawSampleDuration > 0 ? rawSampleDuration : 1L;
         }
 
         private static void CopyOut(ref byte[] dest, byte[] src, out uint length)
