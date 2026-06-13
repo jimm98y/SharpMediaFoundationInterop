@@ -61,10 +61,10 @@ namespace SharpMediaFoundationInterop.Transforms
             {
                 MediaUtils.Check(transform.GetInputStatus(streamID, out uint decoderInputFlags));
                 HRESULT inputResult = transform.ProcessInput(streamID, sample, 0);
-                if(inputResult == MF_E_NOTACCEPTING) // after stream change, we have to flush sometimes
+                if (inputResult == MF_E_NOTACCEPTING)
                 {
-                    transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
-                    inputResult = transform.ProcessInput(streamID, sample, 0); // try again
+                    // The decoder still has buffered output; caller must drain ProcessOutput first.
+                    return false;
                 }
                 MediaUtils.Check(inputResult);
                 ret = true;
@@ -197,10 +197,22 @@ namespace SharpMediaFoundationInterop.Transforms
                 if (Log.WarnEnabled) Log.Warn(log.ToString());
 
                 transform.SetOutputType(streamID, mediaType, 0);
-
-                // because the subtype has not changed, do not flush, otherwise we'd lose frames:
-                //transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
                 dataBuffer[0].dwStatus = 0;
+
+                // After the type change, the decoder may have a frame ready — drain it now.
+                // If we skip this and call ProcessInput next, the MFT returns MF_E_NOTACCEPTING,
+                // and the flush we'd apply would discard that frame and reset decoder state.
+                outputResult = transform.ProcessOutput(0, dataBuffer, out decoderOutputStatus);
+                sample = dataBuffer[0].pSample;
+                if (outputResult.Value == 0 && decoderOutputStatus == 0)
+                {
+                    sample.ConvertToContiguousBuffer(out IMFMediaBuffer retryBuf);
+                    ret = MediaUtils.CopyBuffer(retryBuf, bytes, out length);
+                }
+                else
+                {
+                    length = 0;
+                }
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {

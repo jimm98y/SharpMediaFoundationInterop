@@ -56,12 +56,25 @@ namespace SharpMediaFoundationInterop.Transforms
             return true;
         }
 
+        public void Flush()
+        {
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, default);
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_START_OF_STREAM, default);
+        }
+
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposedValue)
             {
                 if (disposing)
-                { }
+                {
+                    if (_transform != null)
+                    {
+                        DestroyTransform(_transform);
+                        _transform = null;
+                    }
+                }
 
                 _disposedValue = true;
             }

@@ -12,12 +12,12 @@
             <TabItem Header="MP4">
                 <ctrl:VideoControl Source="{Binding MP4Source}" Looping="True" />
             </TabItem>
-            <TabItem Header="Screen">
+            <!--<TabItem Header="Screen">
                 <ctrl:VideoControl Source="{Binding ScreenSource}" Looping="True" />
             </TabItem>
             <TabItem Header="Camera">
                 <ctrl:VideoControl Source="{Binding CameraSource}" Looping="True" />
-            </TabItem>
+            </TabItem>-->
             <!--<TabItem Header="HEIC">
                 <ctrl:VideoControl Source="{Binding HeicSource}" Looping="True" />
             </TabItem>-->

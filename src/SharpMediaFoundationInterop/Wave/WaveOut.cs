@@ -87,11 +87,21 @@ namespace SharpMediaFoundationInterop.Wave
             return time.u.sample;
         }
 
+        public void Pause()
+        {
+            PInvoke.waveOutPause(_hDevice);
+        }
+
+        public void Resume()
+        {
+            PInvoke.waveOutRestart(_hDevice);
+        }
+
         public void Reset()
         {
             PInvoke.waveOutReset(_hDevice);
             Interlocked.Exchange(ref _queuedFrames, 0);
-            _audioBufferIndex = 0; 
+            _audioBufferIndex = 0;
         }
 
         public void Close()

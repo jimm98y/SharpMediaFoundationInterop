@@ -1,23 +1,20 @@
-﻿using SharpMediaFoundationInterop.WPF;
+using System.IO;
 using System.Windows;
 
 namespace SharpMediaFoundationInterop
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
-        public IVideoSource ScreenSource { get { return new ScreenSource(); } }
-        public IVideoSource CameraSource { get { return new CameraSource(); } }
-        public IVideoSource MP4Source { get { return new VideoFileSource("frag_bunny.mp4"); } } // H264
-        public IVideoSource HeicSource { get { return new ImageFileSource("test.heic"); } } // heic
-        public IVideoSource RtspSource { get { return new RtspSource("rtsp://127.0.0.1:8554", "admin", "password"); } }
+        public Mp4VideoSource MP4Source { get; }
 
         public MainWindow()
         {
+            string filePath = File.Exists("test1.mp4") ? "test1.mp4" : "frag_bunny.mp4";
+            MP4Source = new Mp4VideoSource(filePath);
+            MP4Source.Initialize();
+
             InitializeComponent();
-            this.DataContext = this;
+            DataContext = this;
         }
     }
 }
