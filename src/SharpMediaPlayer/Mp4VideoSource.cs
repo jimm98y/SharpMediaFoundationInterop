@@ -86,10 +86,8 @@ namespace SharpMediaFoundationInterop
             if (timestamp == 0) return true;
 
             // Video decoders (MFTs) require starting from a keyframe (random-access point).
-            // Scan forward to find the last keyframe at or before the requested timestamp,
-            // then use that as the actual seek target for both video and audio.
-            long seekTimestamp = timestamp;
-
+            // Pass 1: scan forward to find the last keyframe at or before the target timestamp.
+            long seekTimestamp = 0;
             if (HasVideo)
             {
                 long lastKeyframeAccumulated = 0;
@@ -104,6 +102,9 @@ namespace SharpMediaFoundationInterop
                 }
                 seekTimestamp = lastKeyframeAccumulated * 10_000_000L / _videoTimescale;
 
+                // Pass 2: reopen and skip the reader to just before the keyframe so the
+                // next ReadNextVideoUnit returns the keyframe sample at seekTimestamp.
+                OpenFile();
                 accumulated = 0;
                 while (accumulated < lastKeyframeAccumulated)
                 {
@@ -116,10 +117,12 @@ namespace SharpMediaFoundationInterop
                 _pendingVideoUnits.Clear();
             }
 
-            // Skip audio to the keyframe timestamp (same position as video for A/V sync).
+            // Seek audio to the originally requested timestamp, not the keyframe.
+            // Audio frames are independent so no keyframe alignment is needed, and
+            // keeping audio at the target keeps it in sync during the video pre-roll.
             if (HasAudio)
             {
-                while (_audioAccumulated * 10_000_000L / _audioTimescale < seekTimestamp)
+                while (_audioAccumulated * 10_000_000L / _audioTimescale < timestamp)
                 {
                     var sample = _reader.ReadSample(_audioTrack.TrackID);
                     if (sample == null) break;
@@ -130,7 +133,7 @@ namespace SharpMediaFoundationInterop
                 _pendingAudioUnits.Clear();
             }
 
-            Debug.WriteLine($"Seeked to {timestamp} → keyframe at {seekTimestamp} (video ts={_videoAccumulated * 10_000_000L / _videoTimescale}, audio ts={_audioAccumulated * 10_000_000L / _audioTimescale})");
+            Debug.WriteLine($"Seek: target={timestamp / 10_000_000.0:F2}s  keyframe={seekTimestamp / 10_000_000.0:F2}s  audio={_audioAccumulated * 10_000_000L / _audioTimescale / 10_000_000.0:F2}s");
 
             return true;
         }

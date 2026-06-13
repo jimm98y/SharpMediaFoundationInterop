@@ -55,6 +55,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         private long _videoPtsStart = -1;
         private volatile bool _clockResetNeeded;
+        private long _seekTargetTs = -1;
 
         private volatile bool _looping;
         private volatile bool _mute;
@@ -210,6 +211,7 @@ namespace SharpMediaFoundationInterop.WPF
             var source = Source;
             if (source == null) return;
             long ts = (long)(position.TotalSeconds * 10_000_000);
+            _seekTargetTs = ts;
 
             var cts = _cts;
             var thread = _decodeThread;
@@ -242,8 +244,8 @@ namespace SharpMediaFoundationInterop.WPF
         private void OnSliderDragCompleted(object sender, DragCompletedEventArgs e)
         {
             double value = _positionSlider.Value;
-            _isDraggingSlider = false;
             Seek(TimeSpan.FromSeconds(value));
+            _isDraggingSlider = false;
         }
 
         private void RestartAfterSeek()
@@ -310,6 +312,7 @@ namespace SharpMediaFoundationInterop.WPF
             _clock.Stop();
             _videoPtsStart = -1;
             _clockResetNeeded = false;
+            _seekTargetTs = -1;
             _paused = false;
             IsPlaying = false;
             CanSeek = false;
@@ -437,8 +440,14 @@ namespace SharpMediaFoundationInterop.WPF
                                 {
                                     while (colorConverter.ProcessOutput(ref rgbBuf, out uint rgbLen) && !token.IsCancellationRequested)
                                     {
+                                        // Pre-roll: decode frames silently from the keyframe until
+                                        // we reach the originally requested seek position.
+                                        long seekTarget = _seekTargetTs;
+                                        if (seekTarget >= 0 && videoTs < seekTarget)
+                                            continue;
+                                        _seekTargetTs = -1;
+
                                         byte[] pooled = RentBgra();
-                                        // Copy only the visible rows; rgbBuf may include decoder height-padding rows.
                                         BitmapUtils.CopyBitmap(
                                             rgbBuf,
                                             (int)_originalDisplayWidth,
