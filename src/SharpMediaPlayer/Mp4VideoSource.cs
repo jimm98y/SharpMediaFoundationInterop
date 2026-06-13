@@ -28,7 +28,8 @@ namespace SharpMediaFoundationInterop
         // Timescales extracted during initialization
         private uint _videoTimescale;     // normalized ITrack.Timescale (consistent with FpsDenom)
         private uint _videoMdhdTimescale; // actual mdhd.Timescale (used for raw trun/sample.Duration values)
-        private uint _audioTimescale;
+        private uint _audioTimescale;     // normalized ITrack.Timescale for audio
+        private uint _audioMdhdTimescale; // actual mdhd.Timescale for audio (used for raw sample.Duration values)
 
         // Buffered NALUs/frames within the current sample
         private readonly Queue<byte[]> _pendingVideoUnits = new();
@@ -83,12 +84,25 @@ namespace SharpMediaFoundationInterop
             // Skip video samples to the target position.
             if (HasVideo)
             {
-                long frameCount = timestamp * _videoTimescale / 10_000_000L / FpsDenom;
-                for (long i = 0; i < frameCount; i++)
+                if (FpsDenom > 0)
                 {
-                    if (_reader.ReadSample(_videoTrack.TrackID) == null) break;
+                    long frameCount = timestamp * _videoTimescale / 10_000_000L / FpsDenom;
+                    for (long i = 0; i < frameCount; i++)
+                    {
+                        if (_reader.ReadSample(_videoTrack.TrackID) == null) break;
+                    }
+                    _videoAccumulated = frameCount * FpsDenom;
                 }
-                _videoAccumulated = frameCount * FpsDenom;
+                else
+                {
+                    // Per-sample durations (no DefaultSampleDuration): skip sample by sample.
+                    while (_videoAccumulated * 10_000_000L / _videoTimescale < timestamp)
+                    {
+                        var s = _reader.ReadSample(_videoTrack.TrackID);
+                        if (s == null) break;
+                        _videoAccumulated += AdvanceVideo(s.Duration);
+                    }
+                }
                 _videoSampleTs = _videoAccumulated * 10_000_000L / _videoTimescale;
                 _pendingVideoUnits.Clear();
             }
@@ -158,14 +172,14 @@ namespace SharpMediaFoundationInterop
             {
                 var u = _pendingAudioUnits.Dequeue();
                 CopyOut(ref buffer, u, out length);
-                timestamp = _audioAccumulated * 10_000_000L / _audioTimescale;
+                timestamp = _audioAccumulated * 10_000_000L / _audioMdhdTimescale;
                 return true;
             }
 
             var sample = _reader.ReadSample(_audioTrack.TrackID);
             if (sample == null) { length = 0; timestamp = 0; return false; }
 
-            long sampleTs = _audioAccumulated * 10_000_000L / _audioTimescale;
+            long sampleTs = _audioAccumulated * 10_000_000L / _audioMdhdTimescale;
             _audioAccumulated += (long)sample.Duration;
 
             var frames = _reader.ParseSample(_audioTrack.TrackID, sample.Data).ToList();
@@ -220,6 +234,16 @@ namespace SharpMediaFoundationInterop
 
             if (HasVideo) ExtractVideoInfo();
             if (HasAudio) ExtractAudioInfo();
+
+            if (HasAudio)
+            {
+                var mdhd = moov?.Children.OfType<TrackBox>()
+                    .Where(t => t.Children.OfType<TrackHeaderBox>().Any(h => h.TrackID == _audioTrack.TrackID))
+                    .SelectMany(t => t.Children.OfType<MediaBox>())
+                    .SelectMany(m => m.Children.OfType<MediaHeaderBox>())
+                    .FirstOrDefault();
+                _audioMdhdTimescale = (mdhd != null && mdhd.Timescale > 0) ? mdhd.Timescale : _audioTimescale;
+            }
 
             if (HasVideo)
             {

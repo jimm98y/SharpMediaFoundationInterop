@@ -1,3 +1,10 @@
+using SharpMediaFoundationInterop.Transforms;
+using SharpMediaFoundationInterop.Transforms.AAC;
+using SharpMediaFoundationInterop.Transforms.AV1;
+using SharpMediaFoundationInterop.Transforms.H264;
+using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Transforms.Opus;
+using SharpMediaFoundationInterop.Wave;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -10,13 +17,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using SharpMediaFoundationInterop.Transforms;
-using SharpMediaFoundationInterop.Transforms.AAC;
-using SharpMediaFoundationInterop.Transforms.AV1;
-using SharpMediaFoundationInterop.Transforms.H264;
-using SharpMediaFoundationInterop.Transforms.H265;
-using SharpMediaFoundationInterop.Transforms.Opus;
-using SharpMediaFoundationInterop.Wave;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -26,7 +26,7 @@ namespace SharpMediaFoundationInterop.WPF
     public class VideoControl : Control
     {
         private const int MaxVideoQueueSize = 4;
-        private const int TargetAudioQueueFrames = 100;
+        private const int TargetAudioQueueFrames = 8;
 
         private Image _image;
         private Button _playPauseButton;
@@ -42,6 +42,7 @@ namespace SharpMediaFoundationInterop.WPF
         private readonly Stack<byte[]> _bgraPool = new();
 
         private WaveOut _waveOut;
+        private volatile uint _audioByteRate; // sampleRate * channels * 2; 0 when no audio
         private readonly Stopwatch _clock = new();
 
         private uint _displayWidth;
@@ -153,7 +154,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (_positionSlider != null)
             {
                 _positionSlider.ValueChanged -= OnSliderValueChanged;
-                _positionSlider.RemoveHandler(Thumb.DragStartedEvent,  (DragStartedEventHandler)OnSliderDragStarted);
+                _positionSlider.RemoveHandler(Thumb.DragStartedEvent, (DragStartedEventHandler)OnSliderDragStarted);
                 _positionSlider.RemoveHandler(Thumb.DragCompletedEvent, (DragCompletedEventHandler)OnSliderDragCompleted);
             }
 
@@ -169,7 +170,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (_positionSlider != null)
             {
                 _positionSlider.ValueChanged += OnSliderValueChanged;
-                _positionSlider.AddHandler(Thumb.DragStartedEvent,  (DragStartedEventHandler)OnSliderDragStarted);
+                _positionSlider.AddHandler(Thumb.DragStartedEvent, (DragStartedEventHandler)OnSliderDragStarted);
                 _positionSlider.AddHandler(Thumb.DragCompletedEvent, (DragCompletedEventHandler)OnSliderDragCompleted);
             }
         }
@@ -247,12 +248,16 @@ namespace SharpMediaFoundationInterop.WPF
             DrainFrameQueue();
             _waveOut?.Dispose();
             _waveOut = null;
+            _audioByteRate = 0;
+            _cts?.Cancel();
+            _decodeThread?.Join(2000);
+            _decodeThread = null;
+            _cts?.Dispose();
+            _cts = null;
             _clock.Stop();
             _videoPtsStart = -1;
             _clockResetNeeded = false;
             _paused = false;
-            _cts?.Dispose();
-            _cts = null;
             _decodeThread = null;
             ClearBgraPool();
             if (source != null)
@@ -261,10 +266,10 @@ namespace SharpMediaFoundationInterop.WPF
 
         private void StartPlayback(IVideoPlayerSource source)
         {
-            _displayWidth  = source.VideoWidth;
+            _displayWidth = source.VideoWidth;
             _displayHeight = source.VideoHeight;
 
-            CanSeek  = source.CanSeek;
+            CanSeek = source.CanSeek;
             Duration = source.Duration > 0 ? source.Duration / 10_000_000.0 : 0.0;
             IsPlaying = true;
 
@@ -308,6 +313,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             _waveOut?.Dispose();
             _waveOut = null;
+            _audioByteRate = 0;
 
             _bitmap = null;
             if (_image != null) _image.Source = null;
@@ -361,12 +367,13 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 _waveOut = new WaveOut();
                 _waveOut.Initialize(audioDecoder.SampleRate, audioDecoder.Channels, 16);
+                _audioByteRate = audioDecoder.SampleRate * audioDecoder.Channels * 2u;
             }
 
             byte[] videoCompBuf = source.HasVideo ? new byte[2 * 1024 * 1024] : null;
-            byte[] nv12Buf      = source.HasVideo ? new byte[videoDecoder.OutputSize] : null;
+            byte[] nv12Buf = source.HasVideo ? new byte[videoDecoder.OutputSize] : null;
             byte[] audioCompBuf = source.HasAudio ? new byte[64 * 1024] : null;
-            byte[] pcmBuf       = source.HasAudio ? new byte[audioDecoder.OutputSize] : null;
+            byte[] pcmBuf = source.HasAudio ? new byte[audioDecoder.OutputSize] : null;
 
             bool videoEOS = !source.HasVideo;
             bool audioEOS = !source.HasAudio;
@@ -475,14 +482,32 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 _clockResetNeeded = false;
                 _videoPtsStart = -1;
-                _clock.Restart();
-            }
-            else if (!_clock.IsRunning)
-            {
-                _clock.Restart();
+                _clock.Stop();
+                _clock.Reset();
             }
 
-            long elapsed = _clock.ElapsedTicks * 10_000_000L / Stopwatch.Frequency;
+            // Use audio hardware position as the reference clock so video stays locked
+            // to what the listener actually hears, eliminating audio driver latency lag.
+            // Fall back to a Stopwatch when there is no audio track or playback is muted.
+            long elapsed;
+            uint byteRate = _audioByteRate;
+            if (_waveOut != null && byteRate > 0 && !_mute)
+            {
+                try
+                {
+                    elapsed = (long)_waveOut.GetPosition() * 10_000_000L / byteRate;
+                }
+                catch
+                {
+                    if (!_clock.IsRunning) _clock.Restart();
+                    elapsed = _clock.ElapsedTicks * 10_000_000L / Stopwatch.Frequency;
+                }
+            }
+            else
+            {
+                if (!_clock.IsRunning) _clock.Restart();
+                elapsed = _clock.ElapsedTicks * 10_000_000L / Stopwatch.Frequency;
+            }
 
             DecodedFrame? toPresent = null;
             while (_frameQueue.TryPeek(out var next))
@@ -529,17 +554,17 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 "H264" => new H264Decoder(source.VideoWidth, source.VideoHeight, source.FpsNom, source.FpsDenom),
                 "H265" => new H265Decoder(source.VideoWidth, source.VideoHeight, source.FpsNom, source.FpsDenom),
-                "AV1"  => new AV1Decoder(source.VideoWidth, source.VideoHeight, source.FpsNom, source.FpsDenom),
-                _      => throw new NotSupportedException($"Unsupported video codec: {source.VideoCodec}")
+                "AV1" => new AV1Decoder(source.VideoWidth, source.VideoHeight, source.FpsNom, source.FpsDenom),
+                _ => throw new NotSupportedException($"Unsupported video codec: {source.VideoCodec}")
             };
 
         private static IMediaAudioTransform CreateAudioDecoder(IVideoPlayerSource source) =>
             source.AudioCodec switch
             {
-                "AAC"  => new AACDecoder(source.AudioChannels, source.AudioSampleRate,
+                "AAC" => new AACDecoder(source.AudioChannels, source.AudioSampleRate,
                               AACDecoder.CreateUserData(source.AACUserData), source.AudioChannelConfiguration),
                 "OPUS" => new OpusDecoder(960, source.AudioChannels, source.AudioSampleRate),
-                _      => throw new NotSupportedException($"Unsupported audio codec: {source.AudioCodec}")
+                _ => throw new NotSupportedException($"Unsupported audio codec: {source.AudioCodec}")
             };
 
         private static byte[] MakeSlice(byte[] src, uint length)
@@ -558,7 +583,7 @@ namespace SharpMediaFoundationInterop.WPF
                 float f = BitConverter.ToSingle(floatPcm, i * 4);
                 float c = f < -1f ? -1f : f > 1f ? 1f : f;
                 short s = (short)(c * 32767f);
-                result[i * 2]     = (byte)(s & 0xFF);
+                result[i * 2] = (byte)(s & 0xFF);
                 result[i * 2 + 1] = (byte)((s >> 8) & 0xFF);
             }
             return result;
@@ -572,15 +597,15 @@ namespace SharpMediaFoundationInterop.WPF
                 byte* pUV = pSrc + strideW * strideH;
                 for (int row = 0; row < displayH; row++)
                 {
-                    byte* yRow  = pSrc + row * strideW;
+                    byte* yRow = pSrc + row * strideW;
                     byte* uvRow = pUV + (row >> 1) * strideW;
-                    byte* dRow  = pDst + row * displayW * 4;
+                    byte* dRow = pDst + row * displayW * 4;
 
                     for (int col = 0; col < displayW; col++)
                     {
                         int y = yRow[col];
                         int uvBase = col & ~1;
-                        int u = uvRow[uvBase]     - 128;
+                        int u = uvRow[uvBase] - 128;
                         int v = uvRow[uvBase + 1] - 128;
 
                         int c = (y - 16) * 298;

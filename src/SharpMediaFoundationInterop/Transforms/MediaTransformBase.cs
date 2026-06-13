@@ -227,7 +227,7 @@ namespace SharpMediaFoundationInterop.Transforms
             else
             {
                 length = 0;
-                MediaUtils.Check(outputResult);
+                if (Log.ErrorEnabled) Log.Error(Marshal.GetExceptionForHR(outputResult).Message);
             }
 
             return ret;
