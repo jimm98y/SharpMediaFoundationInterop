@@ -122,11 +122,11 @@ namespace SharpMediaFoundationInterop.WPF
                     descriptor.ChannelConfiguration = (byte)aaccfg.ChannelConfiguration;
                     descriptor.ExtensionAudioObjectType = new GetAudioObjectType() { AudioObjectTypeExt = 5 }; // TODO
                     descriptor.AudioObjectType = new GetAudioObjectType() { AudioObjectType = 2 }; // TODO simplify API
-                    descriptor._GASpecificConfig = new GASpecificConfig((int)AudioSpecificConfigDescriptor.SamplingFrequencyMap[(uint)aaccfg.FrequencyIndex], aaccfg.ChannelConfiguration, 2);
-                    descriptor.SyncExtensionType = 695; // TODO
+                    descriptor._GASpecificConfig = new GASpecificConfig(aaccfg.FrequencyIndex, aaccfg.ChannelConfiguration, 2);
 
                     audioInfo.UserData = descriptor.ToBytes();
-                    audioInfo.ChannelCount = (uint)aaccfg.ChannelConfiguration;
+                    audioInfo.ChannelCount = aaccfg.ChannelConfiguration == 1 ? 1u : (uint)aaccfg.ChannelConfiguration; // ChannelConfiguration = 1 means mono even though ChannelCount = 2
+                    audioInfo.ChannelConfiguration = aaccfg.ChannelConfiguration;
                     audioInfo.SampleRate = AudioSpecificConfigDescriptor.SamplingFrequencyMap[(uint)aaccfg.FrequencyIndex];
                 }
                 else if(e.StreamType == "OPUS")
