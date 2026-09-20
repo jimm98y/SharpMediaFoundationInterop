@@ -86,6 +86,32 @@ namespace SharpSpatialVideo
             }
 
             // What the cross view prediction is worth: the dependent pictures against the base ones.
+            // 5. Cloning the encoder is not possible, so the replay cost is bounded instead by
+            // chunking: the master is encoded one GOP at a time, each chunk a fresh encoder run,
+            // and every replay starts at its own chunk rather than at the first picture. Test 2
+            // is what makes this work - a prefix agrees with the start of a longer run - so the
+            // agreement holds by construction rather than by luck with rate control.
+            int chunk = gopSize > 1 ? (int)gopSize : 4;
+            if (baseView.Count >= chunk * 2)
+            {
+                int second = chunk;   // the first picture of the second chunk
+                var chunkMaster = Encode(baseView.Skip(second).Take(chunk));
+
+                int k = second + chunk / 2;
+                var chunkReplay = Encode(baseView.Skip(second).Take(k - second + 1).Append(dependentView[k]));
+                var basePart = chunkReplay.Take(k - second + 1).ToArray();
+
+                Console.WriteLine();
+                Console.WriteLine($"  5. chunked master, chunk of {chunk} starting at {second}:");
+                Console.WriteLine($"       replay for k={k} vs that chunk: " +
+                    $"{Describe(chunkMaster.Take(k - second + 1).ToArray(), basePart)}");
+
+                long full = (long)baseView.Count * (baseView.Count + 3) / 2;
+                long chunked = (long)baseView.Count * (chunk + 3) / 2;
+                Console.WriteLine($"       picture encodes for {baseView.Count} access units: " +
+                    $"{full} replaying from the start, {chunked} chunked");
+            }
+
             // The dependent picture against the base picture of the same access unit, which is the
             // comparison that means anything - averaging the base view in would fold in the key
             // frame, which is many times the size of the pictures around it.
