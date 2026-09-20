@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpMediaFoundationInterop\SharpMediaFoundationInterop.csproj" />
+  </ItemGroup>
+
+  <!--
+    MV-HEVC parsing needs SharpH265 fixes that are not in the published SharpMP4 0.3.0
+    package yet, so this references the local SharpMP4 working tree and expects it checked
+    out next to this repository. That is also why the project is deliberately left out of
+    SharpMediaFoundationInterop.sln: adding it drags those out-of-repo paths into the
+    solution. Switch these to <PackageReference Include="SharpMP4" ... /> once a package
+    carrying the fixes ships, then add it to the solution.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\SharpMP4\src\SharpH265\SharpH265.csproj" />
+    <ProjectReference Include="..\..\..\SharpMP4\src\SharpMP4\SharpMP4.csproj" />
+    <ProjectReference Include="..\..\..\SharpMP4\src\SharpISOBMFF\SharpISOBMFF.csproj" />
+  </ItemGroup>
+
+</Project>
