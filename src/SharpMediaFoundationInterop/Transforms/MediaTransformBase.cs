@@ -49,7 +49,12 @@ namespace SharpMediaFoundationInterop.Transforms
 
         protected bool ProcessOutput(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length)
         {
-            return Output(0, transform, dataBuffer, ref buffer, out length);
+            return Output(0, transform, dataBuffer, ref buffer, out length, out _);
+        }
+
+        protected bool ProcessOutput(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length, out long timestamp)
+        {
+            return Output(0, transform, dataBuffer, ref buffer, out length, out timestamp);
         }
 
         private unsafe bool Input(uint streamID, IMFTransform transform, IMFSample sample)
@@ -77,8 +82,9 @@ namespace SharpMediaFoundationInterop.Transforms
             return ret;
         }
 
-        private unsafe bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length)
+        private unsafe bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length, out long timestamp)
         {
+            timestamp = 0;
             bool ret = false;
             const int MF_E_TRANSFORM_NEED_MORE_INPUT = unchecked((int)0xc00d6d72);
             const int MF_E_TRANSFORM_STREAM_CHANGE = unchecked((int)0xc00d6d61);
@@ -209,6 +215,10 @@ namespace SharpMediaFoundationInterop.Transforms
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {
+                // The decoder reorders pictures, so the timestamp is the only reliable way for a
+                // caller to tell which input a decoded frame came from.
+                try { sample.GetSampleTime(out timestamp); } catch { timestamp = 0; }
+
                 sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
                 ret = MediaUtils.CopyBuffer(buffer, bytes, out length);
             }
