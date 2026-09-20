@@ -13,6 +13,8 @@ namespace SharpSpatialVideo
             {
                 Console.WriteLine("Usage:");
                 Console.WriteLine("  SharpSpatialVideo analyze <input.mov> [accessUnits]");
+                Console.WriteLine("  SharpSpatialVideo truth <input.mov> [truthDir] [frames]   verify against ffmpeg");
+                Console.WriteLine("  SharpSpatialVideo reference <input.mov> [truthDir]        regenerate the ffmpeg reference");
                 return 1;
             }
 
@@ -44,6 +46,9 @@ namespace SharpSpatialVideo
 
                 case "truth":
                     return Truth(args);
+
+                case "reference":
+                    return Reference(args);
 
                 case "convert":
                     return ConvertSbs(args);
@@ -140,6 +145,29 @@ namespace SharpSpatialVideo
         }
 
         /// <summary>
+        /// Regenerates the per frame reference hashes with ffmpeg, overwriting what is there. The
+        /// 'truth' command generates them on demand, so this is only needed after changing the
+        /// input or the ffmpeg build.
+        /// </summary>
+        private static int Reference(string[] args)
+        {
+            string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
+            string truthDir = args.Length > 2 ? args[2] : @"C:\Temp\truth";
+
+            if (!FfmpegReference.Ensure(path, truthDir, force: true, out string reason))
+            {
+                Console.Error.WriteLine($"  {reason}");
+                return 2;
+            }
+
+            Console.WriteLine($"  {reason}");
+            foreach (var file in Directory.GetFiles(truthDir, "v*.md5"))
+                Console.WriteLine($"  {Path.GetFileName(file)}: {new FileInfo(file).Length} bytes");
+
+            return 0;
+        }
+
+        /// <summary>
         /// Compares both decoded views against reference frames produced by an MV-HEVC capable
         /// decoder. This is the only external check available on the dependent view, which cannot
         /// otherwise be verified because nothing else on this machine can decode it.
@@ -147,8 +175,17 @@ namespace SharpSpatialVideo
         private static int Truth(string[] args)
         {
             string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
-            string truthDir = args.Length > 2 ? args[2] : @"C:\Temp	ruth";
+            string truthDir = args.Length > 2 ? args[2] : @"C:\Temp\truth";
             int frames = args.Length > 3 ? int.Parse(args[3]) : 40;
+
+            // The reference comes from ffmpeg, the only MV-HEVC decoder to hand. Without it there
+            // is nothing to compare against, so say why and stop rather than report a pass.
+            if (!FfmpegReference.Ensure(path, truthDir, force: false, out string reason))
+            {
+                Console.WriteLine($"  no reference available: {reason}");
+                return 2;
+            }
+            Console.WriteLine($"  reference: {reason}");
 
             SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
 
