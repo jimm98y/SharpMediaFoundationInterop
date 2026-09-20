@@ -185,12 +185,17 @@ namespace SharpSpatialVideo
                 return;
             }
 
-            var names = new List<string>();
-            foreach (var (property, name) in Interesting)
+            // Every property the codec API defines, not just the ones we had in mind. An encoder
+            // implements an arbitrary subset, and asking about all of them is the only way to know
+            // what is really on offer.
+            var supported = new List<string>();
+            foreach (var (name, property) in CodecApiCatalogue.All)
                 if (codec.IsPropertySupported(property))
-                    names.Add(name);
+                    supported.Add(name);
 
-            Console.WriteLine($"{indent}{(names.Count == 0 ? "nothing we asked about" : string.Join(", ", names))}");
+            Console.WriteLine($"{indent}{supported.Count} of {CodecApiCatalogue.All.Length} properties supported");
+            foreach (var name in supported)
+                Console.WriteLine($"{indent}  {name}");
         }
 
         private static readonly (Guid Property, string Name)[] Interesting =
