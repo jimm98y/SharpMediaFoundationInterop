@@ -29,7 +29,7 @@ namespace SharpSpatialVideo
             _rewriter = rewriter;
         }
 
-        public void Run(int accessUnits, uint bitrate, int temporalLayers)
+        public void Run(int accessUnits, uint bitrate, int temporalLayers, uint gopSize)
         {
             var sps = _rewriter.ParserContext.SeqParameterSets[0];
             int codedWidth = (int)sps.PicWidthInLumaSamples;
@@ -49,6 +49,13 @@ namespace SharpSpatialVideo
             // single thing that stopped the interleaved encode from being splittable.
             if (temporalLayers > 1)
                 encoder.CodecProperties[CodecApiProperties.TemporalLayerCount] = (uint)temporalLayers;
+
+            // A GOP of 2 over an interleaved feed would make every base picture an I picture, with
+            // no references at all, and leave each dependent picture predicting from the base
+            // picture beside it. That is the MV-HEVC dependency graph, at the cost of coding the
+            // base view intra only.
+            if (gopSize > 0)
+                encoder.CodecProperties[CodecApiProperties.GopSize] = gopSize;
 
             encoder.Initialize();
             ReportCodecSupport(encoder, temporalLayers);
@@ -97,7 +104,28 @@ namespace SharpSpatialVideo
             }
             encoder.EndDrain();
 
-            Console.WriteLine($"  fed {fed} pictures (L, R interleaved), got {output.Count} samples back");
+            long bytes = output.Sum(s => (long)s.Length);
+            Console.WriteLine($"  fed {fed} pictures (L, R interleaved), got {output.Count} samples back, " +
+                $"{bytes / 1024} KB coded");
+
+            // Which view the bits went to. The encoder hands samples back in coding order, which
+            // for this structure is also the order they were fed, so they alternate.
+            long baseBytes = 0, dependentBytes = 0;
+            int baseCount = 0, dependentCount = 0;
+            for (int i = 0; i < output.Count; i++)
+            {
+                if (i % 2 == 0) { baseBytes += output[i].Length; baseCount++; }
+                else { dependentBytes += output[i].Length; dependentCount++; }
+            }
+
+            if (baseCount > 0 && dependentCount > 0)
+            {
+                Console.WriteLine($"  base view:      {baseBytes / 1024,6} KB over {baseCount} pictures " +
+                    $"({baseBytes / baseCount / 1024.0:F1} KB each)");
+                Console.WriteLine($"  dependent view: {dependentBytes / 1024,6} KB over {dependentCount} pictures " +
+                    $"({dependentBytes / dependentCount / 1024.0:F1} KB each)");
+                Console.WriteLine($"  the dependent view costs {100.0 * dependentBytes / baseBytes:F1}% of the base view");
+            }
             Report(output);
         }
 
@@ -139,6 +167,14 @@ namespace SharpSpatialVideo
                 }
                 Console.WriteLine();
             }
+        }
+
+        private static string Describe(Guid property)
+        {
+            foreach (var (candidate, name) in Interesting)
+                if (candidate == property)
+                    return name;
+            return property.ToString();
         }
 
         private static void PrintSupport(ICodecApi codec, string indent)
@@ -190,7 +226,7 @@ namespace SharpSpatialVideo
             }
 
             foreach (var result in encoder.CodecPropertyResults)
-                Console.WriteLine($"  requested {temporalLayers} temporal layers: " +
+                Console.WriteLine($"  requested {Describe(result.Property)}: " +
                     $"supported={result.Supported}, applied={result.Applied}");
 
             Console.WriteLine();

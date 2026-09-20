@@ -53,6 +53,9 @@ namespace SharpSpatialVideo
                 case "encprobe":
                     return EncProbe(args);
 
+                case "compare":
+                    return Compare(args);
+
                 case "convert":
                     return ConvertSbs(args);
 
@@ -156,12 +159,33 @@ namespace SharpSpatialVideo
         /// Encodes the two views interleaved and prints what the encoder referenced, to find out
         /// whether a single layer encode can be patched into a two layer MV-HEVC stream.
         /// </summary>
+        /// <summary>
+        /// Codes the stereo pair both ways at the same total bitrate and reports what each costs in
+        /// quality, since at a fixed rate the schemes differ in quality rather than in size.
+        /// </summary>
+        private static int Compare(string[] args)
+        {
+            string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
+            int accessUnits = args.Length > 2 ? int.Parse(args[2]) : 24;
+            uint bitrate = args.Length > 3 ? uint.Parse(args[3]) : 20_000_000;
+
+            SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
+
+            var track = MvHevcReader.Read(path);
+            var rewriter = new SingleLayerRewriter(track);
+            rewriter.Plan();
+
+            new SchemeComparison(track, rewriter).Run(accessUnits, bitrate);
+            return 0;
+        }
+
         private static int EncProbe(string[] args)
         {
             string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
             int accessUnits = args.Length > 2 ? int.Parse(args[2]) : 16;
             uint bitrate = args.Length > 3 ? uint.Parse(args[3]) : 20_000_000;
             int temporalLayers = args.Length > 4 ? int.Parse(args[4]) : 1;
+            uint gopSize = args.Length > 5 ? uint.Parse(args[5]) : 0;
 
             SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
 
@@ -174,7 +198,7 @@ namespace SharpSpatialVideo
             var rewriter = new SingleLayerRewriter(track);
             rewriter.Plan();
 
-            new EncodeProbe(track, rewriter).Run(accessUnits, bitrate, temporalLayers);
+            new EncodeProbe(track, rewriter).Run(accessUnits, bitrate, temporalLayers, gopSize);
             return 0;
         }
 
