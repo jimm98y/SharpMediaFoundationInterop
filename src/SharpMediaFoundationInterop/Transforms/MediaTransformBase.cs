@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using SharpMediaFoundationInterop.Utils;
@@ -229,6 +230,44 @@ namespace SharpMediaFoundationInterop.Transforms
             }
 
             return ret;
+        }
+
+        /// <summary>
+        /// Every transform matching the given category and formats, activated, with the name the
+        /// system knows it by. What a transform supports varies by vendor, so choosing between
+        /// them - or reporting what is installed - needs more than the first match.
+        /// </summary>
+        public static unsafe List<(string Name, IMFTransform Transform)> EnumerateTransforms(
+            Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
+        {
+            var found = new List<(string, IMFTransform)>();
+
+            MediaUtils.Check(PInvoke.MFTEnumEx(category, flags, input, output, out IMFActivate_unmanaged** activates, out uint activateCount));
+
+            for (uint i = 0; i < activateCount; i++)
+            {
+                string name = "(unnamed)";
+                try
+                {
+                    activates[i]->GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR friendly, out _);
+                    name = friendly.ToString();
+
+                    IUnknown* ptr = (IUnknown*)activates[i]->ActivateObject(typeof(IMFTransform).GUID);
+                    var transform = (IMFTransform)Marshal.GetObjectForIUnknown((nint)ptr);
+                    ptr->Release();
+                    found.Add((name, transform));
+                }
+                catch (Exception ex)
+                {
+                    if (Log.InfoEnabled) Log.Info($"Unable to activate MFT {name}: {ex.Message}");
+                }
+                finally
+                {
+                    activates[i]->Release();
+                }
+            }
+
+            return found;
         }
 
         public static unsafe IMFTransform CreateTransform(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)

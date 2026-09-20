@@ -50,6 +50,9 @@ namespace SharpSpatialVideo
                 case "reference":
                     return Reference(args);
 
+                case "encprobe":
+                    return EncProbe(args);
+
                 case "convert":
                     return ConvertSbs(args);
 
@@ -149,6 +152,32 @@ namespace SharpSpatialVideo
         /// 'truth' command generates them on demand, so this is only needed after changing the
         /// input or the ffmpeg build.
         /// </summary>
+        /// <summary>
+        /// Encodes the two views interleaved and prints what the encoder referenced, to find out
+        /// whether a single layer encode can be patched into a two layer MV-HEVC stream.
+        /// </summary>
+        private static int EncProbe(string[] args)
+        {
+            string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
+            int accessUnits = args.Length > 2 ? int.Parse(args[2]) : 16;
+            uint bitrate = args.Length > 3 ? uint.Parse(args[3]) : 20_000_000;
+            int temporalLayers = args.Length > 4 ? int.Parse(args[4]) : 1;
+
+            SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
+
+            EncodeProbe.ReportEncoders();
+
+            if (accessUnits == 0)
+                return 0;   // listing the encoders only
+
+            var track = MvHevcReader.Read(path);
+            var rewriter = new SingleLayerRewriter(track);
+            rewriter.Plan();
+
+            new EncodeProbe(track, rewriter).Run(accessUnits, bitrate, temporalLayers);
+            return 0;
+        }
+
         private static int Reference(string[] args)
         {
             string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
