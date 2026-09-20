@@ -71,6 +71,23 @@ namespace SharpMediaFoundationInterop.Transforms
         public static readonly Guid RateControlMode =
             new Guid("1c0608e9-370c-4710-8a58-cb6181c42423");
 
+        /// <summary>Values for <see cref="RateControlMode"/>, from eAVEncCommonRateControlMode.</summary>
+        public static class RateControlModes
+        {
+            public const uint Cbr = 0;
+            public const uint PeakConstrainedVbr = 1;
+            public const uint UnconstrainedVbr = 2;
+            public const uint Quality = 3;
+        }
+
+        /// <summary>
+        /// Target quality, 0 to 100, used when the rate control mode is Quality. Quality mode
+        /// carries no bitrate state between pictures, which matters when two encoder runs have to
+        /// agree with each other.
+        /// </summary>
+        public static readonly Guid Quality =
+            new Guid("fcbf57a3-7ea5-4b0c-9644-69b40c39c391");
+
         /// <summary>Number of reference pictures the encoder may keep (UINT32).</summary>
         public static readonly Guid MaxNumRefFrame =
             new Guid("964829ed-94f9-43b4-b74d-ef40944b69a0");

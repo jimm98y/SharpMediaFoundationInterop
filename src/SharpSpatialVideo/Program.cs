@@ -56,6 +56,9 @@ namespace SharpSpatialVideo
                 case "compare":
                     return Compare(args);
 
+                case "prefix":
+                    return Prefix(args);
+
                 case "convert":
                     return ConvertSbs(args);
 
@@ -163,6 +166,28 @@ namespace SharpSpatialVideo
         /// Codes the stereo pair both ways at the same total bitrate and reports what each costs in
         /// quality, since at a fixed rate the schemes differ in quality rather than in size.
         /// </summary>
+        /// <summary>
+        /// Tests whether replaying the base view into a second encoder reproduces it exactly, which
+        /// is what would let the dependent view be encoded against it and the two streams merged.
+        /// </summary>
+        private static int Prefix(string[] args)
+        {
+            string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
+            int accessUnits = args.Length > 2 ? int.Parse(args[2]) : 12;
+            uint bitrate = args.Length > 3 ? uint.Parse(args[3]) : 20_000_000;
+            uint gopSize = args.Length > 4 ? uint.Parse(args[4]) : 0;
+            uint quality = args.Length > 5 ? uint.Parse(args[5]) : 0;
+
+            SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
+
+            var track = MvHevcReader.Read(path);
+            var rewriter = new SingleLayerRewriter(track);
+            rewriter.Plan();
+
+            new PrefixProbe(track, rewriter).Run(accessUnits, bitrate, gopSize, quality);
+            return 0;
+        }
+
         private static int Compare(string[] args)
         {
             string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
