@@ -62,6 +62,12 @@ namespace SharpSpatialVideo
                 case "mvmux":
                     return MvMux(args);
 
+                case "sbs2mv":
+                    return Sbs2Mv(args);
+
+                case "remux":
+                    return Remux(args);
+
                 case "convert":
                     return ConvertSbs(args);
 
@@ -177,6 +183,58 @@ namespace SharpSpatialVideo
         /// The reverse of split: one ordinary HEVC file per eye in, one MV-HEVC file out, without
         /// touching a pixel.
         /// </summary>
+        /// <summary>
+        /// Side by side in, MV-HEVC out, in both of the ways this machine can manage: the two views
+        /// coded independently, and the two views coded as one interleaved sequence so the
+        /// dependent view predicts across the pair.
+        /// </summary>
+        /// <summary>
+        /// Writes an MV-HEVC file back out unchanged and compares the two, which is the one round
+        /// trip that can be checked byte for byte rather than by decoding.
+        /// </summary>
+        private static int Remux(string[] args)
+        {
+            string sourcePath = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
+            string outputPath = args.Length > 2 ? args[2] : @"C:\Temp\mv\remux.mov";
+
+            var result = MvHevcRemuxer.Write(sourcePath, outputPath);
+            Console.WriteLine($"  wrote {result.Path}: {result.AccessUnits} access units, " +
+                $"{result.NalUnits} NAL units, {result.CodedBytes / (1024 * 1024)} MB of coded data");
+
+            MvHevcRemuxer.Compare(sourcePath, outputPath);
+            return 0;
+        }
+
+        private static int Sbs2Mv(string[] args)
+        {
+            if (args.Length < 3)
+            {
+                Console.Error.WriteLine("Usage: SharpSpatialVideo sbs2mv <sbs.mp4> <out-stem> " +
+                    "[bitrate] [frames] [template.MOV]");
+                return 1;
+            }
+
+            string sourcePath = args[1];
+            string stem = args[2];
+            uint bitrate = args.Length > 3 ? uint.Parse(args[3]) : 40_000_000;
+            int limit = args.Length > 4 ? int.Parse(args[4]) : int.MaxValue;
+            string templatePath = args.Length > 5 ? args[5] : @"C:\Temp\IMG_7881.MOV";
+
+            SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
+
+            var converter = new SbsToMultiview(templatePath);
+            var results = converter.Write(sourcePath, stem, bitrate,
+                simulcast: true, crossView: true, limit);
+
+            foreach (var result in results)
+                Console.WriteLine($"  wrote {result.Path}: {result.AccessUnits} access units, " +
+                    $"{result.Bytes / (1024 * 1024)} MB " +
+                    $"(base {result.BaseBytes / 1024} KB, dependent {result.DependentBytes / 1024} KB, " +
+                    $"dependent is {100.0 * result.DependentBytes / Math.Max(1, result.BaseBytes):F0}% of base)");
+
+            return 0;
+        }
+
         private static int MvMux(string[] args)
         {
             if (args.Length < 4)
@@ -191,7 +249,9 @@ namespace SharpSpatialVideo
             string templatePath = args.Length > 4 ? args[4] : @"C:\Temp\IMG_7881.MOV";
 
             var stereo = new StereoMetadata { BaseLayerIsLeftEye = BaseLayerIsLeftEye };
-            var result = LeftRightTranscoder.Write(basePath, dependentPath, outputPath, templatePath, stereo);
+            bool interLayer = args.Length > 5 && args[5] == "interlayer";
+            var result = LeftRightTranscoder.Write(basePath, dependentPath, outputPath, templatePath,
+                stereo, interLayer);
 
             Console.WriteLine($"  wrote {result.Path}: {result.AccessUnits} access units, " +
                 $"{result.Bytes / (1024 * 1024)} MB");

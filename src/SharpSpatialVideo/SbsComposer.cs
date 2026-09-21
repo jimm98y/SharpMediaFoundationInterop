@@ -33,5 +33,45 @@ namespace SharpSpatialVideo
 
             return output;
         }
+
+        /// <summary>
+        /// Takes the left half of a side by side frame, as an NV12 picture of the coded size the
+        /// encoder wants. The source rows are the coded width; the half that is wanted is the
+        /// first <paramref name="width"/> samples of each.
+        /// </summary>
+        public static byte[] CropLeft(byte[] frame, int codedWidth, int codedHeight,
+            int width, int height, int outCodedWidth, int outCodedHeight) =>
+            Crop(frame, 0, codedWidth, codedHeight, width, height, outCodedWidth, outCodedHeight);
+
+        /// <summary>The right half of a side by side frame.</summary>
+        public static byte[] CropRight(byte[] frame, int codedWidth, int codedHeight,
+            int width, int height, int outCodedWidth, int outCodedHeight) =>
+            Crop(frame, width, codedWidth, codedHeight, width, height, outCodedWidth, outCodedHeight);
+
+        private static byte[] Crop(byte[] frame, int x, int codedWidth, int codedHeight,
+            int width, int height, int outCodedWidth, int outCodedHeight)
+        {
+            var output = new byte[outCodedWidth * outCodedHeight * 3 / 2];
+
+            for (int y = 0; y < height; y++)
+                Buffer.BlockCopy(frame, y * codedWidth + x, output, y * outCodedWidth, width);
+
+            // The rows past the picture repeat the last one, so the padding the encoder codes is
+            // cheap rather than an edge it has to spend bits on.
+            for (int y = height; y < outCodedHeight; y++)
+                Buffer.BlockCopy(output, (height - 1) * outCodedWidth, output, y * outCodedWidth, width);
+
+            int sourceChroma = codedWidth * codedHeight;
+            int outputChroma = outCodedWidth * outCodedHeight;
+            for (int y = 0; y < height / 2; y++)
+                Buffer.BlockCopy(frame, sourceChroma + y * codedWidth + x,
+                    output, outputChroma + y * outCodedWidth, width);
+
+            for (int y = height / 2; y < outCodedHeight / 2; y++)
+                Buffer.BlockCopy(output, outputChroma + (height / 2 - 1) * outCodedWidth,
+                    output, outputChroma + y * outCodedWidth, width);
+
+            return output;
+        }
     }
 }

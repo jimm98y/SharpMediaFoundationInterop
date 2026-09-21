@@ -27,7 +27,7 @@ namespace SharpSpatialVideo
 
         public static Result Write(
             string basePath, string dependentPath, string outputPath,
-            string templatePath, StereoMetadata stereo)
+            string templatePath, StereoMetadata stereo, bool interLayerPrediction = false)
         {
             var baseTrack = MvHevcReader.Read(basePath);
             var dependentTrack = MvHevcReader.Read(dependentPath);
@@ -42,7 +42,7 @@ namespace SharpSpatialVideo
             // together layer sets, output layer sets, representation formats and a DPB table;
             // patching one a decoder already accepts beats assembling those by hand.
             var template = MvHevcReader.Read(templatePath);
-            var builder = new MultiviewBuilder { InterLayerPrediction = false };
+            var builder = new MultiviewBuilder { InterLayerPrediction = interLayerPrediction };
             builder.LoadTemplate(template.BaseParameterSets);
             builder.Build(baseTrack.BaseParameterSets, dependentTrack.BaseParameterSets,
                 (int)baseTrack.DisplayWidth, (int)baseTrack.DisplayHeight);
