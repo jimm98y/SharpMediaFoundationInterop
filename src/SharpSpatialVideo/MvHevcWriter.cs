@@ -125,13 +125,23 @@ namespace SharpSpatialVideo
                 var sampleEntry = FindFirst<VisualSampleEntry>(container.Children)
                     ?? throw new InvalidOperationException("the file just written has no visual sample entry");
 
-                ulong before = moov.CalculateSize();
+                var mdat = container.Children.OfType<MediaDataBox>().FirstOrDefault()
+                    ?? throw new InvalidOperationException("the file just written has no media data box");
 
                 sampleEntry.Children.Add(BuildLhvC(layerParameterSets, sampleEntry));
                 sampleEntry.Children.Add(BuildVexu(stereo, sampleEntry));
 
-                ulong after = moov.CalculateSize();
-                long delta = ((long)after - (long)before) >> 3;
+                // A box read from a file keeps the header it was read with, and writing reuses it
+                // rather than recomputing - so without this the movie box would be written with
+                // its old size and the boxes just added would spill past its declared end.
+                ForgetHeaders(moov);
+
+                // Where the media data lands after the boxes grow. Taking that from a size
+                // calculation was off by a hundred odd bytes, and every chunk offset was wrong by
+                // that much; serialising the boxes that come before it and measuring is exact.
+                long mdatHeader = mdat.HasLargeSize ? 16 : 8;
+                long newDataStart = PrefixLength(container, mdat) + mdatHeader;
+                long delta = newDataStart - mdat.Data.Position;
                 if (delta != 0)
                     moov.ModifyChunkOffsets(delta);
 
@@ -140,6 +150,38 @@ namespace SharpSpatialVideo
             }
 
             File.Move(temporary, path, overwrite: true);
+        }
+
+        /// <summary>
+        /// Clears the stored header of a box and everything under it, so their sizes are worked
+        /// out again from what they now contain.
+        /// </summary>
+        private static void ForgetHeaders(Box box)
+        {
+            box.Header = null;
+
+            if (box is IHasBoxChildren parent && parent.Children != null)
+                foreach (var child in parent.Children)
+                    ForgetHeaders(child);
+        }
+
+        /// <summary>
+        /// How many bytes the file holds before the media data, by writing those boxes out and
+        /// measuring rather than adding up what they say they weigh.
+        /// </summary>
+        private static long PrefixLength(Container container, MediaDataBox mdat)
+        {
+            using var measure = new MemoryStream();
+            using var stream = new IsoStream(new StreamWrapper(measure));
+
+            foreach (var child in container.Children)
+            {
+                if (ReferenceEquals(child, mdat))
+                    break;
+                stream.WriteBox(child, "");
+            }
+
+            return measure.Length;
         }
 
         /// <summary>The configuration record for the dependent layer, the counterpart of hvcC.</summary>
