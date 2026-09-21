@@ -214,20 +214,20 @@ namespace SharpSpatialVideo
             var dpb = extension.DpbSize;
             if (dpb?.MaxVpsDecPicBufferingMinus1 != null)
             {
+                // Indexed [ output layer set ][ layer ][ sub-layer ].
                 for (int i = 0; i < dpb.MaxVpsDecPicBufferingMinus1.Length; i++)
                 {
-                    var perSubLayer = dpb.MaxVpsDecPicBufferingMinus1[i];
-                    if (perSubLayer == null) continue;
+                    var perLayer = dpb.MaxVpsDecPicBufferingMinus1[i];
+                    if (perLayer == null) continue;
 
-                    for (int j = 0; j < perSubLayer.Length; j++)
+                    for (int k = 0; k < perLayer.Length && k < 2; k++)
                     {
-                        var perLayer = perSubLayer[j];
-                        if (perLayer == null) continue;
+                        var perSubLayer = perLayer[k];
+                        if (perSubLayer == null) continue;
 
-                        if (perLayer.Length > 0)
-                            perLayer[0] = LastOf(baseSps.SpsMaxDecPicBufferingMinus1);
-                        if (perLayer.Length > 1)
-                            perLayer[1] = LastOf(layerSps.SpsMaxDecPicBufferingMinus1);
+                        var sps = k == 0 ? baseSps : layerSps;
+                        for (int j = 0; j < perSubLayer.Length; j++)
+                            perSubLayer[j] = LastOf(sps.SpsMaxDecPicBufferingMinus1);
                     }
 
                     if (dpb.MaxVpsNumReorderPics?[i] != null)
@@ -245,14 +245,26 @@ namespace SharpSpatialVideo
                 for (int i = 0; i < Vps.VpsMaxNumReorderPics.Length; i++)
                     Vps.VpsMaxNumReorderPics[i] = LastOf(baseSps.SpsMaxNumReorderPics);
 
-            // The representation format says what a layer's pictures look like. It is shared by
-            // both layers here, so one patch covers the pair.
+            // The representation format says what a layer's pictures look like, and a decoder
+            // checks the layers' sequence parameter sets against it. Both layers share it here, so
+            // it is taken whole from the base encode: coded size, chroma format, bit depth and the
+            // conformance window that crops the coded size to the displayed one.
             if (extension.RepFormat != null)
             {
                 foreach (var format in extension.RepFormat)
                 {
-                    format.PicWidthVpsInLumaSamples = (ushort)width;
-                    format.PicHeightVpsInLumaSamples = (ushort)height;
+                    format.PicWidthVpsInLumaSamples = (uint)baseSps.PicWidthInLumaSamples;
+                    format.PicHeightVpsInLumaSamples = (uint)baseSps.PicHeightInLumaSamples;
+                    format.ChromaAndBitDepthVpsPresentFlag = 1;
+                    format.ChromaFormatVpsIdc = (uint)baseSps.ChromaFormatIdc;
+                    format.SeparateColourPlaneVpsFlag = baseSps.SeparateColourPlaneFlag;
+                    format.BitDepthVpsLumaMinus8 = (uint)baseSps.BitDepthLumaMinus8;
+                    format.BitDepthVpsChromaMinus8 = (uint)baseSps.BitDepthChromaMinus8;
+                    format.ConformanceWindowVpsFlag = baseSps.ConformanceWindowFlag;
+                    format.ConfWinVpsLeftOffset = baseSps.ConfWinLeftOffset;
+                    format.ConfWinVpsRightOffset = baseSps.ConfWinRightOffset;
+                    format.ConfWinVpsTopOffset = baseSps.ConfWinTopOffset;
+                    format.ConfWinVpsBottomOffset = baseSps.ConfWinBottomOffset;
                 }
             }
         }
