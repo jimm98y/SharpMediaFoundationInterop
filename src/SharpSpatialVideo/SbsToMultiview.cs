@@ -231,7 +231,18 @@ namespace SharpSpatialVideo
             var multiviewVps = builder.BaseParameterSets.Where(IsVps);
             var restamper = new LayerRestamper(multiviewVps
                 .Concat(dependentView.ParameterSets.Where(n => !IsVps(n)))
-                .Concat(builder.LayerParameterSets.Where(n => !IsVps(n))));
+                .Concat(builder.LayerParameterSets.Where(n => !IsVps(n))))
+            {
+                CrossView = interLayerPrediction,
+            };
+
+            // With a GOP of two every base picture came out an IDR, which resets the count, so
+            // every access unit would carry picture order count zero and a decoder drops all but
+            // the first. Written as CRA pictures instead they keep counting, which costs nothing -
+            // they are still intra coded and still random access points.
+            var baseRestamper = interLayerPrediction
+                ? new LayerRestamper(multiviewVps.Concat(baseView.ParameterSets.Where(n => !IsVps(n))))
+                : null;
 
             int count = Math.Min(baseView.Pictures.Count, dependentView.Pictures.Count);
             int duration = (int)track.FpsDenom;
@@ -249,13 +260,18 @@ namespace SharpSpatialVideo
 
                 foreach (var nalu in baseView.Pictures[i])
                 {
-                    accessUnit.BaseNalus.Add(nalu);
-                    baseBytes += nalu.Length;
+                    // The first picture stays an IDR so the stream still opens with one.
+                    var written = baseRestamper == null || i == 0
+                        ? nalu
+                        : baseRestamper.Restamp(nalu, 0, PpsIdOf(nalu, baseRestamper), i, CraNalType);
+
+                    accessUnit.BaseNalus.Add(written);
+                    baseBytes += written.Length;
                 }
 
                 foreach (var nalu in dependentView.Pictures[i])
                 {
-                    var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId);
+                    var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId, i);
                     accessUnit.LayerNalus.Add(restamped);
                     dependentBytes += restamped.Length;
                 }
@@ -276,6 +292,13 @@ namespace SharpSpatialVideo
                 DependentBytes = dependentBytes,
             };
         }
+
+        /// <summary>Clean random access, the intra picture type that does not reset the count.</summary>
+        private const uint CraNalType = 21;
+
+        /// <summary>The picture parameter set the slice already points at, which does not change.</summary>
+        private static ulong PpsIdOf(byte[] nalu, LayerRestamper restamper) =>
+            restamper.PicParameterSetIdOf(nalu);
 
         private static bool IsVps(byte[] nalu) => ((nalu[0] >> 1) & 0x3F) == 32;
 

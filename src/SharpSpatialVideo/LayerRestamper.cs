@@ -53,8 +53,23 @@ namespace SharpSpatialVideo
 
         public H265Context Context => _parser.Context;
 
+        /// <summary>
+        /// When set, the dependent picture predicts from the base picture of its own access unit
+        /// rather than from a picture of its own view, and its reference set is rewritten to say so.
+        /// </summary>
+        public bool CrossView { get; set; }
+
         /// <summary>Re-emits one coded slice at layer 1, pointing at layer 1's picture parameter set.</summary>
-        public byte[] ToLayerOne(byte[] nalu, ulong picParameterSetId)
+        public byte[] ToLayerOne(byte[] nalu, ulong picParameterSetId, int pictureOrderCount = 0) =>
+            Restamp(nalu, 1, picParameterSetId, pictureOrderCount, null);
+
+        /// <summary>
+        /// Re-emits a coded slice into a given layer, optionally as a different picture type and at
+        /// a given picture order count. Changing an IDR into a CRA is what lets a run of intra
+        /// pictures keep counting rather than resetting to zero at every one of them.
+        /// </summary>
+        public byte[] Restamp(byte[] nalu, uint layerId, ulong picParameterSetId,
+            int pictureOrderCount, uint? newNalType)
         {
             var parsed = _parser.ParseSlice(new Nalu { Data = nalu });
             var context = _parser.Context;
@@ -71,8 +86,8 @@ namespace SharpSpatialVideo
             nalUnit.NalUnitHeader = new NalUnitHeader
             {
                 ForbiddenZeroBit = 0,
-                NalUnitType = parsed.NalUnit.NalUnitHeader.NalUnitType,
-                NuhLayerId = 1,
+                NalUnitType = newNalType ?? parsed.NalUnit.NalUnitHeader.NalUnitType,
+                NuhLayerId = layerId,
                 NuhTemporalIdPlus1 = parsed.NalUnit.NalUnitHeader.NuhTemporalIdPlus1,
             };
             context.NalHeader = nalUnit;
@@ -80,8 +95,37 @@ namespace SharpSpatialVideo
             // An IDR at layer 0 has no picture order count in its header, so when the same slice
             // moves up a layer the value has to be supplied.
             bool isIdr = nalUnit.NalUnitHeader.NalUnitType == 19 || nalUnit.NalUnitHeader.NalUnitType == 20;
-            if (isIdr)
-                header.SlicePicOrderCntLsb = 0;
+            int maxPocLsb = 1 << (int)(context.SeqParameterSetRbsp.Log2MaxPicOrderCntLsbMinus4 + 4);
+            header.SlicePicOrderCntLsb = isIdr ? 0 : (ulong)(pictureOrderCount & (maxPocLsb - 1));
+
+            // An intra picture written as a CRA rather than an IDR keeps the count running, and a
+            // picture with no references needs an empty set to say so.
+            StRefPicSet savedSet = null;
+            byte savedSpsFlag = 0;
+            bool wasIdr = parsed.NalUnit.NalUnitHeader.NalUnitType == 19
+                || parsed.NalUnit.NalUnitHeader.NalUnitType == 20;
+
+            if ((CrossView && !isIdr) || (wasIdr && !isIdr))
+            {
+                // What the encoder coded as a reference to the previous picture is, after the
+                // split, the base picture of this access unit - which is an inter-layer reference,
+                // not a short term one. Emptying the short term set leaves the inter-layer picture
+                // as the only entry in the list, where the short term one used to be.
+                savedSet = header.StRefPicSet;
+                savedSpsFlag = header.ShortTermRefPicSetSpsFlag;
+
+                header.ShortTermRefPicSetSpsFlag = 0;
+                header.StRefPicSet = new StRefPicSet(0)
+                {
+                    InterRefPicSetPredictionFlag = 0,
+                    NumNegativePics = 0,
+                    NumPositivePics = 0,
+                    DeltaPocS0Minus1 = new ulong[0],
+                    UsedByCurrPicS0Flag = new byte[0],
+                    DeltaPocS1Minus1 = new ulong[0],
+                    UsedByCurrPicS1Flag = new byte[0],
+                };
+            }
 
             ulong originalPpsId = header.SlicePicParameterSetId;
             header.SlicePicParameterSetId = picParameterSetId;
@@ -108,8 +152,17 @@ namespace SharpSpatialVideo
             finally
             {
                 header.SlicePicParameterSetId = originalPpsId;
+                if (savedSet != null)
+                {
+                    header.StRefPicSet = savedSet;
+                    header.ShortTermRefPicSetSpsFlag = savedSpsFlag;
+                }
             }
         }
+
+        /// <summary>The picture parameter set a coded slice points at.</summary>
+        public ulong PicParameterSetIdOf(byte[] nalu) =>
+            _parser.ParseSlice(new Nalu { Data = nalu }).Header.SlicePicParameterSetId;
 
         /// <summary>True when the NAL unit is a coded slice rather than a parameter set or message.</summary>
         public static bool IsSlice(byte[] nalu)
