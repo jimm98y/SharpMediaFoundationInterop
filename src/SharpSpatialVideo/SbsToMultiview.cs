@@ -64,6 +64,12 @@ namespace SharpSpatialVideo
         /// </summary>
         public bool OnePass { get; set; }
 
+        /// <summary>
+        /// How the encoders control their rate - see <see cref="EncoderRateControl"/>. A constant
+        /// quantiser by default: constant bitrate made fine detail pulse on every key frame.
+        /// </summary>
+        public string RateControl { get; set; } = "qp:26";
+
         /// <summary>Threads per encoder; 0 leaves it to the encoder.</summary>
         public uint EncoderThreads { get; set; }
 
@@ -119,16 +125,16 @@ namespace SharpSpatialVideo
             // where a sequence starts - a key frame in one resets the picture order count while the
             // other carries on referencing pictures the reset threw away.
             using var baseEncoder = simulcast
-                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom, track.FpsDenom, bitrate / 2, SimulcastGopSize, EncoderThreads)
+                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom, track.FpsDenom, bitrate / 2, SimulcastGopSize, EncoderThreads, RateControl)
                 : null;
             using var dependentEncoder = simulcast
-                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom, track.FpsDenom, bitrate / 2, SimulcastGopSize, EncoderThreads)
+                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom, track.FpsDenom, bitrate / 2, SimulcastGopSize, EncoderThreads, RateControl)
                 : null;
 
             // Cross view: both views through one encoder, interleaved, at twice the rate and with a
             // GOP of two, so each dependent picture predicts from the base picture beside it.
             using var interleavedEncoder = crossView
-                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom * 2, track.FpsDenom, bitrate, 2, EncoderThreads)
+                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom * 2, track.FpsDenom, bitrate, 2, EncoderThreads, RateControl)
                 : null;
             Memory("encoders created");
 
@@ -299,14 +305,18 @@ namespace SharpSpatialVideo
             public PictureSpool Output { get; } = new PictureSpool();
 
             public StreamingEncoder(int width, int height, uint fpsNom, uint fpsDenom, uint bitrate,
-                uint gopSize, uint threads)
+                uint gopSize, uint threads, string rateControl)
             {
                 _encoder = new H265Encoder((uint)width, (uint)height, fpsNom, fpsDenom, bitrate);
                 if (gopSize > 0)
                     _encoder.CodecProperties[CodecApiProperties.GopSize] = gopSize;
                 if (threads > 0)
                     _encoder.CodecProperties[CodecApiProperties.NumWorkerThreads] = threads;
+
+                EncoderRateControl.Apply(_encoder, rateControl);
                 _encoder.Initialize();
+
+                EncoderRateControl.ReportRejected(_encoder);
 
                 _buffer = new byte[_encoder.OutputSize];
                 _frameDuration = 10_000_000L * fpsDenom / fpsNom;

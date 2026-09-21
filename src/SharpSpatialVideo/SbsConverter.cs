@@ -24,6 +24,13 @@ namespace SharpSpatialVideo
         public int FramesWritten { get; private set; }
         public int AudioSamplesWritten { get; private set; }
 
+        /// <summary>
+        /// How the encoder controls its rate - see <see cref="EncoderRateControl"/>. The output is
+        /// usually an intermediate that gets encoded again, and whatever this encode adds is
+        /// inherited by everything made from it, so it defaults a notch finer than the final one.
+        /// </summary>
+        public string RateControl { get; set; } = "qp:22";
+
         public void Convert(string outputPath, uint bitrate, bool baseLayerIsLeftEye, int limit = int.MaxValue)
         {
             var sps = _rewriter.ParserContext.SeqParameterSets[0];
@@ -54,7 +61,9 @@ namespace SharpSpatialVideo
 
             using var encoder = new H265Encoder((uint)(width * 2), (uint)height,
                 _track.FpsNom, _track.FpsDenom, bitrate);
+            EncoderRateControl.Apply(encoder, RateControl);
             encoder.Initialize();
+            EncoderRateControl.ReportRejected(encoder);
 
             var encoded = new byte[encoder.OutputSize];
             long frameDuration = 10_000_000L * _track.FpsDenom / _track.FpsNom;

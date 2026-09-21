@@ -95,6 +95,17 @@ namespace SharpMediaFoundationInterop.Transforms
         public static readonly Guid NumWorkerThreads =
             new Guid("b0c8bf60-16f7-4951-a30b-1db1609293d6");
 
+        /// <summary>Quantiser for constant QP coding (UINT64, the QP in bits 0-15).</summary>
+        public static readonly Guid EncodeQp =
+            new Guid("2cb5696b-23fb-4ce1-a0f9-ef5b90fd55ca");
+
+        /// <summary>
+        /// Quantiser per picture type (UINT64): I in bits 0-15, P in 16-31, B in 32-47. Giving them
+        /// all the same value stops an encoder spending more on its key frames than on the rest.
+        /// </summary>
+        public static readonly Guid EncodeFrameTypeQp =
+            new Guid("aa70b610-e03f-450c-ad07-07314e639ce7");
+
         /// <summary>How many threads a decoder may use (UINT32).</summary>
         public static readonly Guid DecoderWorkerThreads =
             new Guid("9561c3e8-ea9e-4435-9b1e-a93e691894d8");

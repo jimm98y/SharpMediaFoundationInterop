@@ -157,10 +157,13 @@ namespace SharpSpatialVideo
             rewriter.Plan();
 
             var converter = new SbsConverter(track, rewriter);
+            var rateControl = args.FirstOrDefault(a => a.StartsWith("rc="));
+            if (rateControl != null)
+                converter.RateControl = rateControl.Substring("rc=".Length);
             converter.Convert(outPath, bitrate, BaseLayerIsLeftEye, limit);
 
             Console.WriteLine($"  wrote {outPath}: {converter.FramesWritten} frames at " +
-                $"{track.DisplayWidth * 2}x{track.DisplayHeight}, {bitrate / 1_000_000} Mbit/s, " +
+                $"{track.DisplayWidth * 2}x{track.DisplayHeight}, rate control {converter.RateControl}, " +
                 $"{converter.AudioSamplesWritten} audio samples");
             return converter.FramesWritten > 0 ? 0 : 2;
         }
@@ -286,6 +289,9 @@ namespace SharpSpatialVideo
             if (decoderThreads != null)
                 converter.DecoderThreads = uint.Parse(decoderThreads.Substring("dthreads=".Length));
             converter.OnePass = args.Contains("onepass");
+            var rateControl = args.FirstOrDefault(a => a.StartsWith("rc="));
+            if (rateControl != null)
+                converter.RateControl = rateControl.Substring("rc=".Length);
 
             var results = converter.Write(sourcePath, stem, bitrate,
                 simulcast: !onlyCrossView, crossView: !onlySimulcast, limit);
