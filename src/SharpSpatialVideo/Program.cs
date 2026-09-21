@@ -309,18 +309,18 @@ namespace SharpSpatialVideo
         {
             if (args.Length < 4)
             {
-                Console.Error.WriteLine("Usage: SharpSpatialVideo mvmux <base.mp4> <dependent.mp4> <out.mov> [template.MOV]");
+                Console.Error.WriteLine("Usage: SharpSpatialVideo mvmux <left.mp4> <right.mp4> <out.mov> [template.MOV]");
                 return 1;
             }
 
-            string basePath = args[1];
-            string dependentPath = args[2];
+            string leftPath = args[1];
+            string rightPath = args[2];
             string outputPath = args[3];
             string templatePath = args.Length > 4 ? args[4] : @"C:\Temp\IMG_7881.MOV";
 
-            var stereo = new StereoMetadata { BaseLayerIsLeftEye = BaseLayerIsLeftEye };
+            var stereo = new StereoMetadata();
             bool interLayer = args.Length > 5 && args[5] == "interlayer";
-            var result = LeftRightTranscoder.Write(basePath, dependentPath, outputPath, templatePath,
+            var result = LeftRightTranscoder.Write(leftPath, rightPath, outputPath, templatePath,
                 stereo, interLayer);
 
             Console.WriteLine($"  wrote {result.Path}: {result.AccessUnits} access units, " +

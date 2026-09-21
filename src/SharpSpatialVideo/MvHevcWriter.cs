@@ -31,8 +31,6 @@ namespace SharpSpatialVideo
         /// <summary>How far the views are shifted to bring the comfortable depth to the screen.</summary>
         public int DisparityAdjustment { get; set; } = 200;
 
-        /// <summary>True when layer 0 holds the left eye rather than the right.</summary>
-        public bool BaseLayerIsLeftEye { get; set; }
     }
 
     /// <summary>
@@ -136,6 +134,12 @@ namespace SharpSpatialVideo
 
                 sampleEntry.Children.Add(BuildLhvC(layerParameterSets, sampleEntry));
                 sampleEntry.Children.Add(BuildVexu(stereo, sampleEntry));
+
+                // The horizontal field of view sits beside vexu rather than in it.
+                var hfov = new HorizontalFieldOfViewBox();
+                hfov.SetParent(sampleEntry);
+                hfov.FieldOfView = stereo.HorizontalFieldOfViewMillidegrees;
+                sampleEntry.Children.Add(hfov);
 
                 // A box read from a file keeps the header it was read with, and writing reuses it
                 // rather than recomputing - so without this the movie box would be written with
@@ -248,9 +252,11 @@ namespace SharpSpatialVideo
             stri.HasLeftEyeView = true;
             stri.HasRightEyeView = true;
             stri.HasAdditionalViews = false;
-            // The flag says whether the views are stored in the other order than the default, which
-            // is the left eye first.
-            stri.EyeViewsReversed = !stereo.BaseLayerIsLeftEye;
+            // Not reversed, as Apple writes it with the right eye in the base layer. stri only says
+            // which eyes are present; which layer holds which eye is carried by the three
+            // dimensional reference displays SEI in hvcC, and flipping this as well sent players
+            // looking for the eyes the other way round.
+            stri.EyeViewsReversed = false;
             eyes.Children.Add(stri);
 
             var cams = new StereoCameraSystemBox();
@@ -272,6 +278,17 @@ namespace SharpSpatialVideo
             dadj.SetParent(cmfy);
             dadj.DisparityAdjustment = stereo.DisparityAdjustment;
             cmfy.Children.Add(dadj);
+
+            // The projection: an ordinary rectilinear camera, which is what a spatial video is.
+            var proj = new ProjectionBox();
+            proj.SetParent(vexu);
+            proj.Children = new List<Box>();
+            vexu.Children.Add(proj);
+
+            var prji = new ProjectionInformationBox();
+            prji.SetParent(proj);
+            prji.ProjectionKind = IsoStream.FromFourCC("rect");
+            proj.Children.Add(prji);
 
             return vexu;
         }

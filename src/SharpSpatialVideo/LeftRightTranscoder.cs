@@ -25,12 +25,16 @@ namespace SharpSpatialVideo
 
         private static bool IsVps(byte[] nalu) => ((nalu[0] >> 1) & 0x3F) == 32;
 
+        /// <summary>
+        /// The right eye goes in the base layer and the left in layer 1, which is what the eye
+        /// mapping SEI carried over from the template says - see MultiviewBuilder.
+        /// </summary>
         public static Result Write(
-            string basePath, string dependentPath, string outputPath,
+            string leftPath, string rightPath, string outputPath,
             string templatePath, StereoMetadata stereo, bool interLayerPrediction = false)
         {
-            var baseTrack = MvHevcReader.Read(basePath);
-            var dependentTrack = MvHevcReader.Read(dependentPath);
+            var baseTrack = MvHevcReader.Read(rightPath);
+            var dependentTrack = MvHevcReader.Read(leftPath);
 
             if (baseTrack.AccessUnits.Count != dependentTrack.AccessUnits.Count)
                 Console.WriteLine($"  the two inputs differ in length: {baseTrack.AccessUnits.Count} " +

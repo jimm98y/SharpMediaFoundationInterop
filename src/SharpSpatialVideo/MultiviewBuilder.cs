@@ -46,12 +46,35 @@ namespace SharpSpatialVideo
         public byte[] TemplateVpsBytes { get; private set; }
 
         /// <summary>
-        /// Takes the video parameter set from an MV-HEVC file to use as the template.
+        /// The template's prefix SEI messages from hvcC. In an Apple file that is the three
+        /// dimensional reference displays information, whose left_view_id and right_view_id say
+        /// which layer is which eye - the one thing a player needs to pair the two views into a
+        /// stereo frame. Without it the file plays as one eye, at half the frame rate, for twice
+        /// as long, the player taking the two views of an access unit as two frames.
+        ///
+        /// It is carried across as it is, so it keeps Apple's mapping: the right eye in layer 0
+        /// and the left eye in layer 1. Whatever is assembled with it has to put the eyes there.
+        /// </summary>
+        public List<byte[]> TemplateSei { get; } = new List<byte[]>();
+
+        /// <summary>
+        /// Which eye the base layer holds, in the files made here. Fixed rather than chosen: it is
+        /// what the template's SEI says, and what Apple writes.
+        /// </summary>
+        public const bool BaseLayerIsRightEye = true;
+
+        /// <summary>
+        /// Takes the video parameter set, and the eye mapping SEI, from an MV-HEVC file to use as
+        /// the template.
         /// </summary>
         public void LoadTemplate(IEnumerable<byte[]> templateParameterSets)
         {
             TemplateVpsBytes = templateParameterSets.FirstOrDefault(
                 n => ((n[0] >> 1) & 0x3F) == H265NALTypes.VPS_NUT);
+
+            TemplateSei.Clear();
+            TemplateSei.AddRange(templateParameterSets.Where(
+                n => ((n[0] >> 1) & 0x3F) == H265NALTypes.PREFIX_SEI_NUT));
 
             // Parsed through MvHevcParser rather than by hand: the video parameter set's syntax
             // has callbacks that read back what has been parsed so far, so the context has to be
@@ -121,6 +144,9 @@ namespace SharpSpatialVideo
                 if (type == H265NALTypes.SPS_NUT || type == H265NALTypes.PPS_NUT)
                     BaseParameterSets.Add(nalu);
             }
+
+            // The eye mapping, which goes into hvcC with the parameter sets.
+            BaseParameterSets.AddRange(TemplateSei);
 
             // Layer 1's parameter sets come from the dependent view's own encode, not from copies
             // of the base view's - the two views were coded separately and need not agree.

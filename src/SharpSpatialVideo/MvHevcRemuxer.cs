@@ -27,10 +27,7 @@ namespace SharpSpatialVideo
         {
             var track = MvHevcReader.Read(sourcePath);
 
-            var stereo = new StereoMetadata
-            {
-                BaseLayerIsLeftEye = !track.EyeViewsReversed,
-            };
+            var stereo = new StereoMetadata();
 
             var accessUnits = new List<MultiviewAccessUnit>(track.AccessUnits.Count);
             int nalUnits = 0;

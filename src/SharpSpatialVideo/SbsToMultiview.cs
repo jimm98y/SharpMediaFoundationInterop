@@ -152,10 +152,12 @@ namespace SharpSpatialVideo
                 SbsComposer.CropRight(frame, sourceCodedWidth, sourceCodedHeight,
                     Width, Height, CodedWidth, CodedHeight, right);
 
-                baseEncoder?.Feed(left);
-                dependentEncoder?.Feed(right);
-                interleavedEncoder?.Feed(left);
+                // The right eye goes in the base layer: that is what the eye mapping SEI carried
+                // over from the template says, and what Apple writes. See MultiviewBuilder.
+                baseEncoder?.Feed(right);
+                dependentEncoder?.Feed(left);
                 interleavedEncoder?.Feed(right);
+                interleavedEncoder?.Feed(left);
 
                 if (++pairs % 150 == 0)
                     Memory($"{pairs} pairs encoded");
@@ -453,7 +455,7 @@ namespace SharpSpatialVideo
                 }
             }
 
-            var stereo = new StereoMetadata { BaseLayerIsLeftEye = true };
+            var stereo = new StereoMetadata();
             MvHevcWriter.Write(path, builder.BaseParameterSets, builder.LayerParameterSets,
                 AccessUnits(), track.Timescale, stereo, track.HasAudio ? track : null);
 
