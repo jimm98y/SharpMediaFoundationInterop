@@ -59,6 +59,9 @@ namespace SharpSpatialVideo
                 case "prefix":
                     return Prefix(args);
 
+                case "mvmux":
+                    return MvMux(args);
+
                 case "convert":
                     return ConvertSbs(args);
 
@@ -170,6 +173,31 @@ namespace SharpSpatialVideo
         /// Tests whether replaying the base view into a second encoder reproduces it exactly, which
         /// is what would let the dependent view be encoded against it and the two streams merged.
         /// </summary>
+        /// <summary>
+        /// The reverse of split: one ordinary HEVC file per eye in, one MV-HEVC file out, without
+        /// touching a pixel.
+        /// </summary>
+        private static int MvMux(string[] args)
+        {
+            if (args.Length < 4)
+            {
+                Console.Error.WriteLine("Usage: SharpSpatialVideo mvmux <base.mp4> <dependent.mp4> <out.mov> [template.MOV]");
+                return 1;
+            }
+
+            string basePath = args[1];
+            string dependentPath = args[2];
+            string outputPath = args[3];
+            string templatePath = args.Length > 4 ? args[4] : @"C:\Temp\IMG_7881.MOV";
+
+            var stereo = new StereoMetadata { BaseLayerIsLeftEye = BaseLayerIsLeftEye };
+            var result = LeftRightTranscoder.Write(basePath, dependentPath, outputPath, templatePath, stereo);
+
+            Console.WriteLine($"  wrote {result.Path}: {result.AccessUnits} access units, " +
+                $"{result.Bytes / (1024 * 1024)} MB");
+            return 0;
+        }
+
         private static int Prefix(string[] args)
         {
             string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
