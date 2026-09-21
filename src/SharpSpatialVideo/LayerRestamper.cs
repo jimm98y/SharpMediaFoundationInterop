@@ -3,6 +3,7 @@ using SharpH26X;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace SharpSpatialVideo
 {
@@ -100,6 +101,11 @@ namespace SharpSpatialVideo
 
             // An intra picture written as a CRA rather than an IDR keeps the count running, and a
             // picture with no references needs an empty set to say so.
+            // Above layer 0 a slice says whether it predicts from the layer below. A view coded on
+            // its own does not, and has to say so, or the decoder adds a picture to its reference
+            // list that the encoder never used.
+            header.InterLayerPredEnabledFlag = (byte)(CrossView ? 1 : 0);
+
             StRefPicSet savedSet = null;
             byte savedSpsFlag = 0;
             bool wasIdr = parsed.NalUnit.NalUnitHeader.NalUnitType == 19
@@ -158,6 +164,32 @@ namespace SharpSpatialVideo
                     header.ShortTermRefPicSetSpsFlag = savedSpsFlag;
                 }
             }
+        }
+
+        /// <summary>
+        /// Reads a re-stamped slice back the way a decoder would and reports any header field that
+        /// did not survive. The payload is compared too: it is spliced across rather than written,
+        /// so if the header's length changed in a way that breaks the byte alignment the coded data
+        /// would land at the wrong offset.
+        /// </summary>
+        public List<string> CheckRestamped(byte[] original, byte[] restamped)
+        {
+            var problems = new List<string>();
+
+            var before = _parser.ParseSlice(new Nalu { Data = original });
+            var beforeHeader = before.Header;
+            var beforePayload = before.Rbsp.Skip(before.PayloadOffset).ToArray();
+
+            var after = _parser.ParseSlice(new Nalu { Data = restamped });
+            var afterPayload = after.Rbsp.Skip(after.PayloadOffset).ToArray();
+
+            foreach (var difference in ParameterSetDiff.Compare(beforeHeader, after.Header))
+                problems.Add($"header {difference}");
+
+            if (!beforePayload.SequenceEqual(afterPayload))
+                problems.Add($"coded data differs: {beforePayload.Length} bytes against {afterPayload.Length}");
+
+            return problems;
         }
 
         /// <summary>The picture parameter set a coded slice points at.</summary>

@@ -222,7 +222,7 @@ namespace SharpSpatialVideo
 
             SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
 
-            var converter = new SbsToMultiview(templatePath);
+            var converter = new SbsToMultiview(templatePath) { DumpViews = args.Contains("dump") };
             var results = converter.Write(sourcePath, stem, bitrate,
                 simulcast: true, crossView: true, limit);
 

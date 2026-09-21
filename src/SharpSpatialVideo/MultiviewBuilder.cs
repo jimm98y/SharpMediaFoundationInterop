@@ -33,6 +33,9 @@ namespace SharpSpatialVideo
         /// <summary>Whether the template's video parameter set was reproduced exactly.</summary>
         public bool RoundTripsCleanly { get; private set; }
 
+        /// <summary>Whether the patched set writes the same bytes once its own values are re-derived.</summary>
+        public bool VpsIsSelfConsistent { get; private set; }
+
         /// <summary>Layer 0's parameter sets, as they will be written into hvcC.</summary>
         public List<byte[]> BaseParameterSets { get; } = new List<byte[]>();
 
@@ -82,17 +85,48 @@ namespace SharpSpatialVideo
             RoundTripsCleanly = TemplateVpsBytes != null && unpatched.SequenceEqual(TemplateVpsBytes);
 
             PatchVps(width, height);
-            BaseParameterSets.Add(WriteParameterSet(H265NALTypes.VPS_NUT, 0,
-                s => Vps.Write(_templateContext, s)));
+
+            // Values derived from the extension - how many reference layers each layer has, and so
+            // on - were worked out while reading the template, and some of them decide whether a
+            // field is present at all. Changing the layer dependency changes those, so the set is
+            // written, read back with the derived values worked out afresh, and written again.
+            // Two writes that agree mean the result is self consistent; if they do not, what would
+            // go in the file is a set that describes something other than what it contains.
+            var once = WriteParameterSet(H265NALTypes.VPS_NUT, 0, s => Vps.Write(_templateContext, s));
+
+            var reparse = new MvHevcParser();
+            reparse.ParseParameterSets(new[] { once });
+            Vps = reparse.Context.VideoParameterSetRbsp;
+            _templateContext = reparse.Context;
+
+            var twice = WriteParameterSet(H265NALTypes.VPS_NUT, 0, s => Vps.Write(_templateContext, s));
+            VpsIsSelfConsistent = once.SequenceEqual(twice);
+
+            BaseParameterSets.Add(twice);
 
             // Read the base encoder's own sequence and picture parameter sets, keep them verbatim
             // for layer 0, and re-emit copies for layer 1.
             _parser.ParseParameterSets(baseParameterSets);
 
+            // Both layers share one decoded picture buffer, and the encoder sized its sequence
+            // parameter set for one view. Left alone, layer 0's pictures crowd out layer 1's and
+            // the dependent view loses references it was coded against. Only the buffer sizes
+            // change, which nothing in the coded slices depends on.
+            //
+            // A sequence parameter set has to be written before the picture parameter sets that
+            // point at it, or reading them back finds nothing to attach them to.
+            foreach (var parameterSet in _context.SeqParameterSets.Values.ToList())
+            {
+                GrowDecodedPictureBuffer(parameterSet);
+                _context.SeqParameterSetRbsp = parameterSet;
+                BaseParameterSets.Add(WriteParameterSet(H265NALTypes.SPS_NUT, 0,
+                    s => parameterSet.Write(_context, s)));
+            }
+
             foreach (var nalu in baseParameterSets)
             {
                 uint type = (uint)((nalu[0] >> 1) & 0x3F);
-                if (type == H265NALTypes.SPS_NUT || type == H265NALTypes.PPS_NUT)
+                if (type == H265NALTypes.PPS_NUT)
                     BaseParameterSets.Add(nalu);
             }
 
@@ -106,6 +140,7 @@ namespace SharpSpatialVideo
 
             foreach (var parameterSet in sps)
             {
+                GrowDecodedPictureBuffer(parameterSet);
                 // A sequence parameter set at nuh_layer_id 1 may inherit its format from the video
                 // parameter set instead of carrying it. Writing it out in full keeps layer 1
                 // self describing, which is one less thing that has to agree.
@@ -125,6 +160,71 @@ namespace SharpSpatialVideo
             }
         }
 
+        /// <summary>
+        /// Reads layer 1's parameter sets back the way a decoder would - at layer 1 - and reports
+        /// any field that does not come back as the encoder wrote it. The syntax above layer 0 is
+        /// not the same syntax, so a set written there can lose values silently.
+        /// </summary>
+        public List<string> CheckLayerParameterSets(IEnumerable<byte[]> dependentParameterSets)
+        {
+            var problems = new List<string>();
+
+            var original = new MvHevcParser();
+            original.ParseParameterSets(dependentParameterSets);
+
+            var written = new MvHevcParser();
+            written.ParseParameterSets(BaseParameterSets.Where(IsVps).Concat(LayerParameterSets));
+
+            foreach (var expected in original.Context.SeqParameterSets.Values)
+            {
+                if (!written.Context.SeqParameterSets.TryGetValue(LayerSpsId, out var actual))
+                {
+                    problems.Add("layer 1 sequence parameter set did not read back at all");
+                    continue;
+                }
+
+                foreach (var difference in ParameterSetDiff.Compare(expected, actual))
+                    if (!difference.StartsWith("SpsSeqParameterSetId"))
+                        problems.Add($"sequence parameter set {difference}");
+                break;
+            }
+
+            foreach (var expected in original.Context.PicParameterSets.Values)
+            {
+                if (!written.Context.PicParameterSets.TryGetValue(LayerPpsId, out var actual))
+                {
+                    problems.Add("layer 1 picture parameter set did not read back at all");
+                    continue;
+                }
+
+                foreach (var difference in ParameterSetDiff.Compare(expected, actual))
+                    if (!difference.StartsWith("PpsPicParameterSetId")
+                        && !difference.StartsWith("PpsSeqParameterSetId"))
+                        problems.Add($"picture parameter set {difference}");
+                break;
+            }
+
+            return problems;
+        }
+
+        private static bool IsVps(byte[] nalu) => ((nalu[0] >> 1) & 0x3F) == 32;
+
+        /// <summary>
+        /// Room for both layers' pictures rather than one layer's. The spec caps the buffer at 16
+        /// however high the level goes, so doubling is bounded by that.
+        /// </summary>
+        private static void GrowDecodedPictureBuffer(SeqParameterSetRbsp parameterSet)
+        {
+            if (parameterSet.SpsMaxDecPicBufferingMinus1 == null)
+                return;
+
+            for (int i = 0; i < parameterSet.SpsMaxDecPicBufferingMinus1.Length; i++)
+            {
+                ulong pictures = parameterSet.SpsMaxDecPicBufferingMinus1[i] + 1;
+                parameterSet.SpsMaxDecPicBufferingMinus1[i] = Math.Min(pictures * 2, 16) - 1;
+            }
+        }
+
         /// <summary>The ids layer 1's parameter sets take, so both layers can be active together.</summary>
         public const ulong LayerSpsId = 1;
         public const ulong LayerPpsId = 1;
@@ -134,14 +234,15 @@ namespace SharpSpatialVideo
             var extension = Vps.VpsExtension
                 ?? throw new InvalidOperationException("the template video parameter set has no multiview extension");
 
-            // Whether layer 1 is allowed to predict from layer 0. With this clear the two layers
-            // are independent and the file is simulcast; with it set the dependent view's slices
-            // carry inter-layer references.
-            if (extension.DirectDependencyFlag != null && extension.DirectDependencyFlag.Length > 1
-                && extension.DirectDependencyFlag[1] != null && extension.DirectDependencyFlag[1].Length > 0)
-            {
-                extension.DirectDependencyFlag[1][0] = (byte)(InterLayerPrediction ? 1 : 0);
-            }
+            // Layer 1 stays declared as depending on layer 0 either way, and whether it actually
+            // predicts is left to each slice. Clearing the dependency instead would be the more
+            // obvious move, but it changes what the extension itself contains - a layer with no
+            // reference layers carries a poc_lsb_not_present_flag that one with a reference layer
+            // does not - and the set then no longer matches the template that was known to work.
+            //
+            // So: keep the dependency, and turn off the inference that would otherwise force every
+            // dependent slice to use it. With this clear each slice carries the flag itself.
+            extension.DefaultRefLayersActiveFlag = (byte)(InterLayerPrediction ? 1 : 0);
 
             // The representation format says what a layer's pictures look like. It is shared by
             // both layers here, so one patch covers the pair.

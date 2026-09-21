@@ -60,6 +60,9 @@ namespace SharpSpatialVideo
             return results;
         }
 
+        /// <summary>Key frame spacing for the simulcast pair, which both views share.</summary>
+        public uint SimulcastGopSize { get; set; } = 30;
+
         private int Width { get; set; }
         private int Height { get; set; }
         private int CodedWidth { get; set; }
@@ -124,8 +127,14 @@ namespace SharpSpatialVideo
         private Result WriteSimulcast(List<byte[]> left, List<byte[]> right, MvHevcTrack track,
             string path, uint bitrate)
         {
-            var baseView = Encode(left, track, bitrate / 2, gopSize: 0);
-            var dependentView = Encode(right, track, bitrate / 2, gopSize: 0);
+            // Both views take the same fixed GOP. Left to itself the encoder picks key frames to
+            // suit each view's content, and the two views then disagree about where a sequence
+            // starts: a key frame in the base view resets the picture order count and empties the
+            // buffer, while the dependent view carries on referencing pictures that are no longer
+            // there. Every picture of an access unit has to share a count, so both views have to
+            // reset in the same places.
+            var baseView = Encode(left, track, bitrate / 2, SimulcastGopSize);
+            var dependentView = Encode(right, track, bitrate / 2, SimulcastGopSize);
 
             return Assemble(path, baseView, dependentView, track, interLayerPrediction: false);
         }
@@ -228,6 +237,10 @@ namespace SharpSpatialVideo
             builder.LoadTemplate(template.BaseParameterSets);
             builder.Build(baseView.ParameterSets, dependentView.ParameterSets, CodedWidth, CodedHeight);
 
+            if (!builder.VpsIsSelfConsistent)
+                Console.WriteLine("  the patched video parameter set does not write the same bytes " +
+                    "once its derived values are worked out again");
+
             var multiviewVps = builder.BaseParameterSets.Where(IsVps);
             var restamper = new LayerRestamper(multiviewVps
                 .Concat(dependentView.ParameterSets.Where(n => !IsVps(n)))
@@ -272,12 +285,24 @@ namespace SharpSpatialVideo
                 foreach (var nalu in dependentView.Pictures[i])
                 {
                     var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId, i);
+
                     accessUnit.LayerNalus.Add(restamped);
                     dependentBytes += restamped.Length;
                 }
 
                 accessUnits.Add(accessUnit);
             }
+
+            // Each view is also written on its own, so a fault in the encode can be told apart
+            // from a fault in putting the two together.
+            if (DumpViews)
+            {
+                WriteSingleView(path + ".base.mp4", baseView, track);
+                WriteSingleView(path + ".dependent.mp4", dependentView, track);
+            }
+
+            if (DumpViews)
+                ReportAlignment(baseView, dependentView);
 
             var stereo = new StereoMetadata { BaseLayerIsLeftEye = true };
             MvHevcWriter.Write(path, builder.BaseParameterSets, builder.LayerParameterSets,
@@ -299,6 +324,59 @@ namespace SharpSpatialVideo
         /// <summary>The picture parameter set the slice already points at, which does not change.</summary>
         private static ulong PpsIdOf(byte[] nalu, LayerRestamper restamper) =>
             restamper.PicParameterSetIdOf(nalu);
+
+        /// <summary>
+        /// Prints what each view coded per access unit. Every picture of an access unit has to
+        /// carry the same picture order count, so the two columns have to agree.
+        /// </summary>
+        private static void ReportAlignment(EncodedStream baseView, EncodedStream dependentView)
+        {
+            var baseParser = new MvHevcParser();
+            baseParser.ParseParameterSets(baseView.ParameterSets);
+            var dependentParser = new MvHevcParser();
+            dependentParser.ParseParameterSets(dependentView.ParameterSets);
+
+            Console.WriteLine("    au   base type/poc   dependent type/poc");
+            int disagreements = 0;
+            int count = Math.Min(baseView.Pictures.Count, dependentView.Pictures.Count);
+
+            for (int i = 0; i < count; i++)
+            {
+                var b = baseParser.ParseSlice(new Nalu { Data = baseView.Pictures[i][0] });
+                var d = dependentParser.ParseSlice(new Nalu { Data = dependentView.Pictures[i][0] });
+                int basePoc = baseParser.DerivePoc(b);
+                int dependentPoc = dependentParser.DerivePoc(d);
+
+                bool agrees = basePoc == dependentPoc
+                    && b.NalUnit.NalUnitHeader.NalUnitType == d.NalUnit.NalUnitHeader.NalUnitType;
+                if (!agrees)
+                    disagreements++;
+
+                if (i < 8 || !agrees && disagreements < 8)
+                    Console.WriteLine($"    {i,3}   {b.NalUnit.NalUnitHeader.NalUnitType,4}/{basePoc,-6} " +
+                        $"{d.NalUnit.NalUnitHeader.NalUnitType,9}/{dependentPoc,-6} {(agrees ? "" : "  <-- differ")}");
+            }
+
+            Console.WriteLine($"    {disagreements} of {count} access units disagree");
+        }
+
+        /// <summary>Writes one view as an ordinary single layer file, for comparison.</summary>
+        public bool DumpViews { get; set; }
+
+        private static void WriteSingleView(string path, EncodedStream view, MvHevcTrack track)
+        {
+            var pictures = view.Pictures
+                .Select((picture, index) => new MuxPicture
+                {
+                    Nalu = picture[0],
+                    Poc = index,
+                    IsRandomAccessPoint = picture.Any(LayerRestamper.IsIrap),
+                    Duration = (int)track.FpsDenom,
+                })
+                .ToList();
+
+            EyeMuxer.Write(path, view.ParameterSets, pictures, track.Timescale, (int)track.FpsDenom);
+        }
 
         private static bool IsVps(byte[] nalu) => ((nalu[0] >> 1) & 0x3F) == 32;
 
