@@ -27,6 +27,16 @@ namespace SharpSpatialVideo
 
         public List<AccessUnit> AccessUnits { get; } = new List<AccessUnit>();
 
+        /// <summary>
+        /// Where each sample is in the file, so the samples can be read one at a time instead of
+        /// all being held - see <see cref="MvHevcReader.StreamAccessUnits"/>.
+        /// </summary>
+        public string Path { get; set; }
+        public List<long> SampleOffsets { get; set; } = new List<long>();
+        public uint[] SampleSizes { get; set; } = Array.Empty<uint>();
+        public uint[] SampleDurations { get; set; } = Array.Empty<uint>();
+        public int[] SampleCompositionOffsets { get; set; } = Array.Empty<int>();
+
         public bool IsMultiview => LayerParameterSets.Count > 0;
 
         /// <summary>Raw byte of the stereo view information box (vexu/eyes/stri), or null.</summary>
@@ -53,7 +63,12 @@ namespace SharpSpatialVideo
 
     public static class MvHevcReader
     {
-        public static MvHevcTrack Read(string path)
+        /// <summary>
+        /// Reads a track. With <paramref name="loadSamples"/> false the samples are left in the
+        /// file and only their positions are recorded, which is all a caller that streams them - or
+        /// only wants the parameter sets - needs.
+        /// </summary>
+        public static MvHevcTrack Read(string path, bool loadSamples = true)
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
             var container = new Container();
@@ -104,39 +119,15 @@ namespace SharpSpatialVideo
             var durations = SampleDurations(stbl, sizes.Length);
             var compositionOffsets = CompositionOffsets(stbl, sizes.Length);
 
-            for (int i = 0; i < offsets.Count; i++)
-            {
-                stream.Seek(offsets[i], SeekOrigin.Begin);
-                var buffer = new byte[sizes[i]];
-                stream.ReadExactly(buffer);
+            result.Path = path;
+            result.SampleOffsets = offsets;
+            result.SampleSizes = sizes;
+            result.SampleDurations = durations;
+            result.SampleCompositionOffsets = compositionOffsets;
 
-                var accessUnit = new AccessUnit
-                {
-                    Index = i,
-                    Duration = durations[i],
-                    CompositionOffset = compositionOffsets[i],
-                };
-
-                int p = 0;
-                while (p + result.NalLengthSize <= buffer.Length)
-                {
-                    int length = 0;
-                    for (int b = 0; b < result.NalLengthSize; b++)
-                        length = (length << 8) | buffer[p + b];
-                    p += result.NalLengthSize;
-
-                    if (length <= 0 || p + length > buffer.Length)
-                        break;
-
-                    var data = new byte[length];
-                    Array.Copy(buffer, p, data, 0, length);
-                    p += length;
-
-                    accessUnit.Nalus.Add(new Nalu { Data = data });
-                }
-
-                result.AccessUnits.Add(accessUnit);
-            }
+            if (loadSamples)
+                for (int i = 0; i < offsets.Count; i++)
+                    result.AccessUnits.Add(ReadAccessUnit(stream, result, i));
 
             // Derive a nominal frame rate from the most common sample duration.
             if (durations.Length > 0)
@@ -153,6 +144,53 @@ namespace SharpSpatialVideo
             ReadAudioTrack(stream, moov, result);
 
             return result;
+        }
+
+        /// <summary>
+        /// Reads the track's access units one at a time, in decode order, holding only the one
+        /// being handed out. For a caller that goes through the video once - decoding it, say -
+        /// this keeps memory flat however long the clip is.
+        /// </summary>
+        public static IEnumerable<AccessUnit> StreamAccessUnits(MvHevcTrack track, int limit = int.MaxValue)
+        {
+            using var stream = new FileStream(track.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            int count = Math.Min(limit, track.SampleOffsets.Count);
+            for (int i = 0; i < count; i++)
+                yield return ReadAccessUnit(stream, track, i);
+        }
+
+        private static AccessUnit ReadAccessUnit(FileStream stream, MvHevcTrack track, int i)
+        {
+            stream.Seek(track.SampleOffsets[i], SeekOrigin.Begin);
+            var buffer = new byte[track.SampleSizes[i]];
+            stream.ReadExactly(buffer);
+
+            var accessUnit = new AccessUnit
+            {
+                Index = i,
+                Duration = track.SampleDurations[i],
+                CompositionOffset = track.SampleCompositionOffsets[i],
+            };
+
+            int p = 0;
+            while (p + track.NalLengthSize <= buffer.Length)
+            {
+                int length = 0;
+                for (int b = 0; b < track.NalLengthSize; b++)
+                    length = (length << 8) | buffer[p + b];
+                p += track.NalLengthSize;
+
+                if (length <= 0 || p + length > buffer.Length)
+                    break;
+
+                var data = new byte[length];
+                Array.Copy(buffer, p, data, 0, length);
+                p += length;
+
+                accessUnit.Nalus.Add(new Nalu { Data = data });
+            }
+
+            return accessUnit;
         }
 
         /// <summary>

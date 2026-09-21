@@ -50,7 +50,7 @@ namespace SharpSpatialVideo
             string path,
             IEnumerable<byte[]> baseParameterSets,
             IEnumerable<byte[]> layerParameterSets,
-            IReadOnlyList<MultiviewAccessUnit> accessUnits,
+            IEnumerable<MultiviewAccessUnit> accessUnits,
             uint timescale,
             StereoMetadata stereo,
             MvHevcTrack audioSource = null)
@@ -62,14 +62,19 @@ namespace SharpSpatialVideo
         private static void WriteTrack(
             string path,
             IEnumerable<byte[]> baseParameterSets,
-            IReadOnlyList<MultiviewAccessUnit> accessUnits,
+            IEnumerable<MultiviewAccessUnit> accessUnits,
             uint timescale,
             MvHevcTrack audioSource)
         {
             using var output = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
             var builder = new Mp4Builder(new SingleStreamOutput(output));
 
-            int defaultDuration = accessUnits.Count > 0 ? accessUnits[0].Duration : 1;
+            // Access units are taken one at a time as they are written, so a caller can produce
+            // them lazily and never hold the whole video. The track's default duration is the
+            // first one's, which means looking at it before the loop.
+            using var units = accessUnits.GetEnumerator();
+            bool any = units.MoveNext();
+            int defaultDuration = any ? units.Current.Duration : 1;
             var track = new H265Track(timescale, defaultDuration);
             builder.AddTrack(track);
 
@@ -84,8 +89,9 @@ namespace SharpSpatialVideo
             foreach (var parameterSet in baseParameterSets)
                 builder.ProcessTrackSample(track.TrackID, parameterSet, defaultDuration);
 
-            foreach (var accessUnit in accessUnits)
+            for (; any; any = units.MoveNext())
             {
+                var accessUnit = units.Current;
                 var sample = new List<byte>();
                 foreach (var nalu in accessUnit.BaseNalus.Concat(accessUnit.LayerNalus))
                     AppendLengthPrefixed(sample, nalu);

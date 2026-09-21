@@ -88,6 +88,17 @@ namespace SharpMediaFoundationInterop.Transforms
         public static readonly Guid Quality =
             new Guid("fcbf57a3-7ea5-4b0c-9644-69b40c39c391");
 
+        /// <summary>
+        /// How many threads the encoder may use (UINT32). Each keeps its own working buffers, so
+        /// this trades speed against memory.
+        /// </summary>
+        public static readonly Guid NumWorkerThreads =
+            new Guid("b0c8bf60-16f7-4951-a30b-1db1609293d6");
+
+        /// <summary>How many threads a decoder may use (UINT32).</summary>
+        public static readonly Guid DecoderWorkerThreads =
+            new Guid("9561c3e8-ea9e-4435-9b1e-a93e691894d8");
+
         /// <summary>Number of reference pictures the encoder may keep (UINT32).</summary>
         public static readonly Guid MaxNumRefFrame =
             new Guid("964829ed-94f9-43b4-b74d-ef40944b69a0");

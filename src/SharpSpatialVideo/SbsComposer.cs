@@ -40,18 +40,23 @@ namespace SharpSpatialVideo
         /// first <paramref name="width"/> samples of each.
         /// </summary>
         public static byte[] CropLeft(byte[] frame, int codedWidth, int codedHeight,
-            int width, int height, int outCodedWidth, int outCodedHeight) =>
-            Crop(frame, 0, codedWidth, codedHeight, width, height, outCodedWidth, outCodedHeight);
+            int width, int height, int outCodedWidth, int outCodedHeight, byte[] output = null) =>
+            Crop(frame, 0, codedWidth, codedHeight, width, height, outCodedWidth, outCodedHeight, output);
 
         /// <summary>The right half of a side by side frame.</summary>
         public static byte[] CropRight(byte[] frame, int codedWidth, int codedHeight,
-            int width, int height, int outCodedWidth, int outCodedHeight) =>
-            Crop(frame, width, codedWidth, codedHeight, width, height, outCodedWidth, outCodedHeight);
+            int width, int height, int outCodedWidth, int outCodedHeight, byte[] output = null) =>
+            Crop(frame, width, codedWidth, codedHeight, width, height, outCodedWidth, outCodedHeight, output);
 
+        /// <remarks>
+        /// Pass <paramref name="output"/> to crop into an existing buffer instead of a new one. A
+        /// crop is 3 MB, and a conversion makes two per frame; reusing them keeps that off the
+        /// large object heap, which is only collected on a full collection.
+        /// </remarks>
         private static byte[] Crop(byte[] frame, int x, int codedWidth, int codedHeight,
-            int width, int height, int outCodedWidth, int outCodedHeight)
+            int width, int height, int outCodedWidth, int outCodedHeight, byte[] output)
         {
-            var output = new byte[outCodedWidth * outCodedHeight * 3 / 2];
+            output ??= new byte[outCodedWidth * outCodedHeight * 3 / 2];
 
             for (int y = 0; y < height; y++)
                 Buffer.BlockCopy(frame, y * codedWidth + x, output, y * outCodedWidth, width);

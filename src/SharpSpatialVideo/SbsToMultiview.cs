@@ -18,14 +18,20 @@ namespace SharpSpatialVideo
     ///   prediction between the views. The layers are independent and the file declares as much.
     ///
     ///   cross view - the two views encoded as one interleaved sequence with a GOP of two, which
-    ///   makes every base picture an IDR and every dependent picture predict from the base picture
-    ///   beside it. That is real disparity prediction, at the cost of coding the base view intra
-    ///   only. Measured on this footage it spends more bits than simulcast does, so it is offered
-    ///   rather than chosen.
+    ///   makes every base picture an intra picture and every dependent picture predict from the
+    ///   base picture beside it. That is real disparity prediction, at the cost of coding the base
+    ///   view intra only. Measured on this footage it spends more bits than simulcast does, so it
+    ///   is offered rather than chosen.
+    ///
+    /// Memory stays flat however long the clip is. The source is read one access unit at a time,
+    /// each decoded frame is split into two reused buffers and fed to the encoders straight away,
+    /// the encoders spool what they code to disk, and the output is assembled from the spools one
+    /// access unit at a time. What is held is a few frames and the encoders' own working memory.
     /// </summary>
     public sealed class SbsToMultiview
     {
         private readonly string _templatePath;
+        private List<byte[]> _templateParameterSets;
 
         public SbsToMultiview(string templatePath)
         {
@@ -41,186 +47,306 @@ namespace SharpSpatialVideo
             public long DependentBytes { get; set; }
         }
 
-        /// <summary>Decodes the source once and writes whichever versions were asked for.</summary>
-        public List<Result> Write(string sourcePath, string outputStem, uint bitrate,
-            bool simulcast, bool crossView, int limit = int.MaxValue)
-        {
-            var (left, right, track) = DecodeViews(sourcePath, limit);
-            Console.WriteLine($"  {left.Count} stereo pairs at {Width}x{Height} " +
-                $"(coded {CodedWidth}x{CodedHeight})");
+        /// <summary>Threads for the decoder; 0 leaves it to the decoder.</summary>
+        public uint DecoderThreads { get; set; }
 
-            var results = new List<Result>();
+        /// <summary>
+        /// Whether the decoder runs in low latency mode, releasing each frame as soon as it can
+        /// rather than holding a full reorder window. It hands back the same frames in the same
+        /// order - checked against a stream with a B picture pyramid - and holds 86 MB less.
+        /// </summary>
+        public bool DecoderLowLatency { get; set; } = true;
 
-            if (simulcast)
-                results.Add(WriteSimulcast(left, right, track, outputStem + "_simulcast.mov", bitrate));
+        /// <summary>
+        /// Writes both versions from one decode, with all three encoders running at once, instead
+        /// of one version per pass. It is no faster - the encoders are the work, and the passes
+        /// share it out - and it needs a third encoder's memory on top.
+        /// </summary>
+        public bool OnePass { get; set; }
 
-            if (crossView)
-                results.Add(WriteCrossView(left, right, track, outputStem + "_crossview.mov", bitrate));
-
-            return results;
-        }
+        /// <summary>Threads per encoder; 0 leaves it to the encoder.</summary>
+        public uint EncoderThreads { get; set; }
 
         /// <summary>Key frame spacing for the simulcast pair, which both views share.</summary>
         public uint SimulcastGopSize { get; set; } = 30;
+
+        /// <summary>Writes each view as an ordinary single layer file too, for comparison.</summary>
+        public bool DumpViews { get; set; }
+
+        /// <summary>Prints memory at each stage: what is live, and what the process holds in all.</summary>
+        public bool ReportMemory { get; set; }
 
         private int Width { get; set; }
         private int Height { get; set; }
         private int CodedWidth { get; set; }
         private int CodedHeight { get; set; }
 
-        /// <summary>
-        /// Splits every frame of the side by side source down the middle. The halves are the two
-        /// eyes, each at half the source width.
-        /// </summary>
-        private (List<byte[]> Left, List<byte[]> Right, MvHevcTrack Track) DecodeViews(
-            string path, int limit)
+        /// <summary>Decodes the source and writes whichever versions were asked for.</summary>
+        public List<Result> Write(string sourcePath, string outputStem, uint bitrate,
+            bool simulcast, bool crossView, int limit = int.MaxValue)
         {
-            var track = MvHevcReader.Read(path);
+            // One version per pass unless asked otherwise. Decoding the source twice costs far less
+            // than an encoder, and running the encoders one version at a time means only one
+            // version's encoders are in memory at once.
+            if (simulcast && crossView && !OnePass)
+            {
+                var passes = Write(sourcePath, outputStem, bitrate, simulcast: true, crossView: false, limit);
+                passes.AddRange(Write(sourcePath, outputStem, bitrate, simulcast: false, crossView: true, limit));
+                return passes;
+            }
 
-            // The source is an ordinary single layer file, so its own parameter sets drive the
-            // decoder and its samples go in as they are.
-            var rewriter = new SingleLayerRewriter(track);
-            rewriter.Plan(baseViewOnly: true);
+            // Only the sample index is read here; the samples themselves are streamed below. The
+            // template is needed only for its video parameter set.
+            var track = MvHevcReader.Read(sourcePath, loadSamples: false);
+            _templateParameterSets = MvHevcReader.Read(_templatePath, loadSamples: false).BaseParameterSets;
+            Memory("source indexed");
 
-            var sps = rewriter.ParserContext.SeqParameterSets[0];
+            // The source is an ordinary single layer file, so its sequence parameter set gives the
+            // coded size, and its samples go to the decoder as they are.
+            var parser = new MvHevcParser();
+            parser.ParseParameterSets(track.BaseParameterSets);
+            var sps = parser.Context.SeqParameterSets.Values.First();
             int sourceCodedWidth = (int)sps.PicWidthInLumaSamples;
             int sourceCodedHeight = (int)sps.PicHeightInLumaSamples;
-            int sourceWidth = (int)track.DisplayWidth;
-            int sourceHeight = (int)track.DisplayHeight;
 
-            Width = sourceWidth / 2;
-            Height = sourceHeight;
+            Width = (int)track.DisplayWidth / 2;
+            Height = (int)track.DisplayHeight;
             CodedWidth = Align(Width, 8);
             CodedHeight = Align(Height, 8);
 
-            var left = new List<byte[]>();
-            var right = new List<byte[]>();
+            // Simulcast: one encoder per view, sharing a fixed GOP. Left to itself the encoder
+            // picks key frames to suit each view's content, and the two views then disagree about
+            // where a sequence starts - a key frame in one resets the picture order count while the
+            // other carries on referencing pictures the reset threw away.
+            using var baseEncoder = simulcast
+                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom, track.FpsDenom, bitrate / 2, SimulcastGopSize, EncoderThreads)
+                : null;
+            using var dependentEncoder = simulcast
+                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom, track.FpsDenom, bitrate / 2, SimulcastGopSize, EncoderThreads)
+                : null;
 
-            long frameDuration = 10_000_000L * track.FpsDenom / track.FpsNom;
-            var pictures = rewriter.Pictures.Take(limit).ToList();
+            // Cross view: both views through one encoder, interleaved, at twice the rate and with a
+            // GOP of two, so each dependent picture predicts from the base picture beside it.
+            using var interleavedEncoder = crossView
+                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom * 2, track.FpsDenom, bitrate, 2, EncoderThreads)
+                : null;
+            Memory("encoders created");
 
-            using var decoder = new SpatialDecoder((uint)sourceCodedWidth, (uint)sourceCodedHeight,
-                track.FpsNom, track.FpsDenom);
-            decoder.SendParameterSets(track.BaseParameterSets);
+            // The two eyes are cropped into the same two buffers every frame. The encoders copy
+            // what they are given, so the buffers are free again as soon as Feed returns.
+            int cropSize = CodedWidth * CodedHeight * 3 / 2;
+            var left = new byte[cropSize];
+            var right = new byte[cropSize];
+            int pairs = 0;
 
-            void Take(DecodedFrame frame)
+            void Take(byte[] frame, long timestamp)
             {
-                left.Add(SbsComposer.CropLeft(frame.Nv12, sourceCodedWidth, sourceCodedHeight,
-                    Width, Height, CodedWidth, CodedHeight));
-                right.Add(SbsComposer.CropRight(frame.Nv12, sourceCodedWidth, sourceCodedHeight,
-                    Width, Height, CodedWidth, CodedHeight));
+                SbsComposer.CropLeft(frame, sourceCodedWidth, sourceCodedHeight,
+                    Width, Height, CodedWidth, CodedHeight, left);
+                SbsComposer.CropRight(frame, sourceCodedWidth, sourceCodedHeight,
+                    Width, Height, CodedWidth, CodedHeight, right);
+
+                baseEncoder?.Feed(left);
+                dependentEncoder?.Feed(right);
+                interleavedEncoder?.Feed(left);
+                interleavedEncoder?.Feed(right);
+
+                if (++pairs % 150 == 0)
+                    Memory($"{pairs} pairs encoded");
             }
 
-            for (int i = 0; i < pictures.Count; i++)
-                foreach (var frame in decoder.Decode(pictures[i].Source.Nalu.Data, i * frameDuration))
-                    Take(frame);
-            foreach (var frame in decoder.Flush())
-                Take(frame);
+            long frameDuration = 10_000_000L * track.FpsDenom / track.FpsNom;
+            using (var decoder = new SpatialDecoder((uint)sourceCodedWidth, (uint)sourceCodedHeight,
+                track.FpsNom, track.FpsDenom, DecoderLowLatency, DecoderThreads))
+            {
+                decoder.SendParameterSets(track.BaseParameterSets);
 
-            return (left, right, track);
+                foreach (var accessUnit in MvHevcReader.StreamAccessUnits(track, limit))
+                    decoder.DecodeInto(accessUnit.Nalus.Select(n => n.Data),
+                        accessUnit.Index * frameDuration, Take);
+
+                decoder.FlushInto(Take);
+            }
+
+            Console.WriteLine($"  {pairs} stereo pairs at {Width}x{Height} (coded {CodedWidth}x{CodedHeight})");
+            Memory("decode finished");
+
+            var results = new List<Result>();
+
+            if (simulcast)
+            {
+                results.Add(Assemble(outputStem + "_simulcast.mov", baseEncoder.Finish(),
+                    dependentEncoder.Finish(), track, interLayerPrediction: false));
+                Memory("simulcast written");
+            }
+
+            if (crossView)
+            {
+                string path = outputStem + "_crossview.mov";
+                var coded = interleavedEncoder.Finish();
+
+                // The interleaved stream is itself ordinary single layer HEVC, and decoded as such
+                // it is what the two layers have to reproduce - the check that the reference set
+                // rewrite is exact rather than merely plausible.
+                if (DumpViews)
+                    WriteSingleView(path + ".interleaved.mp4", coded, track, doubleRate: true);
+
+                // Even pictures are the base view, odd ones the dependent view.
+                results.Add(Assemble(path, new EveryOther(coded, 0), new EveryOther(coded, 1),
+                    track, interLayerPrediction: true));
+                Memory("cross view written");
+            }
+
+            return results;
+        }
+
+        private void Memory(string stage)
+        {
+            if (!ReportMemory)
+                return;
+
+            long working = System.Diagnostics.Process.GetCurrentProcess().WorkingSet64;
+            long heapBefore = GC.GetTotalMemory(false);
+            long live = GC.GetTotalMemory(true);
+            Console.WriteLine($"    [mem] {stage,-22} working set {working / (1 << 20),5} MB, " +
+                $"managed heap {heapBefore / (1 << 20),5} MB, of which live {live / (1 << 20),5} MB");
         }
 
         private static int Align(int value, int multiple) =>
             (value + multiple - 1) / multiple * multiple;
 
-        /// <summary>Each view encoded on its own, with no prediction between them.</summary>
-        private Result WriteSimulcast(List<byte[]> left, List<byte[]> right, MvHevcTrack track,
-            string path, uint bitrate)
+        /// <summary>A coded stream's parameter sets and its pictures, in coding order.</summary>
+        private interface IPictures
         {
-            // Both views take the same fixed GOP. Left to itself the encoder picks key frames to
-            // suit each view's content, and the two views then disagree about where a sequence
-            // starts: a key frame in the base view resets the picture order count and empties the
-            // buffer, while the dependent view carries on referencing pictures that are no longer
-            // there. Every picture of an access unit has to share a count, so both views have to
-            // reset in the same places.
-            var baseView = Encode(left, track, bitrate / 2, SimulcastGopSize);
-            var dependentView = Encode(right, track, bitrate / 2, SimulcastGopSize);
+            List<byte[]> ParameterSets { get; }
+            int Count { get; }
 
-            return Assemble(path, baseView, dependentView, track, interLayerPrediction: false);
+            /// <summary>One picture's NAL units, read back from wherever they are kept.</summary>
+            List<byte[]> Read(int index);
         }
 
         /// <summary>
-        /// Both views through one encoder as an interleaved sequence with a GOP of two, so the
-        /// dependent pictures predict from the base picture beside them.
+        /// A stream's coded pictures, kept in a temporary file rather than in memory. A 25 second
+        /// clip at these rates is a few hundred megabytes of coded data, and the output is written
+        /// one access unit at a time, so there is no reason to hold it.
         /// </summary>
-        private Result WriteCrossView(List<byte[]> left, List<byte[]> right, MvHevcTrack track,
-            string path, uint bitrate)
+        private sealed class PictureSpool : IPictures, IDisposable
         {
-            var interleaved = new List<byte[]>(left.Count * 2);
-            for (int i = 0; i < Math.Min(left.Count, right.Count); i++)
+            private readonly FileStream _file = new FileStream(
+                Path.GetTempFileName(), FileMode.Create, FileAccess.ReadWrite, FileShare.None,
+                1 << 16, FileOptions.DeleteOnClose);
+
+            private readonly List<(long Offset, int[] Lengths)> _index = new List<(long, int[])>();
+
+            public List<byte[]> ParameterSets { get; } = new List<byte[]>();
+            public int Count => _index.Count;
+
+            public void Add(List<byte[]> picture)
             {
-                interleaved.Add(left[i]);
-                interleaved.Add(right[i]);
+                _file.Seek(0, SeekOrigin.End);
+                long offset = _file.Position;
+                foreach (var nalu in picture)
+                    _file.Write(nalu, 0, nalu.Length);
+                _index.Add((offset, picture.Select(n => n.Length).ToArray()));
             }
 
-            var coded = Encode(interleaved, track, bitrate, gopSize: 2, doubleRate: true);
-
-            // The interleaved stream is itself ordinary single layer HEVC, and decoded as such it
-            // is what the two layers have to reproduce - the check that the reference set rewrite
-            // is exact rather than merely plausible.
-            if (DumpViews)
-                WriteSingleView(path + ".interleaved.mp4", coded, track, doubleRate: true);
-
-            // Even pictures are the base view, odd ones the dependent view.
-            var baseView = new EncodedStream { ParameterSets = coded.ParameterSets };
-            var dependentView = new EncodedStream { ParameterSets = coded.ParameterSets };
-            for (int i = 0; i < coded.Pictures.Count; i++)
-                (i % 2 == 0 ? baseView.Pictures : dependentView.Pictures).Add(coded.Pictures[i]);
-
-            return Assemble(path, baseView, dependentView, track, interLayerPrediction: true);
-        }
-
-        private sealed class EncodedStream
-        {
-            public List<byte[]> ParameterSets { get; set; } = new List<byte[]>();
-            public List<List<byte[]>> Pictures { get; } = new List<List<byte[]>>();
-        }
-
-        private EncodedStream Encode(List<byte[]> frames, MvHevcTrack track, uint bitrate,
-            uint gopSize, bool doubleRate = false)
-        {
-            using var encoder = new H265Encoder((uint)CodedWidth, (uint)CodedHeight,
-                doubleRate ? track.FpsNom * 2 : track.FpsNom, track.FpsDenom, bitrate);
-            if (gopSize > 0)
-                encoder.CodecProperties[CodecApiProperties.GopSize] = gopSize;
-            encoder.Initialize();
-
-            var buffer = new byte[encoder.OutputSize];
-            var samples = new List<byte[]>();
-            long frameDuration = 10_000_000L * track.FpsDenom / track.FpsNom / (doubleRate ? 2 : 1);
-
-            void Drain()
+            public List<byte[]> Read(int index)
             {
-                while (encoder.ProcessOutput(ref buffer, out uint length, out long _) && length > 0)
-                    samples.Add(buffer.Take((int)length).ToArray());
+                var (offset, lengths) = _index[index];
+                _file.Seek(offset, SeekOrigin.Begin);
+
+                var picture = new List<byte[]>(lengths.Length);
+                foreach (int length in lengths)
+                {
+                    var nalu = new byte[length];
+                    _file.ReadExactly(nalu);
+                    picture.Add(nalu);
+                }
+                return picture;
             }
 
-            for (int i = 0; i < frames.Count; i++)
+            public void Dispose() => _file.Dispose();
+        }
+
+        /// <summary>Every other picture of an interleaved stream: one of its two views.</summary>
+        private sealed class EveryOther : IPictures
+        {
+            private readonly IPictures _source;
+            private readonly int _first;
+
+            public EveryOther(IPictures source, int first)
             {
-                encoder.ProcessInput(frames[i], i * frameDuration);
+                _source = source;
+                _first = first;
+            }
+
+            public List<byte[]> ParameterSets => _source.ParameterSets;
+            public int Count => (_source.Count - _first + 1) / 2;
+            public List<byte[]> Read(int index) => _source.Read(_first + index * 2);
+        }
+
+        /// <summary>
+        /// An encoder fed one frame at a time, which spools what it codes to disk - parameter
+        /// sets once, and each picture's slices.
+        /// </summary>
+        private sealed class StreamingEncoder : IDisposable
+        {
+            private readonly H265Encoder _encoder;
+            private readonly long _frameDuration;
+            private byte[] _buffer;
+            private int _fed;
+
+            public PictureSpool Output { get; } = new PictureSpool();
+
+            public StreamingEncoder(int width, int height, uint fpsNom, uint fpsDenom, uint bitrate,
+                uint gopSize, uint threads)
+            {
+                _encoder = new H265Encoder((uint)width, (uint)height, fpsNom, fpsDenom, bitrate);
+                if (gopSize > 0)
+                    _encoder.CodecProperties[CodecApiProperties.GopSize] = gopSize;
+                if (threads > 0)
+                    _encoder.CodecProperties[CodecApiProperties.NumWorkerThreads] = threads;
+                _encoder.Initialize();
+
+                _buffer = new byte[_encoder.OutputSize];
+                _frameDuration = 10_000_000L * fpsDenom / fpsNom;
+            }
+
+            public void Feed(byte[] frame)
+            {
+                _encoder.ProcessInput(frame, _fed++ * _frameDuration);
                 Drain();
             }
 
-            encoder.BeginDrain();
-            for (int quiet = 0; quiet < 4;)
+            public PictureSpool Finish()
             {
-                int before = samples.Count;
-                Drain();
-                if (samples.Count > before) quiet = 0; else quiet++;
+                _encoder.BeginDrain();
+                for (int quiet = 0; quiet < 4;)
+                    quiet = Drain() ? 0 : quiet + 1;
+                _encoder.EndDrain();
+                return Output;
             }
-            encoder.EndDrain();
 
-            // Parameter sets are collected once; the coded pictures keep only their slices.
-            var result = new EncodedStream();
-            foreach (var sample in samples)
+            private bool Drain()
+            {
+                bool any = false;
+                while (_encoder.ProcessOutput(ref _buffer, out uint length, out long _) && length > 0)
+                {
+                    Collect(_buffer.AsSpan(0, (int)length).ToArray());
+                    any = true;
+                }
+                return any;
+            }
+
+            private void Collect(byte[] sample)
             {
                 var picture = new List<byte[]>();
                 foreach (var nalu in AnnexBNalus(sample))
                 {
                     if (LayerRestamper.IsParameterSet(nalu))
                     {
-                        if (!result.ParameterSets.Any(p => p.SequenceEqual(nalu)))
-                            result.ParameterSets.Add(nalu);
+                        if (!Output.ParameterSets.Any(p => p.SequenceEqual(nalu)))
+                            Output.ParameterSets.Add(nalu);
                     }
                     else if (LayerRestamper.IsSlice(nalu))
                     {
@@ -229,25 +355,28 @@ namespace SharpSpatialVideo
                 }
 
                 if (picture.Count > 0)
-                    result.Pictures.Add(picture);
+                    Output.Add(picture);
             }
 
-            return result;
+            public void Dispose()
+            {
+                _encoder.Dispose();
+                Output.Dispose();
+            }
         }
 
-        private Result Assemble(string path, EncodedStream baseView, EncodedStream dependentView,
+        private Result Assemble(string path, IPictures baseView, IPictures dependentView,
             MvHevcTrack track, bool interLayerPrediction)
         {
-            var template = MvHevcReader.Read(_templatePath);
             var builder = new MultiviewBuilder { InterLayerPrediction = interLayerPrediction };
-            builder.LoadTemplate(template.BaseParameterSets);
+            builder.LoadTemplate(_templateParameterSets);
             builder.Build(baseView.ParameterSets, dependentView.ParameterSets, CodedWidth, CodedHeight);
 
             if (!builder.VpsIsSelfConsistent)
                 Console.WriteLine("  the patched video parameter set does not write the same bytes " +
                     "once its derived values are worked out again");
 
-            var multiviewVps = builder.BaseParameterSets.Where(IsVps);
+            var multiviewVps = builder.BaseParameterSets.Where(IsVps).ToList();
             var restamper = new LayerRestamper(multiviewVps
                 .Concat(dependentView.ParameterSets.Where(n => !IsVps(n)))
                 .Concat(builder.LayerParameterSets.Where(n => !IsVps(n))))
@@ -263,76 +392,65 @@ namespace SharpSpatialVideo
                 ? new LayerRestamper(multiviewVps.Concat(baseView.ParameterSets.Where(n => !IsVps(n))))
                 : null;
 
-            int count = Math.Min(baseView.Pictures.Count, dependentView.Pictures.Count);
-            int duration = (int)track.FpsDenom;
-
-            var accessUnits = new List<MultiviewAccessUnit>(count);
-            long baseBytes = 0, dependentBytes = 0;
-
-            for (int i = 0; i < count; i++)
-            {
-                var accessUnit = new MultiviewAccessUnit
-                {
-                    Duration = duration,
-                    IsRandomAccessPoint = baseView.Pictures[i].Any(LayerRestamper.IsIrap),
-                };
-
-                foreach (var nalu in baseView.Pictures[i])
-                {
-                    // The first picture stays an IDR so the stream still opens with one.
-                    var written = baseRestamper == null || i == 0
-                        ? nalu
-                        : baseRestamper.Restamp(nalu, 0, PpsIdOf(nalu, baseRestamper), i, CraNalType);
-
-                    accessUnit.BaseNalus.Add(written);
-                    baseBytes += written.Length;
-                }
-
-                foreach (var nalu in dependentView.Pictures[i])
-                {
-                    // Simulcast keeps the dependent encoder's own count, which already matches the
-                    // base encoder's; cross view renumbers, because the interleaved encode counted
-                    // both views in one sequence.
-                    var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId,
-                        interLayerPrediction ? i : (int?)null);
-
-                    accessUnit.LayerNalus.Add(restamped);
-                    dependentBytes += restamped.Length;
-                }
-
-                accessUnits.Add(accessUnit);
-            }
-
-            // Each view is also written on its own, so a fault in the encode can be told apart
-            // from a fault in putting the two together.
             if (DumpViews)
             {
                 WriteSingleView(path + ".base.mp4", baseView, track);
                 WriteSingleView(path + ".dependent.mp4", dependentView, track);
+                ReportAlignment(baseView, dependentView);
             }
 
-            if (DumpViews)
+            int count = Math.Min(baseView.Count, dependentView.Count);
+            int duration = (int)track.FpsDenom;
+            long baseBytes = 0, dependentBytes = 0;
+
+            // Built one at a time as the writer asks for them, so only the access unit being
+            // written is ever in memory.
+            IEnumerable<MultiviewAccessUnit> AccessUnits()
             {
-                ReportAlignment(baseView, dependentView);
-                Console.WriteLine("    template dpb_size:");
-                foreach (var line in builder.DescribeDpbSize().Split('|'))
-                    Console.WriteLine($"      {line}");
-                var spsParser = new MvHevcParser();
-                spsParser.ParseParameterSets(dependentView.ParameterSets);
-                foreach (var sps in spsParser.Context.SeqParameterSets.Values)
-                    Console.WriteLine($"    dependent encoder sps_max_dec_pic_buffering_minus1 = " +
-                        $"[{string.Join(",", sps.SpsMaxDecPicBufferingMinus1)}], " +
-                        $"num_reorder = [{string.Join(",", sps.SpsMaxNumReorderPics)}]");
+                for (int i = 0; i < count; i++)
+                {
+                    var basePicture = baseView.Read(i);
+                    var accessUnit = new MultiviewAccessUnit
+                    {
+                        Duration = duration,
+                        IsRandomAccessPoint = basePicture.Any(LayerRestamper.IsIrap),
+                    };
+
+                    foreach (var nalu in basePicture)
+                    {
+                        // The first picture stays an IDR so the stream still opens with one.
+                        var written = baseRestamper == null || i == 0
+                            ? nalu
+                            : baseRestamper.Restamp(nalu, 0, baseRestamper.PicParameterSetIdOf(nalu), i, CraNalType);
+
+                        accessUnit.BaseNalus.Add(written);
+                        baseBytes += written.Length;
+                    }
+
+                    foreach (var nalu in dependentView.Read(i))
+                    {
+                        // Simulcast keeps the dependent encoder's own count, which already matches
+                        // the base encoder's; cross view renumbers, because the interleaved encode
+                        // counted both views in one sequence.
+                        var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId,
+                            interLayerPrediction ? i : (int?)null);
+
+                        accessUnit.LayerNalus.Add(restamped);
+                        dependentBytes += restamped.Length;
+                    }
+
+                    yield return accessUnit;
+                }
             }
 
             var stereo = new StereoMetadata { BaseLayerIsLeftEye = true };
             MvHevcWriter.Write(path, builder.BaseParameterSets, builder.LayerParameterSets,
-                accessUnits, track.Timescale, stereo, track.HasAudio ? track : null);
+                AccessUnits(), track.Timescale, stereo, track.HasAudio ? track : null);
 
             return new Result
             {
                 Path = path,
-                AccessUnits = accessUnits.Count,
+                AccessUnits = count,
                 Bytes = new FileInfo(path).Length,
                 BaseBytes = baseBytes,
                 DependentBytes = dependentBytes,
@@ -342,15 +460,11 @@ namespace SharpSpatialVideo
         /// <summary>Clean random access, the intra picture type that does not reset the count.</summary>
         private const uint CraNalType = 21;
 
-        /// <summary>The picture parameter set the slice already points at, which does not change.</summary>
-        private static ulong PpsIdOf(byte[] nalu, LayerRestamper restamper) =>
-            restamper.PicParameterSetIdOf(nalu);
-
         /// <summary>
         /// Prints what each view coded per access unit. Every picture of an access unit has to
         /// carry the same picture order count, so the two columns have to agree.
         /// </summary>
-        private static void ReportAlignment(EncodedStream baseView, EncodedStream dependentView)
+        private static void ReportAlignment(IPictures baseView, IPictures dependentView)
         {
             var baseParser = new MvHevcParser();
             baseParser.ParseParameterSets(baseView.ParameterSets);
@@ -359,12 +473,12 @@ namespace SharpSpatialVideo
 
             Console.WriteLine("    au   base type/poc   dependent type/poc");
             int disagreements = 0;
-            int count = Math.Min(baseView.Pictures.Count, dependentView.Pictures.Count);
+            int count = Math.Min(baseView.Count, dependentView.Count);
 
             for (int i = 0; i < count; i++)
             {
-                var b = baseParser.ParseSlice(new Nalu { Data = baseView.Pictures[i][0] });
-                var d = dependentParser.ParseSlice(new Nalu { Data = dependentView.Pictures[i][0] });
+                var b = baseParser.ParseSlice(new Nalu { Data = baseView.Read(i)[0] });
+                var d = dependentParser.ParseSlice(new Nalu { Data = dependentView.Read(i)[0] });
                 int basePoc = baseParser.DerivePoc(b);
                 int dependentPoc = dependentParser.DerivePoc(d);
 
@@ -381,19 +495,24 @@ namespace SharpSpatialVideo
             Console.WriteLine($"    {disagreements} of {count} access units disagree");
         }
 
-        /// <summary>Writes one view as an ordinary single layer file, for comparison.</summary>
-        public bool DumpViews { get; set; }
-
-        private static void WriteSingleView(string path, EncodedStream view, MvHevcTrack track,
+        /// <summary>
+        /// Writes one view as an ordinary single layer file. A diagnostic, and not a streaming one:
+        /// the muxer it uses takes the pictures as a list.
+        /// </summary>
+        private static void WriteSingleView(string path, IPictures view, MvHevcTrack track,
             bool doubleRate = false)
         {
-            var pictures = view.Pictures
-                .Select((picture, index) => new MuxPicture
+            var pictures = Enumerable.Range(0, view.Count)
+                .Select(index =>
                 {
-                    Nalu = picture[0],
-                    Poc = index,
-                    IsRandomAccessPoint = picture.Any(LayerRestamper.IsIrap),
-                    Duration = (int)track.FpsDenom / (doubleRate ? 2 : 1),
+                    var picture = view.Read(index);
+                    return new MuxPicture
+                    {
+                        Nalu = picture[0],
+                        Poc = index,
+                        IsRandomAccessPoint = picture.Any(LayerRestamper.IsIrap),
+                        Duration = (int)track.FpsDenom / (doubleRate ? 2 : 1),
+                    };
                 })
                 .ToList();
 

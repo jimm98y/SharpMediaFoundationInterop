@@ -42,12 +42,12 @@ namespace SharpSpatialVideo
         /// <summary>Layer 1's parameter sets, as they will be written into lhvC.</summary>
         public List<byte[]> LayerParameterSets { get; } = new List<byte[]>();
 
-        /// <summary>
-        /// Takes the video parameter set from an MV-HEVC file to use as the template.
-        /// </summary>
         /// <summary>The template's video parameter set exactly as it was read, for comparison.</summary>
         public byte[] TemplateVpsBytes { get; private set; }
 
+        /// <summary>
+        /// Takes the video parameter set from an MV-HEVC file to use as the template.
+        /// </summary>
         public void LoadTemplate(IEnumerable<byte[]> templateParameterSets)
         {
             TemplateVpsBytes = templateParameterSets.FirstOrDefault(
@@ -149,38 +149,6 @@ namespace SharpSpatialVideo
         }
 
         private static bool IsVps(byte[] nalu) => ((nalu[0] >> 1) & 0x3F) == 32;
-
-        /// <summary>
-        /// The decoded picture buffer the video parameter set declares for each output layer set.
-        /// With more than one layer this, not the sequence parameter set, is what a decoder sizes
-        /// its buffer by.
-        /// </summary>
-        public string DescribeDpbSize()
-        {
-            var ext = Vps?.VpsExtension;
-            var dpb = ext?.DpbSize;
-            if (dpb == null)
-                return "no dpb_size in the extension";
-
-            string Show(object value)
-            {
-                if (value == null) return "null";
-                if (value is System.Collections.IEnumerable items && !(value is string))
-                    return "[" + string.Join(",", items.Cast<object>().Select(Show)) + "]";
-                return value.ToString();
-            }
-
-            return string.Join("|", new[]
-            {
-                $"NumOutputLayerSets = {ext.NumOutputLayerSets}",
-                $"sub_layer_flag_info_present_flag = {Show(dpb.SubLayerFlagInfoPresentFlag)}",
-                $"sub_layer_dpb_info_present_flag = {Show(dpb.SubLayerDpbInfoPresentFlag)}",
-                $"max_vps_dec_pic_buffering_minus1 = {Show(dpb.MaxVpsDecPicBufferingMinus1)}",
-                $"max_vps_num_reorder_pics = {Show(dpb.MaxVpsNumReorderPics)}",
-                $"max_vps_latency_increase_plus1 = {Show(dpb.MaxVpsLatencyIncreasePlus1)}",
-                $"vps_max_dec_pic_buffering_minus1 (base) = {Show(Vps.VpsMaxDecPicBufferingMinus1)}",
-            });
-        }
 
         /// <summary>The value for the highest sub-layer, which is the one that governs.</summary>
         private static ulong LastOf(ulong[] values) =>

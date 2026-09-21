@@ -27,17 +27,20 @@ namespace SharpSpatialVideo
         private static readonly byte[] StartCode = { 0, 0, 0, 1 };
 
         private readonly H265Decoder _decoder;
-        private readonly byte[] _buffer;
+        private byte[] _buffer;
 
         public uint CodedWidth { get; }
         public uint CodedHeight { get; }
 
-        public SpatialDecoder(uint codedWidth, uint codedHeight, uint fpsNom, uint fpsDenom)
+        public SpatialDecoder(uint codedWidth, uint codedHeight, uint fpsNom, uint fpsDenom,
+            bool lowLatency = false, uint threads = 0)
         {
             CodedWidth = codedWidth;
             CodedHeight = codedHeight;
 
-            _decoder = new H265Decoder(codedWidth, codedHeight, fpsNom, fpsDenom);
+            _decoder = new H265Decoder(codedWidth, codedHeight, fpsNom, fpsDenom, lowLatency);
+            if (threads > 0)
+                _decoder.CodecProperties[SharpMediaFoundationInterop.Transforms.CodecApiProperties.DecoderWorkerThreads] = threads;
             _decoder.Initialize();
 
             // The decoder renegotiates its output type on the first frame; size generously so a
@@ -72,6 +75,45 @@ namespace SharpSpatialVideo
             return Drain();
         }
 
+        /// <summary>
+        /// Feeds one access unit and hands each frame that becomes available to
+        /// <paramref name="onFrame"/> without copying it. The array is the decoder's own buffer: it
+        /// is valid only for the duration of the call and is overwritten by the next frame, so a
+        /// caller that needs to keep a frame has to copy it. At 1080p side by side a frame is over
+        /// 6 MB, and copying every one of them was most of what a conversion allocated.
+        /// </summary>
+        public void DecodeInto(IEnumerable<byte[]> nalus, long timestamp, Action<byte[], long> onFrame)
+        {
+            if (!_decoder.ProcessInput(ToAnnexB(nalus), timestamp))
+                RejectedInputs++;
+            DrainInto(onFrame);
+        }
+
+        /// <summary>Drains the decoder into <paramref name="onFrame"/>, with the same lifetime rule.</summary>
+        public void FlushInto(Action<byte[], long> onFrame)
+        {
+            _decoder.BeginDrain();
+            for (int quiet = 0; quiet < 4;)
+                quiet = DrainInto(onFrame) > 0 ? 0 : quiet + 1;
+            _decoder.EndDrain();
+        }
+
+        private int DrainInto(Action<byte[], long> onFrame)
+        {
+            int count = 0;
+            while (true)
+            {
+                byte[] buffer = _buffer;
+                if (!_decoder.ProcessOutput(ref buffer, out uint length, out long timestamp) || length == 0)
+                    break;
+
+                _buffer = buffer;
+                onFrame(buffer, timestamp);
+                count++;
+            }
+            return count;
+        }
+
         public IEnumerable<DecodedFrame> Flush()
         {
             // The queued frames have to be collected between the drain and the restart; restarting
@@ -100,6 +142,10 @@ namespace SharpSpatialVideo
                 byte[] buffer = _buffer;
                 if (!_decoder.ProcessOutput(ref buffer, out uint length, out long timestamp) || length == 0)
                     break;
+
+                // ProcessOutput grows the buffer when a frame does not fit; keep the grown one, or
+                // every later frame allocates it again.
+                _buffer = buffer;
 
                 var frame = new byte[length];
                 Buffer.BlockCopy(buffer, 0, frame, 0, (int)length);

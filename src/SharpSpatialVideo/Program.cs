@@ -68,6 +68,9 @@ namespace SharpSpatialVideo
                 case "remux":
                     return Remux(args);
 
+                case "decodecheck":
+                    return DecodeCheck(args);
+
                 case "convert":
                     return ConvertSbs(args);
 
@@ -192,6 +195,55 @@ namespace SharpSpatialVideo
         /// Writes an MV-HEVC file back out unchanged and compares the two, which is the one round
         /// trip that can be checked byte for byte rather than by decoding.
         /// </summary>
+        /// <summary>
+        /// Decodes a file with the decoder in low latency mode and in its normal mode, and checks
+        /// the two hand back the same frames in the same order. Low latency changes when a frame is
+        /// released, which matters for a stream with B pictures, whose frames come out of the
+        /// decoder in a different order from the one they went in.
+        /// </summary>
+        private static int DecodeCheck(string[] args)
+        {
+            string path = args[1];
+            var track = MvHevcReader.Read(path, loadSamples: false);
+            var parser = new MvHevcParser();
+            parser.ParseParameterSets(track.BaseParameterSets);
+            var sps = parser.Context.SeqParameterSets.Values.First();
+
+            List<(long Timestamp, string Hash)> Decode(bool lowLatency)
+            {
+                var frames = new List<(long, string)>();
+                using var md5 = System.Security.Cryptography.MD5.Create();
+                long frameDuration = 10_000_000L * track.FpsDenom / track.FpsNom;
+                int frameBytes = (int)(sps.PicWidthInLumaSamples * sps.PicHeightInLumaSamples * 3 / 2);
+
+                using var decoder = new SpatialDecoder((uint)sps.PicWidthInLumaSamples, (uint)sps.PicHeightInLumaSamples,
+                    track.FpsNom, track.FpsDenom, lowLatency);
+                decoder.SendParameterSets(track.BaseParameterSets);
+
+                void Take(byte[] frame, long timestamp) =>
+                    frames.Add((timestamp, Convert.ToHexString(md5.ComputeHash(frame, 0, frameBytes))));
+
+                foreach (var accessUnit in MvHevcReader.StreamAccessUnits(track))
+                    decoder.DecodeInto(accessUnit.Nalus.Select(n => n.Data),
+                        (accessUnit.Index * frameDuration) + track.SampleCompositionOffsets[accessUnit.Index] * 10_000_000L / track.Timescale,
+                        Take);
+                decoder.FlushInto(Take);
+                return frames;
+            }
+
+            var normal = Decode(lowLatency: false);
+            var low = Decode(lowLatency: true);
+
+            bool normalInOrder = normal.Zip(normal.Skip(1), (a, b) => a.Timestamp < b.Timestamp).All(x => x);
+            bool lowInOrder = low.Zip(low.Skip(1), (a, b) => a.Timestamp < b.Timestamp).All(x => x);
+            int same = normal.Zip(low, (a, b) => a.Hash == b.Hash && a.Timestamp == b.Timestamp).Count(x => x);
+
+            Console.WriteLine($"  normal:      {normal.Count} frames, presentation order: {normalInOrder}");
+            Console.WriteLine($"  low latency: {low.Count} frames, presentation order: {lowInOrder}");
+            Console.WriteLine($"  identical frame and timestamp at each position: {same}/{Math.Max(normal.Count, low.Count)}");
+            return 0;
+        }
+
         private static int Remux(string[] args)
         {
             string sourcePath = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
@@ -222,9 +274,21 @@ namespace SharpSpatialVideo
 
             SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
 
-            var converter = new SbsToMultiview(templatePath) { DumpViews = args.Contains("dump") };
+            var converter = new SbsToMultiview(templatePath) { DumpViews = args.Contains("dump"), ReportMemory = args.Contains("mem") };
+            // "simulcast" or "crossview" on the command line writes just that one, which needs
+            // fewer encoders running at once; "threads=N" caps each encoder's threads.
+            bool onlySimulcast = args.Contains("simulcast");
+            bool onlyCrossView = args.Contains("crossview");
+            var threads = args.FirstOrDefault(a => a.StartsWith("threads="));
+            if (threads != null)
+                converter.EncoderThreads = uint.Parse(threads.Substring("threads=".Length));
+            var decoderThreads = args.FirstOrDefault(a => a.StartsWith("dthreads="));
+            if (decoderThreads != null)
+                converter.DecoderThreads = uint.Parse(decoderThreads.Substring("dthreads=".Length));
+            converter.OnePass = args.Contains("onepass");
+
             var results = converter.Write(sourcePath, stem, bitrate,
-                simulcast: true, crossView: true, limit);
+                simulcast: !onlyCrossView, crossView: !onlySimulcast, limit);
 
             foreach (var result in results)
                 Console.WriteLine($"  wrote {result.Path}: {result.AccessUnits} access units, " +
