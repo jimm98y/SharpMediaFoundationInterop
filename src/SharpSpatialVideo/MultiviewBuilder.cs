@@ -84,7 +84,15 @@ namespace SharpSpatialVideo
                 s => Vps.Write(_templateContext, s));
             RoundTripsCleanly = TemplateVpsBytes != null && unpatched.SequenceEqual(TemplateVpsBytes);
 
-            PatchVps(width, height);
+            // Read both encodes' own parameter sets first: the video parameter set's buffer table
+            // is sized from them.
+            _parser.ParseParameterSets(baseParameterSets);
+            var layerParser = new MvHevcParser();
+            layerParser.ParseParameterSets(dependentParameterSets);
+
+            PatchVps(width, height,
+                _context.SeqParameterSets.Values.First(),
+                layerParser.Context.SeqParameterSets.Values.First());
 
             // Values derived from the extension - how many reference layers each layer has, and so
             // on - were worked out while reading the template, and some of them decide whether a
@@ -104,43 +112,23 @@ namespace SharpSpatialVideo
 
             BaseParameterSets.Add(twice);
 
-            // Read the base encoder's own sequence and picture parameter sets, keep them verbatim
-            // for layer 0, and re-emit copies for layer 1.
-            _parser.ParseParameterSets(baseParameterSets);
-
-            // Both layers share one decoded picture buffer, and the encoder sized its sequence
-            // parameter set for one view. Left alone, layer 0's pictures crowd out layer 1's and
-            // the dependent view loses references it was coded against. Only the buffer sizes
-            // change, which nothing in the coded slices depends on.
-            //
-            // A sequence parameter set has to be written before the picture parameter sets that
-            // point at it, or reading them back finds nothing to attach them to.
-            foreach (var parameterSet in _context.SeqParameterSets.Values.ToList())
-            {
-                GrowDecodedPictureBuffer(parameterSet);
-                _context.SeqParameterSetRbsp = parameterSet;
-                BaseParameterSets.Add(WriteParameterSet(H265NALTypes.SPS_NUT, 0,
-                    s => parameterSet.Write(_context, s)));
-            }
-
+            // Layer 0's sequence and picture parameter sets go through verbatim. Its slices are not
+            // touched, and nothing about them needs to change: with more than one layer, the
+            // buffer a decoder keeps is sized by the video parameter set, not by these.
             foreach (var nalu in baseParameterSets)
             {
                 uint type = (uint)((nalu[0] >> 1) & 0x3F);
-                if (type == H265NALTypes.PPS_NUT)
+                if (type == H265NALTypes.SPS_NUT || type == H265NALTypes.PPS_NUT)
                     BaseParameterSets.Add(nalu);
             }
 
             // Layer 1's parameter sets come from the dependent view's own encode, not from copies
             // of the base view's - the two views were coded separately and need not agree.
-            var layerParser = new MvHevcParser();
-            layerParser.ParseParameterSets(dependentParameterSets);
-
             var sps = layerParser.Context.SeqParameterSets.Values.ToList();
             var pps = layerParser.Context.PicParameterSets.Values.ToList();
 
             foreach (var parameterSet in sps)
             {
-                GrowDecodedPictureBuffer(parameterSet);
                 // A sequence parameter set at nuh_layer_id 1 may inherit its format from the video
                 // parameter set instead of carrying it. Writing it out in full keeps layer 1
                 // self describing, which is one less thing that has to agree.
@@ -160,76 +148,49 @@ namespace SharpSpatialVideo
             }
         }
 
-        /// <summary>
-        /// Reads layer 1's parameter sets back the way a decoder would - at layer 1 - and reports
-        /// any field that does not come back as the encoder wrote it. The syntax above layer 0 is
-        /// not the same syntax, so a set written there can lose values silently.
-        /// </summary>
-        public List<string> CheckLayerParameterSets(IEnumerable<byte[]> dependentParameterSets)
-        {
-            var problems = new List<string>();
-
-            var original = new MvHevcParser();
-            original.ParseParameterSets(dependentParameterSets);
-
-            var written = new MvHevcParser();
-            written.ParseParameterSets(BaseParameterSets.Where(IsVps).Concat(LayerParameterSets));
-
-            foreach (var expected in original.Context.SeqParameterSets.Values)
-            {
-                if (!written.Context.SeqParameterSets.TryGetValue(LayerSpsId, out var actual))
-                {
-                    problems.Add("layer 1 sequence parameter set did not read back at all");
-                    continue;
-                }
-
-                foreach (var difference in ParameterSetDiff.Compare(expected, actual))
-                    if (!difference.StartsWith("SpsSeqParameterSetId"))
-                        problems.Add($"sequence parameter set {difference}");
-                break;
-            }
-
-            foreach (var expected in original.Context.PicParameterSets.Values)
-            {
-                if (!written.Context.PicParameterSets.TryGetValue(LayerPpsId, out var actual))
-                {
-                    problems.Add("layer 1 picture parameter set did not read back at all");
-                    continue;
-                }
-
-                foreach (var difference in ParameterSetDiff.Compare(expected, actual))
-                    if (!difference.StartsWith("PpsPicParameterSetId")
-                        && !difference.StartsWith("PpsSeqParameterSetId"))
-                        problems.Add($"picture parameter set {difference}");
-                break;
-            }
-
-            return problems;
-        }
-
         private static bool IsVps(byte[] nalu) => ((nalu[0] >> 1) & 0x3F) == 32;
 
         /// <summary>
-        /// Room for both layers' pictures rather than one layer's. The spec caps the buffer at 16
-        /// however high the level goes, so doubling is bounded by that.
+        /// The decoded picture buffer the video parameter set declares for each output layer set.
+        /// With more than one layer this, not the sequence parameter set, is what a decoder sizes
+        /// its buffer by.
         /// </summary>
-        private static void GrowDecodedPictureBuffer(SeqParameterSetRbsp parameterSet)
+        public string DescribeDpbSize()
         {
-            if (parameterSet.SpsMaxDecPicBufferingMinus1 == null)
-                return;
+            var ext = Vps?.VpsExtension;
+            var dpb = ext?.DpbSize;
+            if (dpb == null)
+                return "no dpb_size in the extension";
 
-            for (int i = 0; i < parameterSet.SpsMaxDecPicBufferingMinus1.Length; i++)
+            string Show(object value)
             {
-                ulong pictures = parameterSet.SpsMaxDecPicBufferingMinus1[i] + 1;
-                parameterSet.SpsMaxDecPicBufferingMinus1[i] = Math.Min(pictures * 2, 16) - 1;
+                if (value == null) return "null";
+                if (value is System.Collections.IEnumerable items && !(value is string))
+                    return "[" + string.Join(",", items.Cast<object>().Select(Show)) + "]";
+                return value.ToString();
             }
+
+            return string.Join("|", new[]
+            {
+                $"NumOutputLayerSets = {ext.NumOutputLayerSets}",
+                $"sub_layer_flag_info_present_flag = {Show(dpb.SubLayerFlagInfoPresentFlag)}",
+                $"sub_layer_dpb_info_present_flag = {Show(dpb.SubLayerDpbInfoPresentFlag)}",
+                $"max_vps_dec_pic_buffering_minus1 = {Show(dpb.MaxVpsDecPicBufferingMinus1)}",
+                $"max_vps_num_reorder_pics = {Show(dpb.MaxVpsNumReorderPics)}",
+                $"max_vps_latency_increase_plus1 = {Show(dpb.MaxVpsLatencyIncreasePlus1)}",
+                $"vps_max_dec_pic_buffering_minus1 (base) = {Show(Vps.VpsMaxDecPicBufferingMinus1)}",
+            });
         }
+
+        /// <summary>The value for the highest sub-layer, which is the one that governs.</summary>
+        private static ulong LastOf(ulong[] values) =>
+            values == null || values.Length == 0 ? 0 : values[values.Length - 1];
 
         /// <summary>The ids layer 1's parameter sets take, so both layers can be active together.</summary>
         public const ulong LayerSpsId = 1;
         public const ulong LayerPpsId = 1;
 
-        private void PatchVps(int width, int height)
+        private void PatchVps(int width, int height, SeqParameterSetRbsp baseSps, SeqParameterSetRbsp layerSps)
         {
             var extension = Vps.VpsExtension
                 ?? throw new InvalidOperationException("the template video parameter set has no multiview extension");
@@ -243,6 +204,46 @@ namespace SharpSpatialVideo
             // So: keep the dependency, and turn off the inference that would otherwise force every
             // dependent slice to use it. With this clear each slice carries the flag itself.
             extension.DefaultRefLayersActiveFlag = (byte)(InterLayerPrediction ? 1 : 0);
+
+            // With more than one layer a decoder sizes each layer's share of the decoded picture
+            // buffer from this table, not from the sequence parameter sets. The template's was
+            // written for Apple's dependent layer, which only ever references the base picture of
+            // its own access unit - a picture that sits in layer 0's share - so it gives layer 1
+            // room for one picture. A dependent view with temporal references of its own needs
+            // what its encoder asked for, or each reference is gone by the time it is used.
+            var dpb = extension.DpbSize;
+            if (dpb?.MaxVpsDecPicBufferingMinus1 != null)
+            {
+                for (int i = 0; i < dpb.MaxVpsDecPicBufferingMinus1.Length; i++)
+                {
+                    var perSubLayer = dpb.MaxVpsDecPicBufferingMinus1[i];
+                    if (perSubLayer == null) continue;
+
+                    for (int j = 0; j < perSubLayer.Length; j++)
+                    {
+                        var perLayer = perSubLayer[j];
+                        if (perLayer == null) continue;
+
+                        if (perLayer.Length > 0)
+                            perLayer[0] = LastOf(baseSps.SpsMaxDecPicBufferingMinus1);
+                        if (perLayer.Length > 1)
+                            perLayer[1] = LastOf(layerSps.SpsMaxDecPicBufferingMinus1);
+                    }
+
+                    if (dpb.MaxVpsNumReorderPics?[i] != null)
+                        for (int j = 0; j < dpb.MaxVpsNumReorderPics[i].Length; j++)
+                            dpb.MaxVpsNumReorderPics[i][j] = Math.Max(
+                                LastOf(baseSps.SpsMaxNumReorderPics), LastOf(layerSps.SpsMaxNumReorderPics));
+                }
+            }
+
+            // The base layer's own entry, which a single layer decoder reads.
+            if (Vps.VpsMaxDecPicBufferingMinus1 != null)
+                for (int i = 0; i < Vps.VpsMaxDecPicBufferingMinus1.Length; i++)
+                    Vps.VpsMaxDecPicBufferingMinus1[i] = LastOf(baseSps.SpsMaxDecPicBufferingMinus1);
+            if (Vps.VpsMaxNumReorderPics != null)
+                for (int i = 0; i < Vps.VpsMaxNumReorderPics.Length; i++)
+                    Vps.VpsMaxNumReorderPics[i] = LastOf(baseSps.SpsMaxNumReorderPics);
 
             // The representation format says what a layer's pictures look like. It is shared by
             // both layers here, so one patch covers the pair.

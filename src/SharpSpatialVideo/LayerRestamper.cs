@@ -61,7 +61,7 @@ namespace SharpSpatialVideo
         public bool CrossView { get; set; }
 
         /// <summary>Re-emits one coded slice at layer 1, pointing at layer 1's picture parameter set.</summary>
-        public byte[] ToLayerOne(byte[] nalu, ulong picParameterSetId, int pictureOrderCount = 0) =>
+        public byte[] ToLayerOne(byte[] nalu, ulong picParameterSetId, int? pictureOrderCount = null) =>
             Restamp(nalu, 1, picParameterSetId, pictureOrderCount, null);
 
         /// <summary>
@@ -70,7 +70,7 @@ namespace SharpSpatialVideo
         /// pictures keep counting rather than resetting to zero at every one of them.
         /// </summary>
         public byte[] Restamp(byte[] nalu, uint layerId, ulong picParameterSetId,
-            int pictureOrderCount, uint? newNalType)
+            int? pictureOrderCount, uint? newNalType)
         {
             var parsed = _parser.ParseSlice(new Nalu { Data = nalu });
             var context = _parser.Context;
@@ -97,7 +97,14 @@ namespace SharpSpatialVideo
             // moves up a layer the value has to be supplied.
             bool isIdr = nalUnit.NalUnitHeader.NalUnitType == 19 || nalUnit.NalUnitHeader.NalUnitType == 20;
             int maxPocLsb = 1 << (int)(context.SeqParameterSetRbsp.Log2MaxPicOrderCntLsbMinus4 + 4);
-            header.SlicePicOrderCntLsb = isIdr ? 0 : (ulong)(pictureOrderCount & (maxPocLsb - 1));
+            // A slice keeps the picture order count it was coded with unless a new one is given.
+            // Renumbering is only wanted when the pictures of two encodes are being made to share
+            // a count they did not have; overwriting it otherwise throws away the encoder's own
+            // numbering, which every reference in the stream is expressed against.
+            if (isIdr)
+                header.SlicePicOrderCntLsb = 0;
+            else if (pictureOrderCount.HasValue)
+                header.SlicePicOrderCntLsb = (ulong)(pictureOrderCount.Value & (maxPocLsb - 1));
 
             // An intra picture written as a CRA rather than an IDR keeps the count running, and a
             // picture with no references needs an empty set to say so.
@@ -164,32 +171,6 @@ namespace SharpSpatialVideo
                     header.ShortTermRefPicSetSpsFlag = savedSpsFlag;
                 }
             }
-        }
-
-        /// <summary>
-        /// Reads a re-stamped slice back the way a decoder would and reports any header field that
-        /// did not survive. The payload is compared too: it is spliced across rather than written,
-        /// so if the header's length changed in a way that breaks the byte alignment the coded data
-        /// would land at the wrong offset.
-        /// </summary>
-        public List<string> CheckRestamped(byte[] original, byte[] restamped)
-        {
-            var problems = new List<string>();
-
-            var before = _parser.ParseSlice(new Nalu { Data = original });
-            var beforeHeader = before.Header;
-            var beforePayload = before.Rbsp.Skip(before.PayloadOffset).ToArray();
-
-            var after = _parser.ParseSlice(new Nalu { Data = restamped });
-            var afterPayload = after.Rbsp.Skip(after.PayloadOffset).ToArray();
-
-            foreach (var difference in ParameterSetDiff.Compare(beforeHeader, after.Header))
-                problems.Add($"header {difference}");
-
-            if (!beforePayload.SequenceEqual(afterPayload))
-                problems.Add($"coded data differs: {beforePayload.Length} bytes against {afterPayload.Length}");
-
-            return problems;
         }
 
         /// <summary>The picture parameter set a coded slice points at.</summary>

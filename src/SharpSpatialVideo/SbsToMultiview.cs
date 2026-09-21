@@ -155,6 +155,12 @@ namespace SharpSpatialVideo
 
             var coded = Encode(interleaved, track, bitrate, gopSize: 2, doubleRate: true);
 
+            // The interleaved stream is itself ordinary single layer HEVC, and decoded as such it
+            // is what the two layers have to reproduce - the check that the reference set rewrite
+            // is exact rather than merely plausible.
+            if (DumpViews)
+                WriteSingleView(path + ".interleaved.mp4", coded, track, doubleRate: true);
+
             // Even pictures are the base view, odd ones the dependent view.
             var baseView = new EncodedStream { ParameterSets = coded.ParameterSets };
             var dependentView = new EncodedStream { ParameterSets = coded.ParameterSets };
@@ -284,7 +290,11 @@ namespace SharpSpatialVideo
 
                 foreach (var nalu in dependentView.Pictures[i])
                 {
-                    var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId, i);
+                    // Simulcast keeps the dependent encoder's own count, which already matches the
+                    // base encoder's; cross view renumbers, because the interleaved encode counted
+                    // both views in one sequence.
+                    var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId,
+                        interLayerPrediction ? i : (int?)null);
 
                     accessUnit.LayerNalus.Add(restamped);
                     dependentBytes += restamped.Length;
@@ -302,7 +312,18 @@ namespace SharpSpatialVideo
             }
 
             if (DumpViews)
+            {
                 ReportAlignment(baseView, dependentView);
+                Console.WriteLine("    template dpb_size:");
+                foreach (var line in builder.DescribeDpbSize().Split('|'))
+                    Console.WriteLine($"      {line}");
+                var spsParser = new MvHevcParser();
+                spsParser.ParseParameterSets(dependentView.ParameterSets);
+                foreach (var sps in spsParser.Context.SeqParameterSets.Values)
+                    Console.WriteLine($"    dependent encoder sps_max_dec_pic_buffering_minus1 = " +
+                        $"[{string.Join(",", sps.SpsMaxDecPicBufferingMinus1)}], " +
+                        $"num_reorder = [{string.Join(",", sps.SpsMaxNumReorderPics)}]");
+            }
 
             var stereo = new StereoMetadata { BaseLayerIsLeftEye = true };
             MvHevcWriter.Write(path, builder.BaseParameterSets, builder.LayerParameterSets,
@@ -363,7 +384,8 @@ namespace SharpSpatialVideo
         /// <summary>Writes one view as an ordinary single layer file, for comparison.</summary>
         public bool DumpViews { get; set; }
 
-        private static void WriteSingleView(string path, EncodedStream view, MvHevcTrack track)
+        private static void WriteSingleView(string path, EncodedStream view, MvHevcTrack track,
+            bool doubleRate = false)
         {
             var pictures = view.Pictures
                 .Select((picture, index) => new MuxPicture
@@ -371,11 +393,12 @@ namespace SharpSpatialVideo
                     Nalu = picture[0],
                     Poc = index,
                     IsRandomAccessPoint = picture.Any(LayerRestamper.IsIrap),
-                    Duration = (int)track.FpsDenom,
+                    Duration = (int)track.FpsDenom / (doubleRate ? 2 : 1),
                 })
                 .ToList();
 
-            EyeMuxer.Write(path, view.ParameterSets, pictures, track.Timescale, (int)track.FpsDenom);
+            EyeMuxer.Write(path, view.ParameterSets, pictures, track.Timescale,
+                (int)track.FpsDenom / (doubleRate ? 2 : 1));
         }
 
         private static bool IsVps(byte[] nalu) => ((nalu[0] >> 1) & 0x3F) == 32;
