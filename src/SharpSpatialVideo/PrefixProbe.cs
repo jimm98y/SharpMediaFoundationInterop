@@ -154,7 +154,7 @@ namespace SharpSpatialVideo
         /// <summary>True when the picture carries an IRAP NAL unit, so it was coded without prediction.</summary>
         private static bool IsIntra(byte[] sample)
         {
-            foreach (var nalu in AnnexBNalus(sample))
+            foreach (var nalu in AnnexB.Nalus(sample))
             {
                 uint type = (uint)((nalu[0] >> 1) & 0x3F);
                 if (type >= 16 && type <= 23)
@@ -182,7 +182,7 @@ namespace SharpSpatialVideo
             var parser = new MvHevcParser();
             var parameterSets = new List<byte[]>();
             foreach (var sample in coded)
-                foreach (var nalu in AnnexBNalus(sample))
+                foreach (var nalu in AnnexB.Nalus(sample))
                 {
                     uint type = (uint)((nalu[0] >> 1) & 0x3F);
                     if (type is 32 or 33 or 34)
@@ -190,7 +190,7 @@ namespace SharpSpatialVideo
                 }
             parser.ParseParameterSets(parameterSets);
 
-            foreach (var nalu in AnnexBNalus(coded.Last()))
+            foreach (var nalu in AnnexB.Nalus(coded.Last()))
             {
                 uint type = (uint)((nalu[0] >> 1) & 0x3F);
                 if (type > 21 || (type > 9 && type < 16))
@@ -292,29 +292,5 @@ namespace SharpSpatialVideo
             return output.ToArray();
         }
 
-        private static IEnumerable<byte[]> AnnexBNalus(byte[] data)
-        {
-            var starts = new List<int>();
-            for (int i = 0; i + 3 < data.Length; i++)
-            {
-                if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1)
-                    starts.Add(i + 3);
-                else if (i + 4 < data.Length && data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 0 && data[i + 3] == 1)
-                {
-                    starts.Add(i + 4);
-                    i++;
-                }
-            }
-
-            for (int i = 0; i < starts.Count; i++)
-            {
-                int start = starts[i];
-                int end = i + 1 < starts.Count ? starts[i + 1] : data.Length;
-                while (end > start && data[end - 1] == 0)
-                    end--;
-                if (end > start)
-                    yield return data.AsSpan(start, end - start).ToArray();
-            }
-        }
     }
 }

@@ -125,7 +125,7 @@ namespace SharpSpatialVideo
             long dts = 0;
             foreach (var sample in samples)
             {
-                foreach (var nalu in AnnexBNalus(sample.Data))
+                foreach (var nalu in AnnexB.Nalus(sample.Data))
                     muxTrack.ProcessSample(nalu, out _, out _);
 
                 long cts = sample.Timestamp * _track.FpsNom / 10_000_000L;
@@ -148,7 +148,7 @@ namespace SharpSpatialVideo
 
         private static bool IsIrap(byte[] annexB)
         {
-            foreach (var nalu in AnnexBNalus(annexB))
+            foreach (var nalu in AnnexB.Nalus(annexB))
             {
                 uint type = (uint)((nalu[0] >> 1) & 0x3F);
                 if (type >= 16 && type <= 23) return true;
@@ -156,37 +156,12 @@ namespace SharpSpatialVideo
             return false;
         }
 
-        /// <summary>Splits an Annex B buffer into its NAL units, dropping the start codes.</summary>
-        private static IEnumerable<byte[]> AnnexBNalus(byte[] data)
-        {
-            var starts = new List<int>();
-            for (int i = 0; i + 3 < data.Length; i++)
-            {
-                if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1)
-                    starts.Add(i + 3);
-                else if (i + 4 < data.Length && data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 0 && data[i + 3] == 1)
-                {
-                    starts.Add(i + 4);
-                    i++;
-                }
-            }
-
-            for (int i = 0; i < starts.Count; i++)
-            {
-                int end = i + 1 < starts.Count ? starts[i + 1] : data.Length;
-                while (end > starts[i] && end - 1 > 0 && data[end - 1] == 0) end--;
-                if (end <= starts[i]) continue;
-                var nalu = new byte[end - starts[i]];
-                Buffer.BlockCopy(data, starts[i], nalu, 0, nalu.Length);
-                yield return nalu;
-            }
-        }
 
         /// <summary>Rewrites an Annex B access unit into the length prefixed form an MP4 sample uses.</summary>
         private static byte[] LengthPrefixed(byte[] annexB)
         {
             using var memory = new MemoryStream();
-            foreach (var nalu in AnnexBNalus(annexB))
+            foreach (var nalu in AnnexB.Nalus(annexB))
             {
                 memory.WriteByte((byte)(nalu.Length >> 24));
                 memory.WriteByte((byte)(nalu.Length >> 16));

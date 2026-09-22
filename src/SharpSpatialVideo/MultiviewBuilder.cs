@@ -135,13 +135,18 @@ namespace SharpSpatialVideo
 
             BaseParameterSets.Add(twice);
 
-            // Layer 0's sequence and picture parameter sets go through verbatim. Its slices are not
-            // touched, and nothing about them needs to change: with more than one layer, the
-            // buffer a decoder keeps is sized by the video parameter set, not by these.
+            // Layer 0's picture parameter sets go through verbatim, and so does its sequence
+            // parameter set but for its profile, tier and level. The encoder's claim a level that
+            // does not exist (general_level_idc 12) and a profile compatibility that differs from
+            // the video parameter set's, and a file whose two sets disagree is played but not
+            // recognised as spatial. Taking them from the video parameter set, as Apple's files
+            // have them, makes the two agree. Nothing a slice reads depends on these fields.
             foreach (var nalu in baseParameterSets)
             {
                 uint type = (uint)((nalu[0] >> 1) & 0x3F);
-                if (type == H265NALTypes.SPS_NUT || type == H265NALTypes.PPS_NUT)
+                if (type == H265NALTypes.SPS_NUT)
+                    BaseParameterSets.Add(WithVpsProfile(nalu));
+                else if (type == H265NALTypes.PPS_NUT)
                     BaseParameterSets.Add(nalu);
             }
 
@@ -155,10 +160,16 @@ namespace SharpSpatialVideo
 
             foreach (var parameterSet in sps)
             {
-                // A sequence parameter set at nuh_layer_id 1 may inherit its format from the video
-                // parameter set instead of carrying it. Writing it out in full keeps layer 1
-                // self describing, which is one less thing that has to agree.
+                // Written in the multi-layer form (sps_ext_or_max_sub_layers_minus1 = 7), as
+                // Apple's are: profile, tier and level, picture format and buffer sizes all come
+                // from the video parameter set, which declares layer 1 Multiview Main. Written in
+                // full instead, the set declares layer 1 plain Main at the encoder's level, and the
+                // file plays but is not recognised as spatial. PatchVps has already put this
+                // encode's format and buffer sizes where the inherited values are read from.
                 parameterSet.SpsSeqParameterSetId = LayerSpsId;
+                parameterSet.SpsExtOrMaxSubLayersMinus1 = 7;
+                parameterSet.UpdateRepFormatFlag = 0;
+                parameterSet.SpsInferScalingListFlag = 0;
                 layerParser.Context.SeqParameterSetRbsp = parameterSet;
                 LayerParameterSets.Add(WriteParameterSet(H265NALTypes.SPS_NUT, 1,
                     s => parameterSet.Write(layerParser.Context, s), layerParser.Context));
@@ -172,6 +183,34 @@ namespace SharpSpatialVideo
                 LayerParameterSets.Add(WriteParameterSet(H265NALTypes.PPS_NUT, 1,
                     s => parameterSet.Write(layerParser.Context, s), layerParser.Context));
             }
+        }
+
+        /// <summary>
+        /// The base layer's sequence parameter set, with the general profile, compatibility flags,
+        /// tier and level of the video parameter set.
+        /// </summary>
+        private byte[] WithVpsProfile(byte[] nalu)
+        {
+            var parser = new MvHevcParser();
+            parser.ParseParameterSets(new[] { nalu });
+            var sps = parser.Context.SeqParameterSetRbsp;
+
+            // The rewrite is only safe if an unchanged set comes back as it went in.
+            var unchanged = WriteParameterSet(H265NALTypes.SPS_NUT, 0,
+                s => sps.Write(parser.Context, s), parser.Context);
+            if (!unchanged.SequenceEqual(nalu))
+                throw new InvalidOperationException("the base sequence parameter set does not round trip: " +
+                    $"{Convert.ToHexString(nalu)} came back as {Convert.ToHexString(unchanged)}");
+
+            var from = Vps.ProfileTierLevel;
+            var to = sps.ProfileTierLevel;
+            to.GeneralTierFlag = from.GeneralTierFlag;
+            to.GeneralProfileIdc = from.GeneralProfileIdc;
+            to.GeneralProfileCompatibilityFlag = (byte[])from.GeneralProfileCompatibilityFlag.Clone();
+            to.GeneralLevelIdc = from.GeneralLevelIdc;
+
+            return WriteParameterSet(H265NALTypes.SPS_NUT, 0,
+                s => sps.Write(parser.Context, s), parser.Context);
         }
 
         private static bool IsVps(byte[] nalu) => ((nalu[0] >> 1) & 0x3F) == 32;
