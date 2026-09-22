@@ -218,7 +218,7 @@ namespace SharpSpatialVideo
         {
             if (args.Length < 3)
             {
-                Console.Error.WriteLine("Usage: SharpSpatialVideo variant <in.mov> <out.mov> [nosei] [sei=<file>] [ext|noext]");
+                Console.Error.WriteLine("Usage: SharpSpatialVideo variant <in.mov> <out.mov> [nosei] [sei=<file>] [ext|noext] [colour|nocolour] [cra1]");
                 return 1;
             }
 
@@ -229,6 +229,9 @@ namespace SharpSpatialVideo
                 else if (flag.StartsWith("sei=")) options.UserDataSeiFrom = flag.Substring(4);
                 else if (flag == "ext") options.LayerExtensions = true;
                 else if (flag == "noext") options.LayerExtensions = false;
+                else if (flag == "colour") options.ColourDescription = true;
+                else if (flag == "nocolour") options.ColourDescription = false;
+                else if (flag == "cra1") options.CraAtLayerOne = true;
                 else throw new ArgumentException($"unknown flag '{flag}'");
             }
 

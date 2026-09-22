@@ -23,15 +23,34 @@ namespace SharpSpatialVideo
 
             /// <summary>True adds the multilayer extensions to layer 1's SPS and PPS, false removes them, null leaves them.</summary>
             public bool? LayerExtensions { get; set; }
+
+            /// <summary>True gives the base SPS the colour description Apple's has, false takes it away, null leaves it.</summary>
+            public bool? ColourDescription { get; set; }
+
+            /// <summary>
+            /// Re-labels layer 1's IDR pictures as CRA, which is what Apple's layer 1 uses. An IDR
+            /// above the base layer cannot predict from the layer below it at all - it has no
+            /// reference list - so a player may read a layer of IDRs as a second video rather than
+            /// as the other eye.
+            /// </summary>
+            public bool CraAtLayerOne { get; set; }
         }
 
         public static void Write(string sourcePath, string outputPath, Options options)
         {
             var track = MvHevcReader.Read(sourcePath);
 
-            var layerParameterSets = options.LayerExtensions.HasValue
-                ? WithLayerExtensions(track.BaseParameterSets, track.LayerParameterSets, options.LayerExtensions.Value)
-                : track.LayerParameterSets;
+            // One parser for both: layer 1's sets are read against the video parameter set and the
+            // base layer's, as a decoder reads them.
+            var parser = new MvHevcParser();
+
+            var baseParameterSets = Rewrite(track.BaseParameterSets, parser,
+                sps => { if (options.ColourDescription.HasValue) SetColourDescription(sps, options.ColourDescription.Value); },
+                pps => { });
+
+            var layerParameterSets = Rewrite(track.LayerParameterSets, parser,
+                sps => { if (options.LayerExtensions.HasValue) SetMultilayerExtension(sps, options.LayerExtensions.Value); },
+                pps => { if (options.LayerExtensions.HasValue) SetMultilayerExtension(pps, options.LayerExtensions.Value); });
 
             // Apple's key frames carry two: one in front of the base picture, one in front of the
             // layer 1 picture - both at nuh_layer_id 0.
@@ -46,6 +65,13 @@ namespace SharpSpatialVideo
                     .Where(IsUserDataSei).Select(n => n.Data).ToList();
                 Console.WriteLine($"  user data SEI: {seiBeforeBase.Count} before the base picture, {seiBeforeLayer.Count} before layer 1's");
             }
+
+            // Built from the sets that go into the file, so a re-written slice is written against
+            // the same parameter sets a decoder will read it with.
+            var restamper = options.CraAtLayerOne
+                ? new LayerRestamper(baseParameterSets.Concat(layerParameterSets))
+                : null;
+            int relabelled = 0;
 
             var accessUnits = new List<MultiviewAccessUnit>();
             foreach (var source in track.AccessUnits)
@@ -78,13 +104,27 @@ namespace SharpSpatialVideo
                             accessUnit.LayerNalus.AddRange(seiBeforeLayer);
                     }
 
-                    (inLayer ? accessUnit.LayerNalus : accessUnit.BaseNalus).Add(nalu.Data);
+                    var data = nalu.Data;
+
+                    // The picture order count of an access unit whose base picture is an IDR is
+                    // zero, and every picture in an access unit shares one, so that is what the
+                    // re-labelled picture takes.
+                    if (restamper != null && nalu.LayerId == 1 && nalu.IsIdr)
+                    {
+                        data = restamper.Restamp(data, 1, restamper.PicParameterSetIdOf(data), 0, 21);
+                        relabelled++;
+                    }
+
+                    (inLayer ? accessUnit.LayerNalus : accessUnit.BaseNalus).Add(data);
                 }
 
                 accessUnits.Add(accessUnit);
             }
 
-            MvHevcWriter.Write(outputPath, track.BaseParameterSets, layerParameterSets,
+            if (restamper != null)
+                Console.WriteLine($"  re-labelled {relabelled} layer 1 IDR pictures as CRA");
+
+            MvHevcWriter.Write(outputPath, baseParameterSets, layerParameterSets,
                 accessUnits, track.Timescale, new StereoMetadata(), track.HasAudio ? track : null);
         }
 
@@ -92,41 +132,75 @@ namespace SharpSpatialVideo
             nalu.Type == H265NALTypes.PREFIX_SEI_NUT && nalu.Data.Length > 2 && nalu.Data[2] == 5;
 
         /// <summary>
-        /// Layer 1's parameter sets with the multilayer extensions added or removed. Every field in
-        /// them is at its inferred value, so a slice parses the same either way.
+        /// Reads each parameter set, lets the caller change it, and writes it back. A set nothing
+        /// was done to comes back as it went in, and anything else is a bug in the read or the
+        /// write rather than the change asked for - so it says so.
         /// </summary>
-        public static List<byte[]> WithLayerExtensions(List<byte[]> baseParameterSets,
-            List<byte[]> layerParameterSets, bool present)
+        private static List<byte[]> Rewrite(List<byte[]> parameterSets, MvHevcParser parser,
+            Action<SeqParameterSetRbsp> onSps, Action<PicParameterSetRbsp> onPps)
         {
-            var parser = new MvHevcParser();
-            parser.ParseParameterSets(baseParameterSets);
-
             var result = new List<byte[]>();
-            foreach (var nalu in layerParameterSets)
+            foreach (var nalu in parameterSets)
             {
                 uint type = (uint)((nalu[0] >> 1) & 0x3F);
                 uint layer = (uint)(((nalu[0] & 1) << 5) | (nalu[1] >> 3));
                 parser.ParseParameterSets(new[] { nalu });
                 var context = parser.Context;
 
+                Func<byte[]> write;
                 if (type == H265NALTypes.SPS_NUT)
                 {
                     var sps = context.SeqParameterSetRbsp;
-                    SetMultilayerExtension(sps, present);
-                    result.Add(MultiviewBuilder.WriteNalUnit(context, type, layer, s => sps.Write(context, s)));
+                    write = () => MultiviewBuilder.WriteNalUnit(context, type, layer, s => sps.Write(context, s));
+                    CheckRoundTrip(nalu, write());
+                    onSps(sps);
                 }
                 else if (type == H265NALTypes.PPS_NUT)
                 {
                     var pps = context.PicParameterSetRbsp;
-                    SetMultilayerExtension(pps, present);
-                    result.Add(MultiviewBuilder.WriteNalUnit(context, type, layer, s => pps.Write(context, s)));
+                    write = () => MultiviewBuilder.WriteNalUnit(context, type, layer, s => pps.Write(context, s));
+                    CheckRoundTrip(nalu, write());
+                    onPps(pps);
                 }
                 else
                 {
                     result.Add(nalu);
+                    continue;
                 }
+
+                result.Add(write());
             }
             return result;
+        }
+
+        private static void CheckRoundTrip(byte[] read, byte[] written)
+        {
+            if (!written.SequenceEqual(read))
+                throw new InvalidOperationException(
+                    $"a parameter set does not round trip: {Convert.ToHexString(read)} came back as {Convert.ToHexString(written)}");
+        }
+
+        /// <summary>
+        /// Gives the sequence parameter set the video signal type Apple's carries - unspecified
+        /// video format, limited range, BT.709 primaries, transfer and matrix - or takes it away.
+        /// The VUI is read by a display, not by the slice decoder, so this changes nothing about
+        /// how the pictures decode.
+        /// </summary>
+        public static void SetColourDescription(SeqParameterSetRbsp sps, bool present)
+        {
+            var vui = sps.VuiParameters
+                ?? throw new InvalidOperationException("the sequence parameter set has no VUI to change");
+
+            vui.VideoSignalTypePresentFlag = (byte)(present ? 1 : 0);
+            if (!present)
+                return;
+
+            vui.VideoFormat = 5;
+            vui.VideoFullRangeFlag = 0;
+            vui.ColourDescriptionPresentFlag = 1;
+            vui.ColourPrimaries = 1;
+            vui.TransferCharacteristics = 1;
+            vui.MatrixCoeffs = 1;
         }
 
         /// <summary>
