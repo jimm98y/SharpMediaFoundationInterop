@@ -34,6 +34,14 @@ namespace SharpSpatialVideo
             /// as the other eye.
             /// </summary>
             public bool CraAtLayerOne { get; set; }
+
+            /// <summary>
+            /// Gives every sample the same duration and no composition offset, as our files have:
+            /// one stts entry and no ctts. Apple's timing is variable, and its pictures are coded
+            /// out of presentation order, so this is a test of the timing tables and not something
+            /// to keep - it changes when Apple's pictures are shown.
+            /// </summary>
+            public bool FlatTiming { get; set; }
         }
 
         public static void Write(string sourcePath, string outputPath, Options options)
@@ -73,14 +81,17 @@ namespace SharpSpatialVideo
                 : null;
             int relabelled = 0;
 
+            // The average, so the track keeps the length it had.
+            int flatDuration = (int)Math.Round(track.AccessUnits.Average(a => (double)a.Duration));
+
             var accessUnits = new List<MultiviewAccessUnit>();
             foreach (var source in track.AccessUnits)
             {
                 bool key = source.Nalus.Any(n => n.IsIrap);
                 var accessUnit = new MultiviewAccessUnit
                 {
-                    Duration = (int)source.Duration,
-                    CompositionOffset = source.CompositionOffset,
+                    Duration = options.FlatTiming ? flatDuration : (int)source.Duration,
+                    CompositionOffset = options.FlatTiming ? 0 : source.CompositionOffset,
                     IsRandomAccessPoint = key,
                 };
 
