@@ -42,6 +42,14 @@ namespace SharpSpatialVideo
             /// to keep - it changes when Apple's pictures are shown.
             /// </summary>
             public bool FlatTiming { get; set; }
+
+            /// <summary>
+            /// How many pictures the decoded picture buffer is said to hold, and how many may be
+            /// reordered, in the video parameter set and both sequence parameter sets. Apple's say
+            /// 5 and 2; the Media Foundation encoder says 2 and 0, because it keeps one reference
+            /// and never reorders. A decoder reads these to size its buffer, not to parse a slice.
+            /// </summary>
+            public (ulong Buffering, ulong Reorder)? DecodedPictureBuffer { get; set; }
         }
 
         public static void Write(string sourcePath, string outputPath, Options options)
@@ -52,13 +60,25 @@ namespace SharpSpatialVideo
             // base layer's, as a decoder reads them.
             var parser = new MvHevcParser();
 
+            var dpb = options.DecodedPictureBuffer;
+
             var baseParameterSets = Rewrite(track.BaseParameterSets, parser,
-                sps => { if (options.ColourDescription.HasValue) SetColourDescription(sps, options.ColourDescription.Value); },
-                pps => { });
+                sps =>
+                {
+                    if (options.ColourDescription.HasValue) SetColourDescription(sps, options.ColourDescription.Value);
+                    if (dpb.HasValue) SetDecodedPictureBuffer(sps, dpb.Value.Buffering, dpb.Value.Reorder);
+                },
+                pps => { },
+                vps => { if (dpb.HasValue) SetDecodedPictureBuffer(vps, dpb.Value.Buffering, dpb.Value.Reorder); });
 
             var layerParameterSets = Rewrite(track.LayerParameterSets, parser,
-                sps => { if (options.LayerExtensions.HasValue) SetMultilayerExtension(sps, options.LayerExtensions.Value); },
-                pps => { if (options.LayerExtensions.HasValue) SetMultilayerExtension(pps, options.LayerExtensions.Value); });
+                sps =>
+                {
+                    if (options.LayerExtensions.HasValue) SetMultilayerExtension(sps, options.LayerExtensions.Value);
+                    if (dpb.HasValue) SetDecodedPictureBuffer(sps, dpb.Value.Buffering, dpb.Value.Reorder);
+                },
+                pps => { if (options.LayerExtensions.HasValue) SetMultilayerExtension(pps, options.LayerExtensions.Value); },
+                vps => { });
 
             // Apple's key frames carry two: one in front of the base picture, one in front of the
             // layer 1 picture - both at nuh_layer_id 0.
@@ -148,7 +168,8 @@ namespace SharpSpatialVideo
         /// write rather than the change asked for - so it says so.
         /// </summary>
         private static List<byte[]> Rewrite(List<byte[]> parameterSets, MvHevcParser parser,
-            Action<SeqParameterSetRbsp> onSps, Action<PicParameterSetRbsp> onPps)
+            Action<SeqParameterSetRbsp> onSps, Action<PicParameterSetRbsp> onPps,
+            Action<VideoParameterSetRbsp> onVps)
         {
             var result = new List<byte[]>();
             foreach (var nalu in parameterSets)
@@ -159,7 +180,14 @@ namespace SharpSpatialVideo
                 var context = parser.Context;
 
                 Func<byte[]> write;
-                if (type == H265NALTypes.SPS_NUT)
+                if (type == H265NALTypes.VPS_NUT)
+                {
+                    var vps = context.VideoParameterSetRbsp;
+                    write = () => MultiviewBuilder.WriteNalUnit(context, type, layer, s => vps.Write(context, s));
+                    CheckRoundTrip(nalu, write());
+                    onVps(vps);
+                }
+                else if (type == H265NALTypes.SPS_NUT)
                 {
                     var sps = context.SeqParameterSetRbsp;
                     write = () => MultiviewBuilder.WriteNalUnit(context, type, layer, s => sps.Write(context, s));
@@ -189,6 +217,36 @@ namespace SharpSpatialVideo
             if (!written.SequenceEqual(read))
                 throw new InvalidOperationException(
                     $"a parameter set does not round trip: {Convert.ToHexString(read)} came back as {Convert.ToHexString(written)}");
+        }
+
+        /// <summary>Sets what the video parameter set says both layers' buffers hold.</summary>
+        public static void SetDecodedPictureBuffer(VideoParameterSetRbsp vps, ulong buffering, ulong reorder)
+        {
+            for (int i = 0; i < (vps.VpsMaxDecPicBufferingMinus1?.Length ?? 0); i++)
+                vps.VpsMaxDecPicBufferingMinus1[i] = buffering;
+            for (int i = 0; i < (vps.VpsMaxNumReorderPics?.Length ?? 0); i++)
+                vps.VpsMaxNumReorderPics[i] = reorder;
+
+            var dpb = vps.VpsExtension?.DpbSize;
+            if (dpb?.MaxVpsDecPicBufferingMinus1 != null)
+                foreach (var perLayer in dpb.MaxVpsDecPicBufferingMinus1)
+                    foreach (var perSubLayer in perLayer ?? Array.Empty<ulong[]>())
+                        for (int j = 0; j < (perSubLayer?.Length ?? 0); j++)
+                            perSubLayer[j] = buffering;
+
+            if (dpb?.MaxVpsNumReorderPics != null)
+                foreach (var perOls in dpb.MaxVpsNumReorderPics)
+                    for (int j = 0; j < (perOls?.Length ?? 0); j++)
+                        perOls[j] = reorder;
+        }
+
+        /// <summary>Sets what a sequence parameter set says its own buffer holds.</summary>
+        public static void SetDecodedPictureBuffer(SeqParameterSetRbsp sps, ulong buffering, ulong reorder)
+        {
+            for (int i = 0; i < (sps.SpsMaxDecPicBufferingMinus1?.Length ?? 0); i++)
+                sps.SpsMaxDecPicBufferingMinus1[i] = buffering;
+            for (int i = 0; i < (sps.SpsMaxNumReorderPics?.Length ?? 0); i++)
+                sps.SpsMaxNumReorderPics[i] = reorder;
         }
 
         /// <summary>

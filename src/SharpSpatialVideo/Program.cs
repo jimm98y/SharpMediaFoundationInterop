@@ -218,7 +218,7 @@ namespace SharpSpatialVideo
         {
             if (args.Length < 3)
             {
-                Console.Error.WriteLine("Usage: SharpSpatialVideo variant <in.mov> <out.mov> [nosei] [sei=<file>] [ext|noext] [colour|nocolour] [cra1] [flattiming]");
+                Console.Error.WriteLine("Usage: SharpSpatialVideo variant <in.mov> <out.mov> [nosei] [sei=<file>] [ext|noext] [colour|nocolour] [cra1] [flattiming] [dpb=<buffering>/<reorder>]");
                 return 1;
             }
 
@@ -233,6 +233,11 @@ namespace SharpSpatialVideo
                 else if (flag == "nocolour") options.ColourDescription = false;
                 else if (flag == "cra1") options.CraAtLayerOne = true;
                 else if (flag == "flattiming") options.FlatTiming = true;
+                else if (flag.StartsWith("dpb="))
+                {
+                    var parts = flag.Substring(4).Split('/');
+                    options.DecodedPictureBuffer = (ulong.Parse(parts[0]), ulong.Parse(parts[1]));
+                }
                 else throw new ArgumentException($"unknown flag '{flag}'");
             }
 
