@@ -38,6 +38,9 @@ namespace SharpSpatialVideo
     {
         public H265Context Context { get; } = new H265Context();
 
+        /// <summary>Where each parameter set's fields are logged as they are read, if anywhere.</summary>
+        public SharpMP4.Common.IMp4Logger Logger { get; set; }
+
         private int _prevTid0PocMsb;
         private int _prevTid0PocLsb;
         private bool _seenFirstPicture;
@@ -51,7 +54,9 @@ namespace SharpSpatialVideo
         private void ParseParameterSet(byte[] ebsp)
         {
             var rbsp = RbspUtils.ToRbsp(ebsp);
-            using var stream = new ItuStream(new MemoryStream(rbsp));
+            using var stream = Logger == null
+                ? new ItuStream(new MemoryStream(rbsp))
+                : new ItuStream(new MemoryStream(rbsp), Logger);
             // The payload splice needs byte offsets in the RBSP domain, so emulation prevention
             // is handled here rather than inside the bit reader.
             stream.Bitstream.SkipPreventionBytes = false;

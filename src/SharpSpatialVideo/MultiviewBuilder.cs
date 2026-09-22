@@ -303,9 +303,11 @@ namespace SharpSpatialVideo
         }
 
         private byte[] WriteParameterSet(uint nalType, uint layerId, Action<ItuStream> write,
-            H265Context context = null)
+            H265Context context = null) => WriteNalUnit(context ?? _context, nalType, layerId, write);
+
+        /// <summary>Writes a parameter set NAL unit - header, then whatever <paramref name="write"/> puts after it.</summary>
+        internal static byte[] WriteNalUnit(H265Context context, uint nalType, uint layerId, Action<ItuStream> write)
         {
-            context ??= _context;
             using var memory = new MemoryStream();
             using (var stream = new ItuStream(memory))
             {

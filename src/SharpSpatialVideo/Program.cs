@@ -68,6 +68,12 @@ namespace SharpSpatialVideo
                 case "remux":
                     return Remux(args);
 
+                case "variant":
+                    return Variant(args);
+
+                case "psdump":
+                    return PsDump(args);
+
                 case "decodecheck":
                     return DecodeCheck(args);
 
@@ -204,6 +210,54 @@ namespace SharpSpatialVideo
         /// released, which matters for a stream with B pictures, whose frames come out of the
         /// decoder in a different order from the one they went in.
         /// </summary>
+        /// <summary>
+        /// Prints every field of a file's parameter sets, base layer's then layer 1's, one per line,
+        /// so two files' configurations can be compared with diff.
+        /// </summary>
+        private static int Variant(string[] args)
+        {
+            if (args.Length < 3)
+            {
+                Console.Error.WriteLine("Usage: SharpSpatialVideo variant <in.mov> <out.mov> [nosei] [sei=<file>] [ext|noext]");
+                return 1;
+            }
+
+            var options = new SpatialVariants.Options();
+            foreach (var flag in args.Skip(3))
+            {
+                if (flag == "nosei") options.DropUserDataSei = true;
+                else if (flag.StartsWith("sei=")) options.UserDataSeiFrom = flag.Substring(4);
+                else if (flag == "ext") options.LayerExtensions = true;
+                else if (flag == "noext") options.LayerExtensions = false;
+                else throw new ArgumentException($"unknown flag '{flag}'");
+            }
+
+            SpatialVariants.Write(args[1], args[2], options);
+            Console.WriteLine($"  wrote {args[2]}");
+            return 0;
+        }
+
+        private static int PsDump(string[] args)
+        {
+            if (args.Length < 2)
+            {
+                Console.Error.WriteLine("Usage: SharpSpatialVideo psdump <file.mov>");
+                return 1;
+            }
+
+            var track = MvHevcReader.Read(args[1], loadSamples: false);
+            var parser = new MvHevcParser { Logger = SharpMP4.Common.ConsoleMp4Logger.Instance };
+            foreach (var nalu in track.BaseParameterSets.Concat(track.LayerParameterSets))
+            {
+                uint type = (uint)((nalu[0] >> 1) & 0x3F);
+                if (type != 32 && type != 33 && type != 34)
+                    continue;
+                Console.WriteLine($"=== NAL type {type}, layer {((nalu[0] & 1) << 5) | (nalu[1] >> 3)}, {nalu.Length} bytes");
+                parser.ParseParameterSets(new[] { nalu });
+            }
+            return 0;
+        }
+
         private static int DecodeCheck(string[] args)
         {
             string path = args[1];
