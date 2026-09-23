@@ -11,17 +11,14 @@ namespace SharpSpatialVideo
     /// Turns a side by side file into MV-HEVC. Unlike the left/right transcode this has to decode
     /// and encode, because the two eyes share a picture in the source and have to be separated.
     ///
-    /// Two ways of coding the pair are offered, because on this machine neither is obviously
-    /// better:
-    ///
-    ///   simulcast - each view encoded on its own, with its own temporal prediction and no
-    ///   prediction between the views. The layers are independent and the file declares as much.
-    ///
-    ///   cross view - the two views encoded as one interleaved sequence with a GOP of two, which
-    ///   makes every base picture an intra picture and every dependent picture predict from the
-    ///   base picture beside it. That is real disparity prediction, at the cost of coding the base
-    ///   view intra only. Measured on this footage it spends more bits than simulcast does, so it
-    ///   is offered rather than chosen.
+    /// Each view is encoded on its own, with its own temporal prediction and no prediction between
+    /// the views: simulcast. A cross view version was built and measured too - both views through
+    /// one encoder, interleaved with a GOP of two, so that every dependent picture predicted from
+    /// the base picture beside it - and then dropped. The encoder keeps one reference picture, so
+    /// in an interleaved feed a base picture's only candidate is the dependent picture before it,
+    /// which MV-HEVC forbids; every base picture therefore had to be coded intra, and the file came
+    /// out at 300 MB against simulcast's 172 for the same footage at the same quantiser. A Mac
+    /// takes either as spatial video, so the disparity prediction bought nothing.
     ///
     /// Memory stays flat however long the clip is. The source is read one access unit at a time,
     /// each decoded frame is split into two reused buffers and fed to the encoders straight away,
@@ -58,13 +55,6 @@ namespace SharpSpatialVideo
         public bool DecoderLowLatency { get; set; } = true;
 
         /// <summary>
-        /// Writes both versions from one decode, with all three encoders running at once, instead
-        /// of one version per pass. It is no faster - the encoders are the work, and the passes
-        /// share it out - and it needs a third encoder's memory on top.
-        /// </summary>
-        public bool OnePass { get; set; }
-
-        /// <summary>
         /// How the encoders control their rate - see <see cref="EncoderRateControl"/>. A constant
         /// quantiser by default: constant bitrate made fine detail pulse on every key frame.
         /// </summary>
@@ -89,18 +79,8 @@ namespace SharpSpatialVideo
 
         /// <summary>Decodes the source and writes whichever versions were asked for.</summary>
         public List<Result> Write(string sourcePath, string outputStem, uint bitrate,
-            bool simulcast, bool crossView, int limit = int.MaxValue)
+            int limit = int.MaxValue)
         {
-            // One version per pass unless asked otherwise. Decoding the source twice costs far less
-            // than an encoder, and running the encoders one version at a time means only one
-            // version's encoders are in memory at once.
-            if (simulcast && crossView && !OnePass)
-            {
-                var passes = Write(sourcePath, outputStem, bitrate, simulcast: true, crossView: false, limit);
-                passes.AddRange(Write(sourcePath, outputStem, bitrate, simulcast: false, crossView: true, limit));
-                return passes;
-            }
-
             // Only the sample index is read here; the samples themselves are streamed below. The
             // template is needed only for its video parameter set.
             var track = MvHevcReader.Read(sourcePath, loadSamples: false);
@@ -124,18 +104,10 @@ namespace SharpSpatialVideo
             // picks key frames to suit each view's content, and the two views then disagree about
             // where a sequence starts - a key frame in one resets the picture order count while the
             // other carries on referencing pictures the reset threw away.
-            using var baseEncoder = simulcast
-                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom, track.FpsDenom, bitrate / 2, SimulcastGopSize, EncoderThreads, RateControl)
-                : null;
-            using var dependentEncoder = simulcast
-                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom, track.FpsDenom, bitrate / 2, SimulcastGopSize, EncoderThreads, RateControl)
-                : null;
-
-            // Cross view: both views through one encoder, interleaved, at twice the rate and with a
-            // GOP of two, so each dependent picture predicts from the base picture beside it.
-            using var interleavedEncoder = crossView
-                ? new StreamingEncoder(CodedWidth, CodedHeight, track.FpsNom * 2, track.FpsDenom, bitrate, 2, EncoderThreads, RateControl)
-                : null;
+            using var baseEncoder = new StreamingEncoder(CodedWidth, CodedHeight,
+                track.FpsNom, track.FpsDenom, bitrate / 2, SimulcastGopSize, EncoderThreads, RateControl);
+            using var dependentEncoder = new StreamingEncoder(CodedWidth, CodedHeight,
+                track.FpsNom, track.FpsDenom, bitrate / 2, SimulcastGopSize, EncoderThreads, RateControl);
             Memory("encoders created");
 
             // The two eyes are cropped into the same two buffers every frame. The encoders copy
@@ -154,10 +126,8 @@ namespace SharpSpatialVideo
 
                 // The right eye goes in the base layer: that is what the eye mapping SEI carried
                 // over from the template says, and what Apple writes. See MultiviewBuilder.
-                baseEncoder?.Feed(right);
-                dependentEncoder?.Feed(left);
-                interleavedEncoder?.Feed(right);
-                interleavedEncoder?.Feed(left);
+                baseEncoder.Feed(right);
+                dependentEncoder.Feed(left);
 
                 if (++pairs % 150 == 0)
                     Memory($"{pairs} pairs encoded");
@@ -179,31 +149,11 @@ namespace SharpSpatialVideo
             Console.WriteLine($"  {pairs} stereo pairs at {Width}x{Height} (coded {CodedWidth}x{CodedHeight})");
             Memory("decode finished");
 
-            var results = new List<Result>();
-
-            if (simulcast)
+            var results = new List<Result>
             {
-                results.Add(Assemble(outputStem + "_simulcast.mov", baseEncoder.Finish(),
-                    dependentEncoder.Finish(), track, interLayerPrediction: false));
-                Memory("simulcast written");
-            }
-
-            if (crossView)
-            {
-                string path = outputStem + "_crossview.mov";
-                var coded = interleavedEncoder.Finish();
-
-                // The interleaved stream is itself ordinary single layer HEVC, and decoded as such
-                // it is what the two layers have to reproduce - the check that the reference set
-                // rewrite is exact rather than merely plausible.
-                if (DumpViews)
-                    WriteSingleView(path + ".interleaved.mp4", coded, track, doubleRate: true);
-
-                // Even pictures are the base view, odd ones the dependent view.
-                results.Add(Assemble(path, new EveryOther(coded, 0), new EveryOther(coded, 1),
-                    track, interLayerPrediction: true));
-                Memory("cross view written");
-            }
+                Assemble(outputStem + "_simulcast.mov", baseEncoder.Finish(), dependentEncoder.Finish(), track),
+            };
+            Memory("simulcast written");
 
             return results;
         }
@@ -276,22 +226,6 @@ namespace SharpSpatialVideo
             public void Dispose() => _file.Dispose();
         }
 
-        /// <summary>Every other picture of an interleaved stream: one of its two views.</summary>
-        private sealed class EveryOther : IPictures
-        {
-            private readonly IPictures _source;
-            private readonly int _first;
-
-            public EveryOther(IPictures source, int first)
-            {
-                _source = source;
-                _first = first;
-            }
-
-            public List<byte[]> ParameterSets => _source.ParameterSets;
-            public int Count => (_source.Count - _first + 1) / 2;
-            public List<byte[]> Read(int index) => _source.Read(_first + index * 2);
-        }
 
         /// <summary>
         /// An encoder fed one frame at a time, which spools what it codes to disk - parameter
@@ -378,9 +312,9 @@ namespace SharpSpatialVideo
         }
 
         private Result Assemble(string path, IPictures baseView, IPictures dependentView,
-            MvHevcTrack track, bool interLayerPrediction)
+            MvHevcTrack track)
         {
-            var builder = new MultiviewBuilder { InterLayerPrediction = interLayerPrediction };
+            var builder = new MultiviewBuilder();
             builder.LoadTemplate(_templateParameterSets);
             builder.Build(baseView.ParameterSets, dependentView.ParameterSets, CodedWidth, CodedHeight);
 
@@ -391,18 +325,7 @@ namespace SharpSpatialVideo
             var multiviewVps = builder.BaseParameterSets.Where(IsVps).ToList();
             var restamper = new LayerRestamper(multiviewVps
                 .Concat(dependentView.ParameterSets.Where(n => !IsVps(n)))
-                .Concat(builder.LayerParameterSets.Where(n => !IsVps(n))))
-            {
-                CrossView = interLayerPrediction,
-            };
-
-            // With a GOP of two every base picture came out an IDR, which resets the count, so
-            // every access unit would carry picture order count zero and a decoder drops all but
-            // the first. Written as CRA pictures instead they keep counting, which costs nothing -
-            // they are still intra coded and still random access points.
-            var baseRestamper = interLayerPrediction
-                ? new LayerRestamper(multiviewVps.Concat(baseView.ParameterSets.Where(n => !IsVps(n))))
-                : null;
+                .Concat(builder.LayerParameterSets.Where(n => !IsVps(n))));
 
             if (DumpViews)
             {
@@ -428,24 +351,18 @@ namespace SharpSpatialVideo
                         IsRandomAccessPoint = basePicture.Any(LayerRestamper.IsIrap),
                     };
 
+                    // The base view is already layer 0, so its slices go through as they are.
                     foreach (var nalu in basePicture)
                     {
-                        // The first picture stays an IDR so the stream still opens with one.
-                        var written = baseRestamper == null || i == 0
-                            ? nalu
-                            : baseRestamper.Restamp(nalu, 0, baseRestamper.PicParameterSetIdOf(nalu), i, CraNalType);
-
-                        accessUnit.BaseNalus.Add(written);
-                        baseBytes += written.Length;
+                        accessUnit.BaseNalus.Add(nalu);
+                        baseBytes += nalu.Length;
                     }
 
                     foreach (var nalu in dependentView.Read(i))
                     {
-                        // Simulcast keeps the dependent encoder's own count, which already matches
-                        // the base encoder's; cross view renumbers, because the interleaved encode
-                        // counted both views in one sequence.
-                        var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId,
-                            interLayerPrediction ? i : (int?)null);
+                        // The dependent encoder's own picture order count is kept, and already
+                        // agrees with the base encoder's: the two share a fixed key frame spacing.
+                        var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId);
 
                         accessUnit.LayerNalus.Add(restamped);
                         dependentBytes += restamped.Length;
@@ -468,9 +385,6 @@ namespace SharpSpatialVideo
                 DependentBytes = dependentBytes,
             };
         }
-
-        /// <summary>Clean random access, the intra picture type that does not reset the count.</summary>
-        private const uint CraNalType = 21;
 
         /// <summary>
         /// Prints what each view coded per access unit. Every picture of an access unit has to
@@ -511,8 +425,7 @@ namespace SharpSpatialVideo
         /// Writes one view as an ordinary single layer file. A diagnostic, and not a streaming one:
         /// the muxer it uses takes the pictures as a list.
         /// </summary>
-        private static void WriteSingleView(string path, IPictures view, MvHevcTrack track,
-            bool doubleRate = false)
+        private static void WriteSingleView(string path, IPictures view, MvHevcTrack track)
         {
             var pictures = Enumerable.Range(0, view.Count)
                 .Select(index =>
@@ -523,13 +436,13 @@ namespace SharpSpatialVideo
                         Nalu = picture[0],
                         Poc = index,
                         IsRandomAccessPoint = picture.Any(LayerRestamper.IsIrap),
-                        Duration = (int)track.FpsDenom / (doubleRate ? 2 : 1),
+                        Duration = (int)track.FpsDenom,
                     };
                 })
                 .ToList();
 
             EyeMuxer.Write(path, view.ParameterSets, pictures, track.Timescale,
-                (int)track.FpsDenom / (doubleRate ? 2 : 1));
+                (int)track.FpsDenom);
         }
 
         private static bool IsVps(byte[] nalu) => ((nalu[0] >> 1) & 0x3F) == 32;

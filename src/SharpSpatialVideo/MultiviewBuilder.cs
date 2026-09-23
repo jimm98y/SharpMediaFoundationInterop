@@ -25,9 +25,6 @@ namespace SharpSpatialVideo
 
         private H265Context _context => _parser.Context;
 
-        /// <summary>Whether layer 1 predicts from layer 0, which the video parameter set declares.</summary>
-        public bool InterLayerPrediction { get; set; }
-
         public VideoParameterSetRbsp Vps { get; private set; }
 
         /// <summary>Whether the template's video parameter set was reproduced exactly.</summary>
@@ -238,15 +235,16 @@ namespace SharpSpatialVideo
             var extension = Vps.VpsExtension
                 ?? throw new InvalidOperationException("the template video parameter set has no multiview extension");
 
-            // Layer 1 stays declared as depending on layer 0 either way, and whether it actually
-            // predicts is left to each slice. Clearing the dependency instead would be the more
-            // obvious move, but it changes what the extension itself contains - a layer with no
-            // reference layers carries a poc_lsb_not_present_flag that one with a reference layer
-            // does not - and the set then no longer matches the template that was known to work.
+            // The two views are coded independently, so layer 1 never predicts from layer 0.
+            // Clearing the declared dependency would be the obvious way to say so, but it changes
+            // what the extension itself contains - a layer with no reference layers carries a
+            // poc_lsb_not_present_flag that one with a reference layer does not - and the set then
+            // no longer matches the template that was known to work.
             //
             // So: keep the dependency, and turn off the inference that would otherwise force every
-            // dependent slice to use it. With this clear each slice carries the flag itself.
-            extension.DefaultRefLayersActiveFlag = (byte)(InterLayerPrediction ? 1 : 0);
+            // dependent slice to use it. With this clear each slice carries the flag itself, and
+            // every slice written here says it predicts from nothing.
+            extension.DefaultRefLayersActiveFlag = 0;
 
             // With more than one layer a decoder sizes each layer's share of the decoded picture
             // buffer from this table, not from the sequence parameter sets. A dependent view with

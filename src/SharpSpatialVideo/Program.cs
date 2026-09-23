@@ -196,9 +196,7 @@ namespace SharpSpatialVideo
         /// touching a pixel.
         /// </summary>
         /// <summary>
-        /// Side by side in, MV-HEVC out, in both of the ways this machine can manage: the two views
-        /// coded independently, and the two views coded as one interleaved sequence so the
-        /// dependent view predicts across the pair.
+        /// Side by side in, MV-HEVC out, with the two views coded independently.
         /// </summary>
         /// <summary>
         /// Writes an MV-HEVC file back out unchanged and compares the two, which is the one round
@@ -341,23 +339,18 @@ namespace SharpSpatialVideo
             SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
 
             var converter = new SbsToMultiview(templatePath) { DumpViews = args.Contains("dump"), ReportMemory = args.Contains("mem") };
-            // "simulcast" or "crossview" on the command line writes just that one, which needs
-            // fewer encoders running at once; "threads=N" caps each encoder's threads.
-            bool onlySimulcast = args.Contains("simulcast");
-            bool onlyCrossView = args.Contains("crossview");
+            // "threads=N" caps each encoder's threads.
             var threads = args.FirstOrDefault(a => a.StartsWith("threads="));
             if (threads != null)
                 converter.EncoderThreads = uint.Parse(threads.Substring("threads=".Length));
             var decoderThreads = args.FirstOrDefault(a => a.StartsWith("dthreads="));
             if (decoderThreads != null)
                 converter.DecoderThreads = uint.Parse(decoderThreads.Substring("dthreads=".Length));
-            converter.OnePass = args.Contains("onepass");
             var rateControl = args.FirstOrDefault(a => a.StartsWith("rc="));
             if (rateControl != null)
                 converter.RateControl = rateControl.Substring("rc=".Length);
 
-            var results = converter.Write(sourcePath, stem, bitrate,
-                simulcast: !onlyCrossView, crossView: !onlySimulcast, limit);
+            var results = converter.Write(sourcePath, stem, bitrate, limit);
 
             foreach (var result in results)
                 Console.WriteLine($"  wrote {result.Path}: {result.AccessUnits} access units, " +
@@ -382,9 +375,7 @@ namespace SharpSpatialVideo
             string templatePath = args.Length > 4 ? args[4] : @"C:\Temp\IMG_7881.MOV";
 
             var stereo = new StereoMetadata();
-            bool interLayer = args.Length > 5 && args[5] == "interlayer";
-            var result = LeftRightTranscoder.Write(leftPath, rightPath, outputPath, templatePath,
-                stereo, interLayer);
+            var result = LeftRightTranscoder.Write(leftPath, rightPath, outputPath, templatePath, stereo);
 
             Console.WriteLine($"  wrote {result.Path}: {result.AccessUnits} access units, " +
                 $"{result.Bytes / (1024 * 1024)} MB");

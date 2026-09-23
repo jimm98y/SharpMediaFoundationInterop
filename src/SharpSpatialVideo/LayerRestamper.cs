@@ -54,12 +54,6 @@ namespace SharpSpatialVideo
 
         public H265Context Context => _parser.Context;
 
-        /// <summary>
-        /// When set, the dependent picture predicts from the base picture of its own access unit
-        /// rather than from a picture of its own view, and its reference set is rewritten to say so.
-        /// </summary>
-        public bool CrossView { get; set; }
-
         /// <summary>Re-emits one coded slice at layer 1, pointing at layer 1's picture parameter set.</summary>
         public byte[] ToLayerOne(byte[] nalu, ulong picParameterSetId, int? pictureOrderCount = null) =>
             Restamp(nalu, 1, picParameterSetId, pictureOrderCount, null);
@@ -106,24 +100,20 @@ namespace SharpSpatialVideo
             else if (pictureOrderCount.HasValue)
                 header.SlicePicOrderCntLsb = (ulong)(pictureOrderCount.Value & (maxPocLsb - 1));
 
-            // An intra picture written as a CRA rather than an IDR keeps the count running, and a
-            // picture with no references needs an empty set to say so.
-            // Above layer 0 a slice says whether it predicts from the layer below. A view coded on
-            // its own does not, and has to say so, or the decoder adds a picture to its reference
-            // list that the encoder never used.
-            header.InterLayerPredEnabledFlag = (byte)(CrossView ? 1 : 0);
+            // Above layer 0 a slice says whether it predicts from the layer below. The views here
+            // are coded on their own and do not, and each slice has to say so, or the decoder adds
+            // a picture to its reference list that the encoder never used.
+            header.InterLayerPredEnabledFlag = 0;
 
             StRefPicSet savedSet = null;
             byte savedSpsFlag = 0;
             bool wasIdr = parsed.NalUnit.NalUnitHeader.NalUnitType == 19
                 || parsed.NalUnit.NalUnitHeader.NalUnitType == 20;
 
-            if ((CrossView && !isIdr) || (wasIdr && !isIdr))
+            // An intra picture written as a CRA rather than an IDR keeps the count running, and
+            // a picture with no references needs an empty set to say so.
+            if (wasIdr && !isIdr)
             {
-                // What the encoder coded as a reference to the previous picture is, after the
-                // split, the base picture of this access unit - which is an inter-layer reference,
-                // not a short term one. Emptying the short term set leaves the inter-layer picture
-                // as the only entry in the list, where the short term one used to be.
                 savedSet = header.StRefPicSet;
                 savedSpsFlag = header.ShortTermRefPicSetSpsFlag;
 
