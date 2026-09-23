@@ -50,15 +50,6 @@ namespace SharpSpatialVideo
                 case "reference":
                     return Reference(args);
 
-                case "encprobe":
-                    return EncProbe(args);
-
-                case "compare":
-                    return Compare(args);
-
-                case "prefix":
-                    return Prefix(args);
-
                 case "mvmux":
                     return MvMux(args);
 
@@ -175,42 +166,8 @@ namespace SharpSpatialVideo
         }
 
         /// <summary>
-        /// Regenerates the per frame reference hashes with ffmpeg, overwriting what is there. The
-        /// 'truth' command generates them on demand, so this is only needed after changing the
-        /// input or the ffmpeg build.
-        /// </summary>
-        /// <summary>
-        /// Encodes the two views interleaved and prints what the encoder referenced, to find out
-        /// whether a single layer encode can be patched into a two layer MV-HEVC stream.
-        /// </summary>
-        /// <summary>
-        /// Codes the stereo pair both ways at the same total bitrate and reports what each costs in
-        /// quality, since at a fixed rate the schemes differ in quality rather than in size.
-        /// </summary>
-        /// <summary>
-        /// Tests whether replaying the base view into a second encoder reproduces it exactly, which
-        /// is what would let the dependent view be encoded against it and the two streams merged.
-        /// </summary>
-        /// <summary>
-        /// The reverse of split: one ordinary HEVC file per eye in, one MV-HEVC file out, without
-        /// touching a pixel.
-        /// </summary>
-        /// <summary>
-        /// Side by side in, MV-HEVC out, with the two views coded independently.
-        /// </summary>
-        /// <summary>
-        /// Writes an MV-HEVC file back out unchanged and compares the two, which is the one round
-        /// trip that can be checked byte for byte rather than by decoding.
-        /// </summary>
-        /// <summary>
-        /// Decodes a file with the decoder in low latency mode and in its normal mode, and checks
-        /// the two hand back the same frames in the same order. Low latency changes when a frame is
-        /// released, which matters for a stream with B pictures, whose frames come out of the
-        /// decoder in a different order from the one they went in.
-        /// </summary>
-        /// <summary>
-        /// Prints every field of a file's parameter sets, base layer's then layer 1's, one per line,
-        /// so two files' configurations can be compared with diff.
+        /// Remuxes a file with one thing about it changed - see SpatialVariants - to find out what
+        /// a player's behaviour actually depends on.
         /// </summary>
         private static int Variant(string[] args)
         {
@@ -244,6 +201,10 @@ namespace SharpSpatialVideo
             return 0;
         }
 
+        /// <summary>
+        /// Prints every field of a file's parameter sets, base layer's then layer 1's, one per line,
+        /// so two files' configurations can be compared with diff.
+        /// </summary>
         private static int PsDump(string[] args)
         {
             if (args.Length < 2)
@@ -265,6 +226,12 @@ namespace SharpSpatialVideo
             return 0;
         }
 
+        /// <summary>
+        /// Decodes a file with the decoder in low latency mode and in its normal mode, and checks
+        /// the two hand back the same frames in the same order. Low latency changes when a frame is
+        /// released, which matters for a stream with B pictures, whose frames come out of the
+        /// decoder in a different order from the one they went in.
+        /// </summary>
         private static int DecodeCheck(string[] args)
         {
             string path = args[1];
@@ -308,6 +275,10 @@ namespace SharpSpatialVideo
             return 0;
         }
 
+        /// <summary>
+        /// Writes an MV-HEVC file back out unchanged and compares the two, which is the one round
+        /// trip that can be checked byte for byte rather than by decoding.
+        /// </summary>
         private static int Remux(string[] args)
         {
             string sourcePath = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
@@ -321,6 +292,9 @@ namespace SharpSpatialVideo
             return 0;
         }
 
+        /// <summary>
+        /// Side by side in, MV-HEVC out, with the two views coded independently.
+        /// </summary>
         private static int Sbs2Mv(string[] args)
         {
             if (args.Length < 3)
@@ -361,6 +335,10 @@ namespace SharpSpatialVideo
             return 0;
         }
 
+        /// <summary>
+        /// The reverse of split: one ordinary HEVC file per eye in, one MV-HEVC file out, without
+        /// touching a pixel.
+        /// </summary>
         private static int MvMux(string[] args)
         {
             if (args.Length < 4)
@@ -382,63 +360,14 @@ namespace SharpSpatialVideo
             return 0;
         }
 
-        private static int Prefix(string[] args)
-        {
-            string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
-            int accessUnits = args.Length > 2 ? int.Parse(args[2]) : 12;
-            uint bitrate = args.Length > 3 ? uint.Parse(args[3]) : 20_000_000;
-            uint gopSize = args.Length > 4 ? uint.Parse(args[4]) : 0;
-            uint quality = args.Length > 5 ? uint.Parse(args[5]) : 0;
 
-            SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
 
-            var track = MvHevcReader.Read(path);
-            var rewriter = new SingleLayerRewriter(track);
-            rewriter.Plan();
 
-            new PrefixProbe(track, rewriter).Run(accessUnits, bitrate, gopSize, quality);
-            return 0;
-        }
-
-        private static int Compare(string[] args)
-        {
-            string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
-            int accessUnits = args.Length > 2 ? int.Parse(args[2]) : 24;
-            uint bitrate = args.Length > 3 ? uint.Parse(args[3]) : 20_000_000;
-
-            SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
-
-            var track = MvHevcReader.Read(path);
-            var rewriter = new SingleLayerRewriter(track);
-            rewriter.Plan();
-
-            new SchemeComparison(track, rewriter).Run(accessUnits, bitrate);
-            return 0;
-        }
-
-        private static int EncProbe(string[] args)
-        {
-            string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
-            int accessUnits = args.Length > 2 ? int.Parse(args[2]) : 16;
-            uint bitrate = args.Length > 3 ? uint.Parse(args[3]) : 20_000_000;
-            int temporalLayers = args.Length > 4 ? int.Parse(args[4]) : 1;
-            uint gopSize = args.Length > 5 ? uint.Parse(args[5]) : 0;
-
-            SharpMediaFoundationInterop.Log.SinkError = (m, ex) => Console.WriteLine($"  [mf error] {m}");
-
-            EncodeProbe.ReportEncoders();
-
-            if (accessUnits == 0)
-                return 0;   // listing the encoders only
-
-            var track = MvHevcReader.Read(path);
-            var rewriter = new SingleLayerRewriter(track);
-            rewriter.Plan();
-
-            new EncodeProbe(track, rewriter).Run(accessUnits, bitrate, temporalLayers, gopSize);
-            return 0;
-        }
-
+        /// <summary>
+        /// Regenerates the per frame reference hashes with ffmpeg, overwriting what is there. The
+        /// 'truth' command generates them on demand, so this is only needed after changing the
+        /// input or the ffmpeg build.
+        /// </summary>
         private static int Reference(string[] args)
         {
             string path = args.Length > 1 ? args[1] : @"C:\Temp\IMG_7881.MOV";
