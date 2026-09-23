@@ -125,7 +125,7 @@ namespace SharpSpatialVideo
             long dts = 0;
             foreach (var sample in samples)
             {
-                foreach (var nalu in AnnexB.Nalus(sample.Data))
+                foreach (var nalu in SharpMP4.AnnexB.ParseNalUnits(sample.Data))
                     muxTrack.ProcessSample(nalu, out _, out _);
 
                 long cts = sample.Timestamp * _track.FpsNom / 10_000_000L;
@@ -148,7 +148,7 @@ namespace SharpSpatialVideo
 
         private static bool IsIrap(byte[] annexB)
         {
-            foreach (var nalu in AnnexB.Nalus(annexB))
+            foreach (var nalu in SharpMP4.AnnexB.ParseNalUnits(annexB))
             {
                 uint type = (uint)((nalu[0] >> 1) & 0x3F);
                 if (type >= 16 && type <= 23) return true;
@@ -161,7 +161,7 @@ namespace SharpSpatialVideo
         private static byte[] LengthPrefixed(byte[] annexB)
         {
             using var memory = new MemoryStream();
-            foreach (var nalu in AnnexB.Nalus(annexB))
+            foreach (var nalu in SharpMP4.AnnexB.ParseNalUnits(annexB))
             {
                 memory.WriteByte((byte)(nalu.Length >> 24));
                 memory.WriteByte((byte)(nalu.Length >> 16));

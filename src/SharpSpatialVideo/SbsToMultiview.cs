@@ -287,7 +287,7 @@ namespace SharpSpatialVideo
             private void Collect(byte[] sample)
             {
                 var picture = new List<byte[]>();
-                foreach (var nalu in AnnexB.Nalus(sample))
+                foreach (var nalu in SharpMP4.AnnexB.ParseNalUnits(sample))
                 {
                     if (LayerRestamper.IsParameterSet(nalu))
                     {

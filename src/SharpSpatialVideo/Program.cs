@@ -256,7 +256,7 @@ namespace SharpSpatialVideo
 
                 foreach (var accessUnit in MvHevcReader.StreamAccessUnits(track))
                     decoder.DecodeInto(accessUnit.Nalus.Select(n => n.Data),
-                        (accessUnit.Index * frameDuration) + track.SampleCompositionOffsets[accessUnit.Index] * 10_000_000L / track.Timescale,
+                        (accessUnit.Index * frameDuration) + accessUnit.CompositionOffset * 10_000_000L / track.Timescale,
                         Take);
                 decoder.FlushInto(Take);
                 return frames;
