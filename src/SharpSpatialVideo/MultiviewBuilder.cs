@@ -145,7 +145,7 @@ namespace SharpSpatialVideo
             {
                 uint type = (uint)((nalu[0] >> 1) & 0x3F);
                 if (type == H265NALTypes.SPS_NUT)
-                    BaseParameterSets.Add(WithVpsProfile(nalu));
+                    BaseParameterSets.Add(WithVpsProfileAndBufferSize(nalu));
                 else if (type == H265NALTypes.PPS_NUT)
                     BaseParameterSets.Add(nalu);
             }
@@ -187,9 +187,9 @@ namespace SharpSpatialVideo
 
         /// <summary>
         /// The base layer's sequence parameter set, with the general profile, compatibility flags,
-        /// tier and level of the video parameter set.
+        /// tier, level and buffer sizes of the video parameter set.
         /// </summary>
-        private byte[] WithVpsProfile(byte[] nalu)
+        private byte[] WithVpsProfileAndBufferSize(byte[] nalu)
         {
             var parser = new MvHevcParser();
             parser.ParseParameterSets(new[] { nalu });
@@ -208,6 +208,16 @@ namespace SharpSpatialVideo
             to.GeneralProfileIdc = from.GeneralProfileIdc;
             to.GeneralProfileCompatibilityFlag = (byte[])from.GeneralProfileCompatibilityFlag.Clone();
             to.GeneralLevelIdc = from.GeneralLevelIdc;
+
+            // And the buffer sizes, so this set says what the video parameter set says. Layer 1's
+            // sequence parameter set does not carry them at all - in the multi-layer form it takes
+            // them from the video parameter set - so this is the only other place they appear.
+            for (int i = 0; i < (sps.SpsMaxDecPicBufferingMinus1?.Length ?? 0); i++)
+                sps.SpsMaxDecPicBufferingMinus1[i] = Math.Max(
+                    sps.SpsMaxDecPicBufferingMinus1[i], LastOf(Vps.VpsMaxDecPicBufferingMinus1));
+            for (int i = 0; i < (sps.SpsMaxNumReorderPics?.Length ?? 0); i++)
+                sps.SpsMaxNumReorderPics[i] = Math.Max(
+                    sps.SpsMaxNumReorderPics[i], LastOf(Vps.VpsMaxNumReorderPics));
 
             return WriteParameterSet(H265NALTypes.SPS_NUT, 0,
                 s => sps.Write(parser.Context, s), parser.Context);
@@ -239,11 +249,19 @@ namespace SharpSpatialVideo
             extension.DefaultRefLayersActiveFlag = (byte)(InterLayerPrediction ? 1 : 0);
 
             // With more than one layer a decoder sizes each layer's share of the decoded picture
-            // buffer from this table, not from the sequence parameter sets. The template's was
-            // written for Apple's dependent layer, which only ever references the base picture of
-            // its own access unit - a picture that sits in layer 0's share - so it gives layer 1
-            // room for one picture. A dependent view with temporal references of its own needs
-            // what its encoder asked for, or each reference is gone by the time it is used.
+            // buffer from this table, not from the sequence parameter sets. A dependent view with
+            // temporal references of its own needs what its encoder asked for, or each reference is
+            // gone by the time it is used - but never less than the template asks for.
+            //
+            // The floor is what makes the file spatial video. The Media Foundation encoder asks for
+            // two pictures and no reordering, which is all a single layer encode of its own needs;
+            // a stereo pair needs the base picture still in the buffer while layer 1 is decoded, so
+            // a buffer of two cannot hold one. A Mac plays such a file but will not take it into
+            // the Spatial library. With the template's sizes - five pictures, two reordered, which
+            // is what Apple writes - the same coded pictures are taken. Nothing else about the file
+            // had to change: not the eye mapping SEI, the multilayer extensions, the colour
+            // description, the picture types, the timing tables, nor inter-layer prediction itself,
+            // all of which were ruled out one at a time against a file the Mac does recognise.
             var dpb = extension.DpbSize;
             if (dpb?.MaxVpsDecPicBufferingMinus1 != null)
             {
@@ -260,23 +278,26 @@ namespace SharpSpatialVideo
 
                         var sps = k == 0 ? baseSps : layerSps;
                         for (int j = 0; j < perSubLayer.Length; j++)
-                            perSubLayer[j] = LastOf(sps.SpsMaxDecPicBufferingMinus1);
+                            perSubLayer[j] = Math.Max(perSubLayer[j], LastOf(sps.SpsMaxDecPicBufferingMinus1));
                     }
 
                     if (dpb.MaxVpsNumReorderPics?[i] != null)
                         for (int j = 0; j < dpb.MaxVpsNumReorderPics[i].Length; j++)
-                            dpb.MaxVpsNumReorderPics[i][j] = Math.Max(
-                                LastOf(baseSps.SpsMaxNumReorderPics), LastOf(layerSps.SpsMaxNumReorderPics));
+                            dpb.MaxVpsNumReorderPics[i][j] = Math.Max(dpb.MaxVpsNumReorderPics[i][j], Math.Max(
+                                LastOf(baseSps.SpsMaxNumReorderPics), LastOf(layerSps.SpsMaxNumReorderPics)));
                 }
             }
 
-            // The base layer's own entry, which a single layer decoder reads.
+            // The base layer's own entry, which a single layer decoder reads. Kept at the
+            // template's size for the same reason as the table above.
             if (Vps.VpsMaxDecPicBufferingMinus1 != null)
                 for (int i = 0; i < Vps.VpsMaxDecPicBufferingMinus1.Length; i++)
-                    Vps.VpsMaxDecPicBufferingMinus1[i] = LastOf(baseSps.SpsMaxDecPicBufferingMinus1);
+                    Vps.VpsMaxDecPicBufferingMinus1[i] = Math.Max(
+                        Vps.VpsMaxDecPicBufferingMinus1[i], LastOf(baseSps.SpsMaxDecPicBufferingMinus1));
             if (Vps.VpsMaxNumReorderPics != null)
                 for (int i = 0; i < Vps.VpsMaxNumReorderPics.Length; i++)
-                    Vps.VpsMaxNumReorderPics[i] = LastOf(baseSps.SpsMaxNumReorderPics);
+                    Vps.VpsMaxNumReorderPics[i] = Math.Max(
+                        Vps.VpsMaxNumReorderPics[i], LastOf(baseSps.SpsMaxNumReorderPics));
 
             // The representation format says what a layer's pictures look like, and a decoder
             // checks the layers' sequence parameter sets against it. Both layers share it here, so
