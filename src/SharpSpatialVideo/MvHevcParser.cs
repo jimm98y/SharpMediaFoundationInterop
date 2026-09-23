@@ -14,17 +14,13 @@ namespace SharpSpatialVideo
         public SliceSegmentLayerRbsp Slice { get; set; }
         public SliceSegmentHeader Header => Slice.SliceSegmentHeader;
 
-        /// <summary>The whole NAL unit with emulation prevention removed.</summary>
-        public byte[] Rbsp { get; set; }
-
-        /// <summary>Bits consumed by the NAL unit header plus the slice segment header.</summary>
-        public ulong HeaderBits { get; set; }
-
         /// <summary>
-        /// Index into <see cref="Rbsp"/> of the first slice segment data byte. The slice segment
-        /// header ends with byte_alignment(), so the payload always starts on a byte boundary.
+        /// The coded slice data that follows the header, read out through the same stream the
+        /// header was, so it comes without emulation prevention bytes and can be written back
+        /// through a stream that puts them in again. The header ends with byte_alignment(), so it
+        /// starts on a byte boundary.
         /// </summary>
-        public int PayloadOffset => (int)((HeaderBits + 7) / 8);
+        public byte[] Payload { get; set; }
 
         /// <summary>Picture order count derived for this picture (8.3.1).</summary>
         public int Poc { get; set; }
@@ -53,15 +49,13 @@ namespace SharpSpatialVideo
 
         private void ParseParameterSet(byte[] ebsp)
         {
-            var rbsp = RbspUtils.ToRbsp(ebsp);
+            // The stream takes the NAL unit as stored and drops emulation prevention bytes as it
+            // reads, so nothing has to be stripped first.
             using var stream = Logger == null
-                ? new ItuStream(new MemoryStream(rbsp))
-                : new ItuStream(new MemoryStream(rbsp), Logger);
-            // The payload splice needs byte offsets in the RBSP domain, so emulation prevention
-            // is handled here rather than inside the bit reader.
-            stream.Bitstream.SkipPreventionBytes = false;
+                ? new ItuStream(new MemoryStream(ebsp))
+                : new ItuStream(new MemoryStream(ebsp), Logger);
 
-            var nalUnit = new NalUnit((uint)rbsp.Length);
+            var nalUnit = new NalUnit((uint)ebsp.Length);
             Context.NalHeader = nalUnit;
             nalUnit.Read(Context, stream);
 
@@ -90,26 +84,40 @@ namespace SharpSpatialVideo
         /// <summary>Parses a slice segment header, leaving the payload untouched.</summary>
         public ParsedSlice ParseSlice(Nalu nalu)
         {
-            var rbsp = RbspUtils.ToRbsp(nalu.Data);
-            using var stream = new ItuStream(new MemoryStream(rbsp));
-            stream.Bitstream.SkipPreventionBytes = false;
+            using var stream = new ItuStream(new MemoryStream(nalu.Data));
 
-            var nalUnit = new NalUnit((uint)rbsp.Length);
+            var nalUnit = new NalUnit((uint)nalu.Data.Length);
             Context.NalHeader = nalUnit;
-            ulong bits = nalUnit.Read(Context, stream);
+            nalUnit.Read(Context, stream);
 
             var slice = new SliceSegmentLayerRbsp();
             Context.SliceSegmentLayerRbsp = slice;
-            bits += slice.Read(Context, stream);
+            slice.Read(Context, stream);
 
             return new ParsedSlice
             {
                 Nalu = nalu,
                 NalUnit = nalUnit,
                 Slice = slice,
-                Rbsp = rbsp,
-                HeaderBits = bits,
+                Payload = ReadToEnd(stream, nalu.Data.Length),
             };
+        }
+
+        /// <summary>
+        /// The rest of a NAL unit, byte by byte through the stream so its emulation prevention
+        /// bytes are dropped on the way. The stream counts them in its position, so what is left
+        /// is measured against the stored length.
+        /// </summary>
+        private static byte[] ReadToEnd(ItuStream stream, int storedLength)
+        {
+            var payload = new List<byte>(storedLength);
+            while (stream.Bitstream.BitsPosition / 8 < storedLength)
+            {
+                stream.ReadUnsignedInt(0, 8, out byte value, null);
+                payload.Add(value);
+            }
+
+            return payload.ToArray();
         }
 
         /// <summary>

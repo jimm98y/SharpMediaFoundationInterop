@@ -330,9 +330,6 @@ namespace SharpSpatialVideo
             using var memory = new MemoryStream();
             using (var stream = new ItuStream(memory))
             {
-                // Emulation prevention is applied once, over the finished NAL unit.
-                stream.Bitstream.InsertPreventionBytes = false;
-
                 var nalUnit = new NalUnit(0);
                 nalUnit.NalUnitHeader = new NalUnitHeader
                 {
@@ -346,7 +343,7 @@ namespace SharpSpatialVideo
                 write(stream);
             }
 
-            return RbspUtils.ToEbsp(memory.ToArray());
+            return memory.ToArray();
         }
     }
 }

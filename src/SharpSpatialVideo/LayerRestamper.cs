@@ -135,22 +135,20 @@ namespace SharpSpatialVideo
 
             try
             {
+                // The payload goes back through the stream rather than being appended to what
+                // it writes: emulation prevention then covers the join between the new header and
+                // the old payload, where a run of zeros can straddle the two.
                 using var memory = new MemoryStream();
                 using (var stream = new ItuStream(memory))
                 {
-                    stream.Bitstream.InsertPreventionBytes = false;
                     nalUnit.Write(context, stream);
                     parsed.Slice.Write(context, stream);
+
+                    foreach (byte value in parsed.Payload)
+                        stream.WriteUnsignedInt(8, value, null);
                 }
 
-                var rewritten = memory.ToArray();
-                var payload = parsed.Rbsp;
-                var output = new byte[rewritten.Length + payload.Length - parsed.PayloadOffset];
-                Buffer.BlockCopy(rewritten, 0, output, 0, rewritten.Length);
-                Buffer.BlockCopy(payload, parsed.PayloadOffset, output,
-                    rewritten.Length, payload.Length - parsed.PayloadOffset);
-
-                return RbspUtils.ToEbsp(output);
+                return memory.ToArray();
             }
             finally
             {

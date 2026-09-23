@@ -476,9 +476,6 @@ namespace SharpSpatialVideo
             using var memory = new MemoryStream();
             using (var stream = new ItuStream(memory))
             {
-                // Emulation prevention is applied once, over the finished NAL unit.
-                stream.Bitstream.InsertPreventionBytes = false;
-
                 var nalUnit = new NalUnit(0);
                 nalUnit.NalUnitHeader = new NalUnitHeader
                 {
@@ -492,7 +489,7 @@ namespace SharpSpatialVideo
                 write(stream);
             }
 
-            return RbspUtils.ToEbsp(memory.ToArray());
+            return memory.ToArray();
         }
 
         /// <summary>Rewrites one picture's slice into a single-layer NAL unit.</summary>
@@ -528,18 +525,14 @@ namespace SharpSpatialVideo
             using var memory = new MemoryStream();
             using (var stream = new ItuStream(memory))
             {
-                stream.Bitstream.InsertPreventionBytes = false;
                 nalUnit.Write(context, stream);
                 source.Slice.Write(context, stream);
+
+                foreach (byte value in source.Payload)
+                    stream.WriteUnsignedInt(8, value, null);
             }
 
-            var rbsp = memory.ToArray();
-            var payload = source.Rbsp;
-            var output = new byte[rbsp.Length + payload.Length - source.PayloadOffset];
-            Buffer.BlockCopy(rbsp, 0, output, 0, rbsp.Length);
-            Buffer.BlockCopy(payload, source.PayloadOffset, output, rbsp.Length, payload.Length - source.PayloadOffset);
-
-            return RbspUtils.ToEbsp(output);
+            return memory.ToArray();
         }
 
         private static int MaxPocLsb(H265Context context) =>
