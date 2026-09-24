@@ -59,14 +59,42 @@ namespace SharpMediaFoundationInterop.Transforms
             return ProcessOutput(_transform, _dataBuffer, ref buffer, out length);
         }
 
+        /// <summary>
+        /// Same as <see cref="ProcessOutput(ref byte[], out uint)"/>, but also reports the decoded
+        /// frame's presentation time. Decoders reorder pictures, so this is what identifies which
+        /// input a frame came from.
+        /// </summary>
+        public bool ProcessOutput(ref byte[] buffer, out uint length, out long timestamp)
+        {
+            return ProcessOutput(_transform, _dataBuffer, ref buffer, out length, out timestamp);
+        }
+
         public virtual bool Drain()
         {
+            BeginDrain();
+            EndDrain();
+            return true;
+        }
+
+        /// <summary>
+        /// Asks the transform to emit everything it still holds. Call <see cref="ProcessOutput(ref byte[], out uint)"/>
+        /// until it returns false before calling <see cref="EndDrain"/>, otherwise restarting the
+        /// stream discards the frames the drain just queued.
+        /// </summary>
+        public virtual void BeginDrain()
+        {
+            // End of stream then drain, and nothing else: notifying end of streaming first tells
+            // the transform to release its resources, which costs the frames still queued.
             _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_END_OF_STREAM, default);
-            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_END_STREAMING, default);
             _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_DRAIN, default);
+        }
+
+        /// <summary>Restarts the transform so it accepts input again after a drain.</summary>
+        public virtual void EndDrain()
+        {
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_END_STREAMING, default);
             _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, default);
             _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_START_OF_STREAM, default);
-            return true;
         }
 
         protected virtual void Dispose(bool disposing)
