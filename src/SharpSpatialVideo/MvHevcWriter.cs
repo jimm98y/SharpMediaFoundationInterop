@@ -1,4 +1,4 @@
-using SharpISOBMFF;
+﻿using SharpISOBMFF;
 using SharpISOBMFF.Extensions;
 using SharpMP4.Builders;
 using SharpMP4.Tracks;
@@ -12,8 +12,12 @@ namespace SharpSpatialVideo
     /// <summary>One access unit: the base view's coded slices, then the dependent view's.</summary>
     public sealed class MultiviewAccessUnit
     {
-        public List<byte[]> BaseNalus { get; } = new List<byte[]>();
-        public List<byte[]> LayerNalus { get; } = new List<byte[]>();
+        /// <summary>
+        /// The two views' NAL units. They may lie in buffers their source reads the next access unit
+        /// over: an access unit is written before the next is asked for.
+        /// </summary>
+        public List<ArraySegment<byte>> BaseNalus { get; } = new List<ArraySegment<byte>>();
+        public List<ArraySegment<byte>> LayerNalus { get; } = new List<ArraySegment<byte>>();
         public int Duration { get; set; }
         public int CompositionOffset { get; set; }
         public bool IsRandomAccessPoint { get; set; }
@@ -87,22 +91,25 @@ namespace SharpSpatialVideo
             foreach (var parameterSet in baseParameterSets)
                 builder.ProcessTrackSample(track.TrackID, parameterSet, defaultDuration);
 
+            // Every sample is assembled in this, which grows to the largest of them and is then
+            // written over: the builder writes each one out before the next is assembled.
+            var sample = new MemoryStream(1 << 20);
+
             for (; any; any = units.MoveNext())
             {
                 var accessUnit = units.Current;
-                var sample = new List<byte>();
+                sample.SetLength(0);
                 foreach (var nalu in accessUnit.BaseNalus.Concat(accessUnit.LayerNalus))
                     AppendLengthPrefixed(sample, nalu);
 
-                builder.ProcessRawSample(track.TrackID, sample.ToArray(),
+                builder.ProcessRawSample(track.TrackID, new ArraySegment<byte>(sample.GetBuffer(), 0, (int)sample.Length),
                     accessUnit.Duration, accessUnit.IsRandomAccessPoint, accessUnit.CompositionOffset);
             }
 
             if (audioTrack != null)
             {
-                for (int i = 0; i < audioSource.AudioSamples.Count; i++)
-                    builder.ProcessRawSample(audioTrack.TrackID, audioSource.AudioSamples[i],
-                        (int)audioSource.AudioSampleDurations[i], true);
+                foreach (var (data, duration) in MvHevcReader.StreamAudioSamples(audioSource))
+                    builder.ProcessRawSample(audioTrack.TrackID, data, duration, true);
             }
 
             builder.FinalizeMedia();
@@ -313,13 +320,13 @@ namespace SharpSpatialVideo
             return null;
         }
 
-        private static void AppendLengthPrefixed(List<byte> sample, byte[] nalu)
+        private static void AppendLengthPrefixed(Stream sample, ArraySegment<byte> nalu)
         {
-            sample.Add((byte)(nalu.Length >> 24));
-            sample.Add((byte)(nalu.Length >> 16));
-            sample.Add((byte)(nalu.Length >> 8));
-            sample.Add((byte)nalu.Length);
-            sample.AddRange(nalu);
+            sample.WriteByte((byte)(nalu.Count >> 24));
+            sample.WriteByte((byte)(nalu.Count >> 16));
+            sample.WriteByte((byte)(nalu.Count >> 8));
+            sample.WriteByte((byte)nalu.Count);
+            sample.Write(nalu.Array, nalu.Offset, nalu.Count);
         }
     }
 }

@@ -16,7 +16,15 @@ namespace SharpSpatialVideo
     /// </summary>
     public sealed class Nalu
     {
-        public byte[] Data { get; set; }
+        /// <summary>
+        /// The unit's bytes. One that came from <see cref="MvHevcReader.StreamAccessUnits"/> lies
+        /// in the reader's own buffer, which the next access unit is read over: it has to be used,
+        /// or copied, before the next one is asked for. The rest own their bytes.
+        /// </summary>
+        public ArraySegment<byte> Data { get; set; }
+
+        /// <summary>Where this unit lies in the file, for a caller that reads it again later.</summary>
+        public long Offset { get; set; }
 
         public uint Type => (uint)((Data[0] >> 1) & 0x3F);
         public uint LayerId => (uint)(((Data[0] & 1) << 5) | (Data[1] >> 3));
@@ -27,10 +35,9 @@ namespace SharpSpatialVideo
 
         public bool IsIrap => Type >= 16 && Type <= 23;
         public bool IsIdr => Type == 19 || Type == 20;
-        public bool IsCra => Type == 21;
         public bool IsRasl => Type == 8 || Type == 9;
 
-        public override string ToString() => $"t={Type} L{LayerId} {Data.Length}B";
+        public override string ToString() => $"t={Type} L{LayerId} {Data.Count}B";
     }
 
     /// <summary>
@@ -63,7 +70,6 @@ namespace SharpSpatialVideo
     {
         public uint DisplayWidth { get; set; }
         public uint DisplayHeight { get; set; }
-        public int NalLengthSize { get; set; }
         public uint Timescale { get; set; }
         public uint FpsNom { get; set; }
         public uint FpsDenom { get; set; }
@@ -82,14 +88,23 @@ namespace SharpSpatialVideo
         /// </summary>
         public string Path { get; set; }
 
-        public bool IsMultiview => LayerParameterSets.Count > 0;
+        /// <summary>
+        /// Where each sample of the video track lies, which is what lets a caller work through a
+        /// file of any size: it keeps what it learns about each picture and reads the picture again
+        /// when it comes to write it.
+        /// </summary>
+        public List<(long Offset, int Length)> SamplePositions { get; } = new List<(long, int)>();
+
 
         /// <summary>Raw byte of the stereo view information box (vexu/eyes/stri), or null.</summary>
         public byte? StereoViewInfo { get; set; }
 
-        /// <summary>Audio samples copied verbatim from the source, or empty if there is no audio.</summary>
-        public List<byte[]> AudioSamples { get; } = new List<byte[]>();
-        public List<uint> AudioSampleDurations { get; } = new List<uint>();
+        /// <summary>
+        /// How many audio samples the source holds. The samples stay in the file and are handed
+        /// out one at a time by <see cref="MvHevcReader.StreamAudioSamples"/>: an hour of audio is
+        /// a hundred megabytes, and every caller copies it across without looking at it.
+        /// </summary>
+        public int AudioSampleCount { get; set; }
 
         /// <summary>
         /// Box carrying the elementary stream descriptor, used to configure the output track. This
@@ -98,11 +113,10 @@ namespace SharpSpatialVideo
         public Box AudioConfig { get; set; }
         public uint AudioTimescale { get; set; }
 
-        public bool HasAudio => AudioSamples.Count > 0 && AudioConfig != null;
+        public bool HasAudio => AudioSampleCount > 0 && AudioConfig != null;
 
         public bool HasLeftEyeView => StereoViewInfo.HasValue && (StereoViewInfo.Value & 0x01) != 0;
         public bool HasRightEyeView => StereoViewInfo.HasValue && (StereoViewInfo.Value & 0x02) != 0;
-        public bool HasAdditionalViews => StereoViewInfo.HasValue && (StereoViewInfo.Value & 0x04) != 0;
         public bool EyeViewsReversed => StereoViewInfo.HasValue && (StereoViewInfo.Value & 0x08) != 0;
     }
 
@@ -142,7 +156,6 @@ namespace SharpSpatialVideo
             {
                 DisplayWidth = visualSample.Width,
                 DisplayHeight = visualSample.Height,
-                NalLengthSize = hvcC._HEVCConfig.LengthSizeMinusOne + 1,
                 Timescale = mdhd.Timescale,
             };
 
@@ -183,12 +196,49 @@ namespace SharpSpatialVideo
             var reader = new VideoReader();
             reader.Parse(container);
 
+            uint videoTrackId = TrackId(reader, HandlerTypes.Video);
+            if (reader.Tracks.TryGetValue(videoTrackId, out var videoTrack))
+                result.SamplePositions.AddRange(SamplePositions(videoTrack));
+
             if (loadSamples)
-                result.AccessUnits.AddRange(ReadAccessUnits(reader, TrackId(reader, HandlerTypes.Video), int.MaxValue));
+                result.AccessUnits.AddRange(ReadAccessUnits(reader, videoTrackId, int.MaxValue, result.SamplePositions,
+                    copy: true));
 
             ReadAudioTrack(reader, moov, result);
 
             return result;
+        }
+
+        /// <summary>Where each of a track's samples lies, worked out from its chunks and sizes.</summary>
+        public static IEnumerable<(long Offset, int Length)> SamplePositions(TrackContext track)
+        {
+            int sample = 0;
+            for (int chunk = 0; chunk < track.ChunkAddressList.Length && sample < track.SizesList.Length; chunk++)
+            {
+                long offset = (long)track.ChunkAddressList[chunk];
+
+                for (int i = 0; i < track.FramesInChunkList[chunk] && sample < track.SizesList.Length; i++)
+                {
+                    int length = (int)track.SizesList[sample++];
+                    yield return (offset, length);
+                    offset += length;
+                }
+            }
+        }
+
+        /// <summary>
+        /// One NAL unit, read back out of the file it was found in, into a buffer the caller keeps:
+        /// it grows to the largest unit read through it and is written over by the next one, so
+        /// reading a whole track costs one buffer.
+        /// </summary>
+        public static ArraySegment<byte> ReadNalu(Stream file, long offset, int length, ref byte[] buffer)
+        {
+            if (buffer == null || buffer.Length < length)
+                buffer = new byte[Math.Max(length, (buffer?.Length ?? 4096) * 2)];
+
+            file.Seek(offset, SeekOrigin.Begin);
+            file.ReadExactly(buffer, 0, length);
+            return new ArraySegment<byte>(buffer, 0, length);
         }
 
         /// <summary>The id of the first track of a kind, or zero if the file has none.</summary>
@@ -201,7 +251,12 @@ namespace SharpSpatialVideo
         /// Reads samples in decode order and splits each into its NAL units. A sample of an
         /// MV-HEVC track is one access unit, holding both views' pictures.
         /// </summary>
-        private static IEnumerable<AccessUnit> ReadAccessUnits(VideoReader reader, uint trackId, int limit)
+        /// <param name="copy">
+        /// Whether each unit gets an array of its own. Only a caller that keeps them all needs it;
+        /// otherwise they are handed out where they lie in the reader's buffer.
+        /// </param>
+        private static IEnumerable<AccessUnit> ReadAccessUnits(VideoReader reader, uint trackId, int limit,
+            List<(long Offset, int Length)> positions, bool copy)
         {
             for (int i = 0; i < limit; i++)
             {
@@ -216,8 +271,18 @@ namespace SharpSpatialVideo
                     CompositionOffset = (int)(sample.PTS - sample.DTS),
                 };
 
+                long sampleOffset = positions != null && i < positions.Count ? positions[i].Offset : 0;
+
+                // The reader hands out each NAL unit where it lies in the sample, and each is told
+                // where in the file that is.
                 foreach (var nalu in reader.ParseSample(trackId, sample.Data))
-                    accessUnit.Nalus.Add(new Nalu { Data = nalu });
+                {
+                    accessUnit.Nalus.Add(new Nalu
+                    {
+                        Data = copy ? new ArraySegment<byte>(nalu.ToArray()) : nalu,
+                        Offset = sampleOffset + nalu.Offset,
+                    });
+                }
 
                 yield return accessUnit;
             }
@@ -239,14 +304,16 @@ namespace SharpSpatialVideo
             var reader = new VideoReader();
             reader.Parse(container);
 
-            foreach (var accessUnit in ReadAccessUnits(reader, TrackId(reader, HandlerTypes.Video), limit))
+            foreach (var accessUnit in ReadAccessUnits(reader, TrackId(reader, HandlerTypes.Video), limit,
+                track.SamplePositions, copy: false))
                 yield return accessUnit;
         }
 
 
         /// <summary>
-        /// Copies the audio track's samples and its elementary stream descriptor, so the audio can
-        /// be carried into the output without being decoded or re-encoded.
+        /// Finds the audio track's elementary stream descriptor and how many samples it holds, so
+        /// the audio can be carried into the output without being decoded or re-encoded. The
+        /// samples themselves are left in the file - see <see cref="StreamAudioSamples"/>.
         /// </summary>
         private static void ReadAudioTrack(VideoReader reader, MovieBox moov, MvHevcTrack result)
         {
@@ -277,12 +344,33 @@ namespace SharpSpatialVideo
             if (result.AudioConfig == null)
                 return;
 
+            if (reader.Tracks.TryGetValue(TrackId(reader, HandlerTypes.Sound), out var track))
+                result.AudioSampleCount = track.SizesList.Length;
+        }
+
+        /// <summary>
+        /// The audio samples one at a time, in order, each with its duration - read out of the
+        /// file as they are asked for. Nothing when the track has no audio this can carry.
+        /// </summary>
+        /// <remarks>
+        /// Each sample lies in the reader's own buffer, which the next one is read over: it has to
+        /// be written, or copied, before the next is asked for. Every caller writes it at once.
+        /// </remarks>
+        public static IEnumerable<(ArraySegment<byte> Data, int Duration)> StreamAudioSamples(MvHevcTrack track)
+        {
+            if (!track.HasAudio)
+                yield break;
+
+            using var stream = new FileStream(track.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var container = new Container();
+            container.Read(new IsoStream(new StreamWrapper(stream)));
+
+            var reader = new VideoReader();
+            reader.Parse(container);
+
             uint trackId = TrackId(reader, HandlerTypes.Sound);
             for (var sample = reader.ReadSample(trackId); sample != null; sample = reader.ReadSample(trackId))
-            {
-                result.AudioSamples.Add(sample.Data);
-                result.AudioSampleDurations.Add((uint)sample.Duration);
-            }
+                yield return (sample.Data, (int)sample.Duration);
         }
 
         /// <summary>

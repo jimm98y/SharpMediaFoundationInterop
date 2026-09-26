@@ -13,7 +13,29 @@ namespace SharpSpatialVideo
         public int DecodeIndex { get; set; }
         public int View { get; set; }
         public int Poc { get; set; }
-        public ParsedSlice Source { get; set; }
+        /// <summary>Where the picture lies in the source file, so it can be read when it is written.</summary>
+        public long SourceOffset { get; set; }
+        public int SourceLength { get; set; }
+
+        /// <summary>What the source said about it, kept because the bytes are not.</summary>
+        public uint SourceTemporalIdPlus1 { get; set; }
+        /// <summary>
+        /// The count the source gave this picture. It is not unique: an IDR picture starts the
+        /// count again, so a recording with a key frame every second names a picture per second
+        /// with the same number. <see cref="Poc"/> is the one that names a picture in the stream.
+        /// </summary>
+        public int SourcePoc { get; set; }
+        public bool SourceIsIrap { get; set; }
+
+        /// <summary>
+        /// The slice segment header as the source stored it, which is small and worth keeping: it
+        /// is what the split carries so the way back can put the picture together again.
+        /// </summary>
+        public byte[] SourceHeaderBytes { get; set; }
+
+        /// <summary>The access unit it came from, and how long that was.</summary>
+        public int AccessUnitIndex { get; set; }
+        public uint AccessUnitDuration { get; set; }
 
         /// <summary>Long-term cross-view reference for this picture; -1 when it has none.</summary>
         public int CrossViewPoc { get; set; } = -1;
@@ -45,6 +67,13 @@ namespace SharpSpatialVideo
     /// the base view out of the rewritten stream and comparing it against the untouched one.
     /// </para>
     /// <para>
+    /// The count never starts again. A source whose key frames are IDR pictures restarts its count
+    /// at each one, but the interleave names pictures from both sides of a key frame, and every
+    /// map here uses the count as a picture's identity. So k carries on across key frames, the base
+    /// view's later IDR pictures are written as CRA pictures - intra all the same, and the slice
+    /// data does not name its own NAL type - and the count is made wide enough never to wrap.
+    /// </para>
+    /// <para>
     /// The inter-layer reference is re-expressed as a <em>long-term</em> reference picture. In
     /// reference list construction (8.3.4) LtCurr is appended after StCurrBefore and StCurrAfter,
     /// which is exactly where MV-HEVC puts RefPicSetInterLayer0 (F.8.3.4), and MV-HEVC already
@@ -60,7 +89,7 @@ namespace SharpSpatialVideo
     /// <see cref="ScheduleDecodeOrder"/>.
     /// </para>
     /// </remarks>
-    public sealed class SingleLayerRewriter
+    public sealed class SingleLayerRewriter : IDisposable
     {
         // Level 5.1. Interleaving multiplies the picture rate and the DPB, which overflows the
         // original level 4.1 (its MaxDpbSize is 6 at this picture size).
@@ -69,17 +98,40 @@ namespace SharpSpatialVideo
         /// <summary>Picture order count slots per access unit: base then dependent.</summary>
         public const int PocScale = 2;
 
-        // 3 x 760 access units overflows the source's 11-bit picture order count, so widen it.
-        private const ulong OutputLog2MaxPocLsbMinus4 = 9;
+        // The rewritten stream holds two pictures per access unit and keeps counting across key
+        // frames, so its counts run far past the source's 11 bits. The width is chosen to hold the
+        // whole stream without wrapping, because a long term reference is named by its low bits
+        // alone; 16 bits is as wide as HEVC allows, which is 32768 access units.
+        private const ulong MaxLog2MaxPocLsbMinus4 = 12;
+        private ulong _log2MaxPocLsbMinus4 = 9;
 
         private readonly MvHevcTrack _track;
+        /// <summary>Reads the source: its parameter sets as the camera wrote them, never changed.</summary>
         private readonly MvHevcParser _parser = new MvHevcParser();
+
+        /// <summary>
+        /// Writes the rewritten stream, against its own copies of the parameter sets - the ones
+        /// this widens the picture order count in, and allows long-term references in. A slice of
+        /// the source has to be read against the sets it was written with and written against
+        /// these, so the two cannot be the same objects.
+        /// </summary>
+        private readonly MvHevcParser _writer = new MvHevcParser();
 
         public H265Context ParserContext => _parser.Context;
 
         public List<OutputPicture> Pictures { get; } = new List<OutputPicture>();
-        public int MaxRetained { get; private set; }
-        public int TemporalMvpPictures { get; private set; }
+
+        /// <summary>
+        /// What each access unit held besides its two pictures, by access unit: the camera writes
+        /// an SEI of its own in front of each picture of a key frame. They are collected while
+        /// planning, which is the one pass over the file, and are small enough to keep.
+        /// </summary>
+        /// <remarks>
+        /// Counted in decode order, not by picture order count: a stream whose key frames are IDR
+        /// pictures starts its count again at each one, so picture order counts repeat.
+        /// </remarks>
+        public Dictionary<int, List<(byte[] Data, bool BeforeBasePicture)>> OtherNalus { get; } =
+            new Dictionary<int, List<(byte[], bool)>>();
 
         /// <summary>
         /// Largest number of pictures that precede a picture in decode order but follow it in
@@ -97,30 +149,83 @@ namespace SharpSpatialVideo
         /// Drops the dependent view, leaving only the picture order count rescaling. Useful to
         /// separate a problem in the rescaling from one in the cross-view reference.
         /// </param>
+        /// <summary>
+        /// Reads the file through once and works out what the rewritten stream will hold: which
+        /// picture goes where, what each predicts from, and what has to stay in the buffer for it.
+        /// </summary>
+        /// <remarks>
+        /// Only what is said about each picture is kept - a few dozen bytes - not the picture. Each
+        /// is read again, out of the file, when it comes to be written, so a recording of any
+        /// length costs the same.
+        /// </remarks>
         public void Plan(bool baseViewOnly = false)
         {
             _parser.ParseParameterSets(_track.BaseParameterSets);
             _parser.ParseParameterSets(_track.LayerParameterSets);
             _parser.ResetPocState();
 
-            foreach (var au in _track.AccessUnits)
+            _writer.ParseParameterSets(_track.BaseParameterSets);
+            _writer.ParseParameterSets(_track.LayerParameterSets);
+
+            // Where the rewritten stream's count has reached, and the highest count the source has
+            // given in the sequence being read. An IDR picture starts the source's count again;
+            // this one carries on, because the interleave has to name pictures from before it - see
+            // StreamPoc.
+            int carriedOver = 0;
+            int highestInSequence = -1;
+
+            foreach (var au in MvHevcReader.StreamAccessUnits(_track))
             {
                 var baseSlice = au.SliceOfLayer(0);
                 var depSlice = au.SliceOfLayer(1);
                 if (baseSlice == null)
                     continue;
 
-                var parsedBase = _parser.ParseSlice(baseSlice);
-                int poc = _parser.DerivePoc(parsedBase);
-                parsedBase.Poc = poc;
+                // One slice a picture is what this rewrites: Apple writes that, and so does every
+                // encoder this has been used with. Of a picture coded as several, all but the first
+                // would be left out without a word, so such a file is refused rather than turned
+                // into a broken one.
+                int mostSlices = Math.Max(
+                    au.Nalus.Count(n => n.IsSlice && n.LayerId == 0),
+                    au.Nalus.Count(n => n.IsSlice && n.LayerId == 1));
+                if (mostSlices > 1)
+                    throw new NotSupportedException(
+                        $"Access unit {au.Index} codes a picture as {mostSlices} slices, and only pictures " +
+                        "of a single slice can be taken apart into their views.");
 
-                var basePicture = new OutputPicture
+                var parsedBase = _parser.ParseSlice(baseSlice);
+                int sourcePoc = _parser.DerivePoc(parsedBase);
+
+                if (baseSlice.IsIdr && Pictures.Count > 0)
                 {
-                    View = 0,
-                    Poc = poc * PocScale,
-                    Source = parsedBase,
-                    OutputNalType = baseSlice.Type,
-                };
+                    carriedOver += highestInSequence + 1;
+                    highestInSequence = -1;
+                }
+
+                highestInSequence = Math.Max(highestInSequence, sourcePoc);
+                int poc = sourcePoc + carriedOver;
+
+                foreach (var nalu in au.Nalus)
+                {
+                    if (nalu.IsSlice)
+                        continue;
+
+                    if (!OtherNalus.TryGetValue(au.Index, out var others))
+                        OtherNalus[au.Index] = others = new List<(byte[], bool)>();
+
+                    // Kept past this access unit, so copied out of the reader's buffer.
+                    others.Add((nalu.Data.ToArray(), nalu.Offset < baseSlice.Offset));
+                }
+
+                var basePicture = Describe(baseSlice, parsedBase, au, view: 0, poc: poc, sourcePoc: sourcePoc);
+
+                // An IDR would start the count again, which the interleave cannot have: a CRA is a
+                // key frame too and carries on counting, and the slice data is untouched either way
+                // - both are intra pictures, and nothing in the payload names its own NAL type. The
+                // first picture stays an IDR, because a stream has to open with one.
+                basePicture.OutputNalType = baseSlice.IsIdr && Pictures.Count > 0
+                    ? H265NALTypes.CRA_NUT
+                    : baseSlice.Type;
                 CollectUsedReferences(parsedBase, poc, 0, basePicture);
                 Pictures.Add(basePicture);
 
@@ -128,17 +233,12 @@ namespace SharpSpatialVideo
                     continue;
 
                 var parsedDep = _parser.ParseSlice(depSlice);
-                parsedDep.Poc = poc;
 
-                var depPicture = new OutputPicture
-                {
-                    View = 1,
-                    Poc = poc * PocScale + 1,
-                    Source = parsedDep,
-                    // The dependent view predicts from the base view, so it can no longer be an
-                    // IRAP: a CRA there becomes an ordinary trailing picture.
-                    OutputNalType = depSlice.IsCra ? 1u : depSlice.Type,
-                };
+                var depPicture = Describe(depSlice, parsedDep, au, view: 1, poc: poc, sourcePoc: sourcePoc);
+
+                // The dependent view predicts from the base view, so it can no longer be an IRAP at
+                // all: a key frame there becomes an ordinary trailing picture, whichever kind it was.
+                depPicture.OutputNalType = depSlice.IsIrap ? 1u : depSlice.Type;
                 CollectUsedReferences(parsedDep, poc, 1, depPicture);
 
                 // In the source the inter-layer picture is always a candidate, but only some
@@ -153,15 +253,29 @@ namespace SharpSpatialVideo
             ScheduleDecodeOrder();
 
             for (int i = 0; i < Pictures.Count; i++)
-            {
                 Pictures[i].DecodeIndex = i;
-                if (Pictures[i].Source.Header.SliceTemporalMvpEnabledFlag != 0)
-                    TemporalMvpPictures++;
-            }
 
             ComputeRetention();
             ComputeDpbRequirements();
+            ChoosePocWidth();
         }
+
+        /// <summary>What is worth keeping about a picture, once its bytes are let go of.</summary>
+        private static OutputPicture Describe(Nalu slice, ParsedSlice parsed, AccessUnit accessUnit,
+            int view, int poc, int sourcePoc) =>
+            new OutputPicture
+            {
+                View = view,
+                Poc = poc * PocScale + view,
+                SourceOffset = slice.Offset,
+                SourceLength = slice.Data.Count,
+                SourceTemporalIdPlus1 = parsed.NalUnit.NalUnitHeader.NuhTemporalIdPlus1,
+                SourcePoc = sourcePoc,
+                SourceIsIrap = slice.IsIrap,
+                SourceHeaderBytes = parsed.HeaderBytes,
+                AccessUnitIndex = accessUnit.Index,
+                AccessUnitDuration = accessUnit.Duration,
+            };
 
         /// <summary>
         /// Orders the interleaved pictures so that a base picture is only named as a long-term
@@ -257,15 +371,20 @@ namespace SharpSpatialVideo
             // Output happens in picture order count order, so a picture can leave once every
             // lower numbered picture has been decoded.
             var remainingPocs = new SortedSet<int>(Pictures.Select(p => p.Poc));
-            var decoded = new List<int>();
+
+            // Decoded but not yet output. Once the lowest undecoded count passes a picture it is
+            // output and never waits again, so the set only holds the reorder window rather than
+            // being worked out afresh from everything decoded so far.
+            var waiting = new SortedSet<int>();
 
             for (int i = 0; i < Pictures.Count; i++)
             {
-                decoded.Add(Pictures[i].Poc);
+                waiting.Add(Pictures[i].Poc);
                 remainingPocs.Remove(Pictures[i].Poc);
 
                 int lowestUndecoded = remainingPocs.Count > 0 ? remainingPocs.Min : int.MaxValue;
-                var waiting = decoded.Where(poc => poc > lowestUndecoded).ToList();
+                while (waiting.Count > 0 && waiting.Min < lowestUndecoded)
+                    waiting.Remove(waiting.Min);
                 MaxReorder = Math.Max(MaxReorder, waiting.Count);
 
                 var occupancy = new HashSet<int>(waiting);
@@ -275,6 +394,20 @@ namespace SharpSpatialVideo
 
                 MaxDpbOccupancy = Math.Max(MaxDpbOccupancy, occupancy.Count + 1);
             }
+        }
+
+        /// <summary>
+        /// Widens the picture order count until the whole stream fits in it without wrapping. A long
+        /// term reference is named by the low bits of its count alone, so two pictures sharing them
+        /// would be indistinguishable.
+        /// </summary>
+        private void ChoosePocWidth()
+        {
+            int highest = Pictures.Count > 0 ? Pictures.Max(p => p.Poc) : 0;
+
+            _log2MaxPocLsbMinus4 = 9;
+            while (_log2MaxPocLsbMinus4 < MaxLog2MaxPocLsbMinus4 && 1 << (int)(_log2MaxPocLsbMinus4 + 4) <= highest)
+                _log2MaxPocLsbMinus4++;
         }
 
         /// <summary>Largest number of pictures the decoded picture buffer has to hold at once.</summary>
@@ -288,6 +421,13 @@ namespace SharpSpatialVideo
         /// </summary>
         private static bool UsesInterLayerReference(ParsedSlice slice, int usedShortTermCount)
         {
+            // An intra slice predicts from nothing at all, whatever the candidate list holds. This
+            // is what a key frame of the dependent view looks like in a stream whose views are coded
+            // independently; naming the base picture there would mark it long term for nothing, and
+            // hold the dependent view back behind it.
+            if (slice.Header.SliceType == 2)
+                return false;
+
             if (usedShortTermCount == 0)
                 return true;
 
@@ -332,42 +472,41 @@ namespace SharpSpatialVideo
         /// still needs. A picture's reference picture set has to name all of them, otherwise the
         /// decoder marks them unused and a later picture loses its reference.
         /// </summary>
+        /// <remarks>
+        /// A picture is still needed at position i when something at i or after references it, so
+        /// all that has to be known of the future is where each picture is referenced for the last
+        /// time. What is retained is then a set that only ever holds what the buffer holds - a
+        /// dozen pictures - rather than, for every picture, everything the rest of the stream
+        /// references, which grows with the square of the length: three gigabytes for six
+        /// thousand access units.
+        /// </remarks>
         private void ComputeRetention()
         {
-            var decodedBefore = new HashSet<int>();
-            var positionOf = new Dictionary<int, int>();
+            var lastReferencedAt = new Dictionary<int, int>();
             for (int i = 0; i < Pictures.Count; i++)
-                positionOf[Pictures[i].Poc] = i;
-
-            // futureNeeds[i] = every POC referenced by picture i or anything after it.
-            var futureNeeds = new HashSet<int>[Pictures.Count];
-            var running = new HashSet<int>();
-            for (int i = Pictures.Count - 1; i >= 0; i--)
             {
                 foreach (var poc in Pictures[i].UsedShortTerm)
-                    running.Add(poc);
+                    lastReferencedAt[poc] = i;
                 if (Pictures[i].CrossViewPoc >= 0)
-                    running.Add(Pictures[i].CrossViewPoc);
-
-                futureNeeds[i] = new HashSet<int>(running);
+                    lastReferencedAt[Pictures[i].CrossViewPoc] = i;
             }
+
+            // Decoded, and referenced again at or after the picture being looked at.
+            var live = new HashSet<int>();
 
             for (int i = 0; i < Pictures.Count; i++)
             {
                 var picture = Pictures[i];
+                live.RemoveWhere(poc => lastReferencedAt[poc] < i);
 
-                foreach (var poc in futureNeeds[i])
-                {
-                    if (poc == picture.Poc)
-                        continue;
-                    if (decodedBefore.Contains(poc))
+                foreach (var poc in live)
+                    if (poc != picture.Poc)
                         picture.Retained.Add(poc);
-                }
 
                 picture.Retained.Sort();
-                MaxRetained = Math.Max(MaxRetained, picture.Retained.Count);
 
-                decodedBefore.Add(picture.Poc);
+                if (lastReferencedAt.TryGetValue(picture.Poc, out int last) && last > i)
+                    live.Add(picture.Poc);
             }
         }
 
@@ -378,7 +517,7 @@ namespace SharpSpatialVideo
         /// </summary>
         private void CollapseVpsToSingleLayer()
         {
-            var vps = _parser.Context.VideoParameterSetRbsp;
+            var vps = _writer.Context.VideoParameterSetRbsp;
             vps.VpsMaxLayersMinus1 = 0;
             vps.VpsMaxLayerId = 0;
             vps.VpsNumLayerSetsMinus1 = 0;
@@ -403,7 +542,7 @@ namespace SharpSpatialVideo
         /// </remarks>
         public List<byte[]> BuildBaseViewParameterSets(IEnumerable<byte[]> originalParameterSets)
         {
-            var context = _parser.Context;
+            var context = _writer.Context;
             CollapseVpsToSingleLayer();
 
             var result = new List<byte[]>
@@ -425,7 +564,7 @@ namespace SharpSpatialVideo
         /// <summary>Emits the rewritten parameter sets, in the order they should be fed to a decoder.</summary>
         public List<byte[]> BuildParameterSets(int dpbSize, int maxReorder)
         {
-            var context = _parser.Context;
+            var context = _writer.Context;
             var result = new List<byte[]>();
 
             var vps = context.VideoParameterSetRbsp;
@@ -452,7 +591,7 @@ namespace SharpSpatialVideo
             // allowed to signal long-term references.
             sps.LongTermRefPicsPresentFlag = 1;
             sps.NumLongTermRefPicsSps = 0;
-            sps.Log2MaxPicOrderCntLsbMinus4 = OutputLog2MaxPocLsbMinus4;
+            sps.Log2MaxPicOrderCntLsbMinus4 = _log2MaxPocLsbMinus4;
             result.Add(WriteParameterSet(H265NALTypes.SPS_NUT, s => sps.Write(context, s)));
 
             // Both views now share sequence parameter set 0; only one can be active in a sequence.
@@ -472,7 +611,7 @@ namespace SharpSpatialVideo
 
         private byte[] WriteParameterSet(uint nalType, Action<ItuStream> write)
         {
-            var context = _parser.Context;
+            var context = _writer.Context;
             using var memory = new MemoryStream();
             using (var stream = new ItuStream(memory))
             {
@@ -492,11 +631,18 @@ namespace SharpSpatialVideo
             return memory.ToArray();
         }
 
-        /// <summary>Rewrites one picture's slice into a single-layer NAL unit.</summary>
-        public byte[] RewriteSlice(OutputPicture picture)
+        /// <summary>
+        /// Rewrites one picture's slice into a single-layer NAL unit, reading it back out of the
+        /// source file: what the plan kept is where it lies, not what it holds.
+        /// </summary>
+        /// <remarks>
+        /// The NAL unit is written into a buffer the next picture is written over, so it has to be
+        /// used - or copied - before another is asked for. Every caller writes it out at once.
+        /// </remarks>
+        public ArraySegment<byte> RewriteSlice(OutputPicture picture)
         {
-            var context = _parser.Context;
-            var source = picture.Source;
+            var context = _writer.Context;
+            var source = ReadSource(picture);
             var header = source.Header;
 
             // Re-activate the parameter sets this slice uses so the writer takes the same branches.
@@ -510,11 +656,11 @@ namespace SharpSpatialVideo
                 ForbiddenZeroBit = 0,
                 NalUnitType = picture.OutputNalType,
                 NuhLayerId = 0,
-                NuhTemporalIdPlus1 = source.NalUnit.NalUnitHeader.NuhTemporalIdPlus1,
+                NuhTemporalIdPlus1 = picture.SourceTemporalIdPlus1,
             };
             context.NalHeader = nalUnit;
 
-            ApplyReferenceSet(picture);
+            ApplyReferenceSet(picture, source);
 
             bool isIdr = picture.OutputNalType == 19 || picture.OutputNalType == 20;
             if (!isIdr)
@@ -522,18 +668,51 @@ namespace SharpSpatialVideo
 
             header.PicOutputFlag = (byte)(picture.Output ? 1 : 0);
 
-            using var memory = new MemoryStream();
-            using (var stream = new ItuStream(memory))
-            {
-                nalUnit.Write(context, stream);
-                source.Slice.Write(context, stream);
+            // The stream is not disposed, because that would dispose the buffer under it. It holds
+            // nothing else: bytes go through as each is completed, and every write here ends on a
+            // byte boundary.
+            _rewritten.SetLength(0);
+            var stream = new ItuStream(_rewritten);
 
-                foreach (byte value in source.Payload)
-                    stream.WriteUnsignedInt(8, value, null);
-            }
+            nalUnit.Write(context, stream);
+            source.Slice.Write(context, stream);
 
-            return memory.ToArray();
+            var payload = source.Payload;
+            stream.WriteBytes(payload.Array, payload.Offset, payload.Count);
+
+            return new ArraySegment<byte>(_rewritten.GetBuffer(), 0, (int)_rewritten.Length);
         }
+
+        /// <summary>What <see cref="RewriteSlice"/> writes into, one picture after another.</summary>
+        private readonly MemoryStream _rewritten = new MemoryStream(1 << 20);
+
+        /// <summary>The picture as the source holds it, read again and parsed again.</summary>
+        private ParsedSlice ReadSource(OutputPicture picture)
+        {
+            _source ??= new FileStream(_track.Path, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+            var nalu = new Nalu
+            {
+                Data = MvHevcReader.ReadNalu(_source, picture.SourceOffset, picture.SourceLength, ref _readBuffer),
+                Offset = picture.SourceOffset,
+            };
+
+            return _parser.ParseSlice(nalu);
+        }
+
+        /// <summary>
+        /// What each picture is read into. The next one goes over it, so a picture is written out
+        /// - payload and all - before the next is read; see <see cref="RewriteSlice"/>.
+        /// </summary>
+        private byte[] _readBuffer;
+
+        public void Dispose()
+        {
+            _source?.Dispose();
+            _source = null;
+        }
+
+        private FileStream _source;
 
         private static int MaxPocLsb(H265Context context) =>
             1 << (int)(context.SeqParameterSetRbsp.Log2MaxPicOrderCntLsbMinus4 + 4);
@@ -542,9 +721,9 @@ namespace SharpSpatialVideo
         /// Rebuilds the slice's reference picture set over the doubled picture order counts, and
         /// moves the cross-view reference into the long-term set.
         /// </summary>
-        private void ApplyReferenceSet(OutputPicture picture)
+        private void ApplyReferenceSet(OutputPicture picture, ParsedSlice source)
         {
-            var header = picture.Source.Header;
+            var header = source.Header;
             bool isIdr = picture.OutputNalType == 19 || picture.OutputNalType == 20;
 
             if (isIdr)
@@ -601,7 +780,7 @@ namespace SharpSpatialVideo
             {
                 header.NumLongTermPics = 1;
                 header.LtIdxSps = new ulong[1];
-                header.PocLsbLt = new ulong[] { (ulong)(picture.CrossViewPoc & (MaxPocLsb(_parser.Context) - 1)) };
+                header.PocLsbLt = new ulong[] { (ulong)(picture.CrossViewPoc & (MaxPocLsb(_writer.Context) - 1)) };
                 header.UsedByCurrPicLtFlag = new byte[] { 1 };
                 // Every picture order count in the stream is unique modulo MaxPicOrderCntLsb, so
                 // the least significant bits identify the picture on their own.

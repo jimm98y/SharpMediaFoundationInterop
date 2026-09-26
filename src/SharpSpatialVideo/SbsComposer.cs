@@ -6,32 +6,27 @@ namespace SharpSpatialVideo
     public static class SbsComposer
     {
         /// <summary>
-        /// Builds a <paramref name="width"/>*2 by <paramref name="height"/> NV12 frame from two
-        /// decoded eyes. The decoded pictures are the coded size, so <paramref name="height"/> can
-        /// be the display height to drop the conformance window padding at the bottom.
+        /// Writes one decoded eye into its half of a <paramref name="width"/>*2 by
+        /// <paramref name="height"/> NV12 frame. The decoded pictures are the coded size, so
+        /// <paramref name="height"/> can be the display height to drop the conformance window
+        /// padding at the bottom. Placing each eye as it arrives means neither has to be kept until
+        /// the other comes.
         /// </summary>
-        public static byte[] Compose(byte[] left, byte[] right, int codedWidth, int codedHeight, int width, int height)
+        public static void PlaceEye(byte[] eye, int codedWidth, int codedHeight, int width, int height,
+            byte[] output, bool rightHalf)
         {
             int outWidth = width * 2;
-            var output = new byte[outWidth * height * 3 / 2];
+            int x = rightHalf ? width : 0;
 
             // Luma: each output row is the left row followed by the right row.
             for (int y = 0; y < height; y++)
-            {
-                Buffer.BlockCopy(left, y * codedWidth, output, y * outWidth, width);
-                Buffer.BlockCopy(right, y * codedWidth, output, y * outWidth + width, width);
-            }
+                Buffer.BlockCopy(eye, y * codedWidth, output, y * outWidth + x, width);
 
             // Chroma is interleaved and half height, so it splits at the same byte offset.
             int srcChroma = codedWidth * codedHeight;
             int dstChroma = outWidth * height;
             for (int y = 0; y < height / 2; y++)
-            {
-                Buffer.BlockCopy(left, srcChroma + y * codedWidth, output, dstChroma + y * outWidth, width);
-                Buffer.BlockCopy(right, srcChroma + y * codedWidth, output, dstChroma + y * outWidth + width, width);
-            }
-
-            return output;
+                Buffer.BlockCopy(eye, srcChroma + y * codedWidth, output, dstChroma + y * outWidth + x, width);
         }
 
         /// <summary>

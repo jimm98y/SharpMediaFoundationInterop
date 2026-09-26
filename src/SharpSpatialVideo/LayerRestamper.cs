@@ -1,9 +1,8 @@
-using SharpH265;
+﻿using SharpH265;
 using SharpH26X;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 namespace SharpSpatialVideo
 {
@@ -52,19 +51,24 @@ namespace SharpSpatialVideo
             vps.VpsExtension.PocLsbNotPresentFlag ??= new byte[layers];
         }
 
-        public H265Context Context => _parser.Context;
-
         /// <summary>Re-emits one coded slice at layer 1, pointing at layer 1's picture parameter set.</summary>
-        public byte[] ToLayerOne(byte[] nalu, ulong picParameterSetId, int? pictureOrderCount = null) =>
-            Restamp(nalu, 1, picParameterSetId, pictureOrderCount, null);
+        /// <param name="into">
+        /// What the caller collects the access unit in: the slice is appended to it and handed back
+        /// as a segment of its buffer. The caller empties it for each access unit, and has written
+        /// the unit out by then - a picture may have several slices, so it is not emptied per slice.
+        /// </param>
+        public ArraySegment<byte> ToLayerOne(ArraySegment<byte> nalu, ulong picParameterSetId, MemoryStream into,
+            int? pictureOrderCount = null) =>
+            Restamp(nalu, 1, picParameterSetId, pictureOrderCount, null, into);
 
         /// <summary>
         /// Re-emits a coded slice into a given layer, optionally as a different picture type and at
         /// a given picture order count. Changing an IDR into a CRA is what lets a run of intra
         /// pictures keep counting rather than resetting to zero at every one of them.
         /// </summary>
-        public byte[] Restamp(byte[] nalu, uint layerId, ulong picParameterSetId,
-            int? pictureOrderCount, uint? newNalType)
+        /// <param name="into">What the slice is appended to - see <see cref="ToLayerOne"/>.</param>
+        public ArraySegment<byte> Restamp(ArraySegment<byte> nalu, uint layerId, ulong picParameterSetId,
+            int? pictureOrderCount, uint? newNalType, MemoryStream into)
         {
             var parsed = _parser.ParseSlice(new Nalu { Data = nalu });
             var context = _parser.Context;
@@ -138,17 +142,22 @@ namespace SharpSpatialVideo
                 // The payload goes back through the stream rather than being appended to what
                 // it writes: emulation prevention then covers the join between the new header and
                 // the old payload, where a run of zeros can straddle the two.
-                using var memory = new MemoryStream();
-                using (var stream = new ItuStream(memory))
-                {
-                    nalUnit.Write(context, stream);
-                    parsed.Slice.Write(context, stream);
+                //
+                // The stream is not disposed, because that would dispose what it writes into. It
+                // holds nothing else: bytes go through as each is completed, and the write ends on
+                // a byte boundary. Should the buffer grow, the slices already in it stay where they
+                // were, in the array they were written to, which nothing writes to again.
+                int start = (int)into.Length;
+                into.Position = start;
+                var stream = new ItuStream(into);
 
-                    foreach (byte value in parsed.Payload)
-                        stream.WriteUnsignedInt(8, value, null);
-                }
+                nalUnit.Write(context, stream);
+                parsed.Slice.Write(context, stream);
 
-                return memory.ToArray();
+                var payload = parsed.Payload;
+                stream.WriteBytes(payload.Array, payload.Offset, payload.Count);
+
+                return new ArraySegment<byte>(into.GetBuffer(), start, (int)into.Length - start);
             }
             finally
             {
@@ -161,26 +170,22 @@ namespace SharpSpatialVideo
             }
         }
 
-        /// <summary>The picture parameter set a coded slice points at.</summary>
-        public ulong PicParameterSetIdOf(byte[] nalu) =>
-            _parser.ParseSlice(new Nalu { Data = nalu }).Header.SlicePicParameterSetId;
-
         /// <summary>True when the NAL unit is a coded slice rather than a parameter set or message.</summary>
-        public static bool IsSlice(byte[] nalu)
+        public static bool IsSlice(ArraySegment<byte> nalu)
         {
             uint type = (uint)((nalu[0] >> 1) & 0x3F);
             return type <= 21 && !(type > 9 && type < 16);
         }
 
         /// <summary>True when the NAL unit starts a random access point.</summary>
-        public static bool IsIrap(byte[] nalu)
+        public static bool IsIrap(ArraySegment<byte> nalu)
         {
             uint type = (uint)((nalu[0] >> 1) & 0x3F);
             return type >= 16 && type <= 23;
         }
 
         /// <summary>True when the NAL unit carries a parameter set.</summary>
-        public static bool IsParameterSet(byte[] nalu)
+        public static bool IsParameterSet(ArraySegment<byte> nalu)
         {
             uint type = (uint)((nalu[0] >> 1) & 0x3F);
             return type is 32 or 33 or 34;

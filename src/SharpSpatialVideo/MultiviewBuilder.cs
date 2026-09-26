@@ -55,12 +55,6 @@ namespace SharpSpatialVideo
         public List<byte[]> TemplateSei { get; } = new List<byte[]>();
 
         /// <summary>
-        /// Which eye the base layer holds, in the files made here. Fixed rather than chosen: it is
-        /// what the template's SEI says, and what Apple writes.
-        /// </summary>
-        public const bool BaseLayerIsRightEye = true;
-
-        /// <summary>
         /// Takes the video parameter set, and the eye mapping SEI, from an MV-HEVC file to use as
         /// the template.
         /// </summary>

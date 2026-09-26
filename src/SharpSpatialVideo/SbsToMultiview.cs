@@ -1,9 +1,11 @@
-using SharpMediaFoundationInterop.Transforms;
+﻿using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Transforms.H265;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace SharpSpatialVideo
 {
@@ -27,12 +29,15 @@ namespace SharpSpatialVideo
     /// </summary>
     public sealed class SbsToMultiview
     {
-        private readonly string _templatePath;
-        private List<byte[]> _templateParameterSets;
+        private readonly List<byte[]> _templateParameterSets;
 
-        public SbsToMultiview(string templatePath)
+        /// <param name="templateParameterSets">
+        /// What the stereo pair is described with - see <see cref="MultiviewTemplate"/>. The
+        /// built-in ones unless a different recording's are wanted.
+        /// </param>
+        public SbsToMultiview(List<byte[]> templateParameterSets = null)
         {
-            _templatePath = templatePath;
+            _templateParameterSets = templateParameterSets ?? MultiviewTemplate.ParameterSets();
         }
 
         public sealed class Result
@@ -84,7 +89,6 @@ namespace SharpSpatialVideo
             // Only the sample index is read here; the samples themselves are streamed below. The
             // template is needed only for its video parameter set.
             var track = MvHevcReader.Read(sourcePath, loadSamples: false);
-            _templateParameterSets = MvHevcReader.Read(_templatePath, loadSamples: false).BaseParameterSets;
             Memory("source indexed");
 
             // The source is an ordinary single layer file, so its sequence parameter set gives the
@@ -124,10 +128,16 @@ namespace SharpSpatialVideo
                 SbsComposer.CropRight(frame, sourceCodedWidth, sourceCodedHeight,
                     Width, Height, CodedWidth, CodedHeight, right);
 
+                // The two views have nothing to say to each other, so they are encoded side by
+                // side: the dependent view on a thread of its own while this one takes the base
+                // view. One encoder leaves half the machine idle, and the pair together finish a
+                // frame in a little over the time one of them takes.
+                //
                 // The right eye goes in the base layer: that is what the eye mapping SEI carried
                 // over from the template says, and what Apple writes. See MultiviewBuilder.
+                dependentEncoder.Begin(left);
                 baseEncoder.Feed(right);
-                dependentEncoder.Feed(left);
+                dependentEncoder.Wait();
 
                 if (++pairs % 150 == 0)
                     Memory($"{pairs} pairs encoded");
@@ -158,6 +168,8 @@ namespace SharpSpatialVideo
             return results;
         }
 
+        private readonly System.Diagnostics.Stopwatch _elapsed = System.Diagnostics.Stopwatch.StartNew();
+
         private void Memory(string stage)
         {
             if (!ReportMemory)
@@ -166,7 +178,8 @@ namespace SharpSpatialVideo
             long working = System.Diagnostics.Process.GetCurrentProcess().WorkingSet64;
             long heapBefore = GC.GetTotalMemory(false);
             long live = GC.GetTotalMemory(true);
-            Console.WriteLine($"    [mem] {stage,-22} working set {working / (1 << 20),5} MB, " +
+            Console.WriteLine($"    [mem] {stage,-22} at {_elapsed.Elapsed.TotalSeconds,6:F1} s, " +
+                $"working set {working / (1 << 20),5} MB, " +
                 $"managed heap {heapBefore / (1 << 20),5} MB, of which live {live / (1 << 20),5} MB");
         }
 
@@ -194,33 +207,44 @@ namespace SharpSpatialVideo
                 Path.GetTempFileName(), FileMode.Create, FileAccess.ReadWrite, FileShare.None,
                 1 << 16, FileOptions.DeleteOnClose);
 
-            private readonly List<(long Offset, int[] Lengths)> _index = new List<(long, int[])>();
+            private readonly List<(long Offset, int Length)> _index = new List<(long, int)>();
+            private readonly SharpMP4.Tracks.H265Track _track;
+
+            /// <summary>
+            /// The track the pictures come from, which is also what splits them again: they are
+            /// kept as it assembled them, with each NAL unit's length in front of it.
+            /// </summary>
+            public PictureSpool(SharpMP4.Tracks.H265Track track)
+            {
+                _track = track;
+            }
 
             public List<byte[]> ParameterSets { get; } = new List<byte[]>();
             public int Count => _index.Count;
 
-            public void Add(List<byte[]> picture)
+            public void Add(ArraySegment<byte> accessUnit)
             {
                 _file.Seek(0, SeekOrigin.End);
-                long offset = _file.Position;
-                foreach (var nalu in picture)
-                    _file.Write(nalu, 0, nalu.Length);
-                _index.Add((offset, picture.Select(n => n.Length).ToArray()));
+                _index.Add((_file.Position, accessUnit.Count));
+                _file.Write(accessUnit.Array, accessUnit.Offset, accessUnit.Count);
             }
 
             public List<byte[]> Read(int index)
             {
-                var (offset, lengths) = _index[index];
+                var (offset, length) = _index[index];
                 _file.Seek(offset, SeekOrigin.Begin);
 
-                var picture = new List<byte[]>(lengths.Length);
-                foreach (int length in lengths)
-                {
-                    var nalu = new byte[length];
-                    _file.ReadExactly(nalu);
-                    picture.Add(nalu);
-                }
-                return picture;
+                var accessUnit = new byte[length];
+                _file.ReadExactly(accessUnit);
+
+                // Only the slices: what else an access unit may carry is not re-stamped into a
+                // layer, and the parameter sets are held by the track rather than by the picture.
+                // Each NAL unit comes back where it lies in the access unit just read; the
+                // caller keeps them, so each is copied into an array of its own.
+                return _track.ParseSample(accessUnit)
+                    .Select(nalu => nalu.ToArray())
+                    .Where(nalu => LayerRestamper.IsSlice(nalu))
+                    .ToList();
             }
 
             public void Dispose() => _file.Dispose();
@@ -238,11 +262,29 @@ namespace SharpSpatialVideo
             private byte[] _buffer;
             private int _fed;
 
-            public PictureSpool Output { get; } = new PictureSpool();
+            /// <summary>
+            /// The frame handed to this encoder's own thread, and whether that thread has finished
+            /// with it - see <see cref="Begin"/>. One frame at a time: the point is only to keep
+            /// two views going at once, not to let either run ahead.
+            /// </summary>
+            private readonly BlockingCollection<byte[]> _handed = new BlockingCollection<byte[]>(1);
+            private readonly ManualResetEventSlim _taken = new ManualResetEventSlim(true);
+            private Thread _worker;
+
+            /// <summary>
+            /// A track of the encoder's own, which turns each Annex B sample it hands back into an
+            /// access unit and keeps the parameter sets out of it.
+            /// </summary>
+            private readonly SharpMP4.Tracks.H265Track _track;
+
+            public PictureSpool Output { get; }
 
             public StreamingEncoder(int width, int height, uint fpsNom, uint fpsDenom, uint bitrate,
                 uint gopSize, uint threads, string rateControl)
             {
+                _track = new SharpMP4.Tracks.H265Track(fpsNom, (int)fpsDenom);
+                Output = new PictureSpool(_track);
+
                 _encoder = new H265Encoder((uint)width, (uint)height, fpsNom, fpsDenom, bitrate);
                 if (gopSize > 0)
                     _encoder.CodecProperties[CodecApiProperties.GopSize] = gopSize;
@@ -264,12 +306,53 @@ namespace SharpSpatialVideo
                 Drain();
             }
 
+            /// <summary>
+            /// Feeds the encoder from a thread of its own and returns before it is finished, so
+            /// that a second view can be encoded at the same time. The frame is read by that
+            /// thread, so it must be left alone until <see cref="Wait"/> returns.
+            /// </summary>
+            public void Begin(byte[] frame)
+            {
+                if (_worker == null)
+                {
+                    _worker = new Thread(() =>
+                    {
+                        foreach (var frameToEncode in _handed.GetConsumingEnumerable())
+                        {
+                            Feed(frameToEncode);
+                            _taken.Set();
+                        }
+                    })
+                    {
+                        IsBackground = true,
+                        Name = "encoder",
+                    };
+
+                    _worker.Start();
+                }
+
+                _taken.Reset();
+                _handed.Add(frame);
+            }
+
+            /// <summary>Waits for the frame handed over by <see cref="Begin"/> to be encoded.</summary>
+            public void Wait() => _taken.Wait();
+
             public PictureSpool Finish()
             {
+                _handed.CompleteAdding();
+                _worker?.Join();
+
                 _encoder.BeginDrain();
                 for (int quiet = 0; quiet < 4;)
                     quiet = Drain() ? 0 : quiet + 1;
                 _encoder.EndDrain();
+
+                // The track took the parameter sets out of the pictures as they went by.
+                Output.ParameterSets.AddRange(_track.VpsRaw.Values);
+                Output.ParameterSets.AddRange(_track.SpsRaw.Values);
+                Output.ParameterSets.AddRange(_track.PpsRaw.Values);
+
                 return Output;
             }
 
@@ -278,34 +361,33 @@ namespace SharpSpatialVideo
                 bool any = false;
                 while (_encoder.ProcessOutput(ref _buffer, out uint length, out long _) && length > 0)
                 {
-                    Collect(_buffer.AsSpan(0, (int)length).ToArray());
+                    Collect(_buffer, (int)length);
                     any = true;
                 }
                 return any;
             }
 
-            private void Collect(byte[] sample)
+            /// <summary>
+            /// Turns one buffer of the encoder's output into an access unit and spools it. The
+            /// buffer is read where it lies - a stream over it copies nothing - and holds exactly
+            /// one access unit, so it is fed and then flushed: the track otherwise keeps one until
+            /// it sees the next one start.
+            /// </summary>
+            private void Collect(byte[] buffer, int length)
             {
-                var picture = new List<byte[]>();
-                foreach (var nalu in SharpMP4.AnnexB.ParseNalUnits(sample))
-                {
-                    if (LayerRestamper.IsParameterSet(nalu))
-                    {
-                        if (!Output.ParameterSets.Any(p => p.SequenceEqual(nalu)))
-                            Output.ParameterSets.Add(nalu);
-                    }
-                    else if (LayerRestamper.IsSlice(nalu))
-                    {
-                        picture.Add(nalu);
-                    }
-                }
+                foreach (var nalu in _track.ParseSample(new MemoryStream(buffer, 0, length)))
+                    _track.ProcessSample(nalu.Array, nalu.Offset, nalu.Count, out _, out _);
 
-                if (picture.Count > 0)
-                    Output.Add(picture);
+                _track.ProcessSample(null, out var accessUnit, out _);
+
+                if (accessUnit.Array != null)
+                    Output.Add(accessUnit);
             }
 
             public void Dispose()
             {
+                _handed.Dispose();
+                _taken.Dispose();
                 _encoder.Dispose();
                 Output.Dispose();
             }
@@ -342,13 +424,18 @@ namespace SharpSpatialVideo
             // written is ever in memory.
             IEnumerable<MultiviewAccessUnit> AccessUnits()
             {
+                // Layer 1's slices are restamped into this, which is emptied for each access unit:
+                // the writer has written the last one out before it asks for the next.
+                var layerOne = new MemoryStream(1 << 20);
+
                 for (int i = 0; i < count; i++)
                 {
+                    layerOne.SetLength(0);
                     var basePicture = baseView.Read(i);
                     var accessUnit = new MultiviewAccessUnit
                     {
                         Duration = duration,
-                        IsRandomAccessPoint = basePicture.Any(LayerRestamper.IsIrap),
+                        IsRandomAccessPoint = basePicture.Any(nalu => LayerRestamper.IsIrap(nalu)),
                     };
 
                     // The base view is already layer 0, so its slices go through as they are.
@@ -362,10 +449,10 @@ namespace SharpSpatialVideo
                     {
                         // The dependent encoder's own picture order count is kept, and already
                         // agrees with the base encoder's: the two share a fixed key frame spacing.
-                        var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId);
+                        var restamped = restamper.ToLayerOne(nalu, MultiviewBuilder.LayerPpsId, layerOne);
 
                         accessUnit.LayerNalus.Add(restamped);
-                        dependentBytes += restamped.Length;
+                        dependentBytes += restamped.Count;
                     }
 
                     yield return accessUnit;
@@ -435,7 +522,7 @@ namespace SharpSpatialVideo
                     {
                         Nalu = picture[0],
                         Poc = index,
-                        IsRandomAccessPoint = picture.Any(LayerRestamper.IsIrap),
+                        IsRandomAccessPoint = picture.Any(nalu => LayerRestamper.IsIrap(nalu)),
                         Duration = (int)track.FpsDenom,
                     };
                 })

@@ -1,6 +1,5 @@
 ﻿using SharpMediaFoundationInterop.Transforms.H265;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -67,109 +66,105 @@ namespace SharpSpatialVideo
 
             var encoded = new byte[encoder.OutputSize];
             long frameDuration = 10_000_000L * _track.FpsDenom / _track.FpsNom;
-            var samples = new List<(long Timestamp, byte[] Data)>();
+            long dts = 0;
 
-            // The decoder emits in picture order, so a dependent picture always arrives just after
-            // the base picture it pairs with. Composing on the fly keeps one frame in hand rather
-            // than the whole clip, which at this resolution would run to gigabytes.
-            var pending = new Dictionary<int, byte[]>();
-            int composed = 0;
-
-            void Take(DecodedFrame frame)
+            // Each coded picture is written the moment the encoder hands it back, so nothing waits
+            // for the end: the encoder returns them in decode order, stamped with their
+            // presentation time, and the composition offset of each comes straight from that.
+            void Write(int length, long timestamp)
             {
-                int poc = (int)(frame.Timestamp / step);
-                pending[poc] = frame.Nv12;
+                // The encoder hands its output back in Annex B, one access unit at a time, so it is
+                // split where it lies and fed to the track, and the access unit is then flushed out
+                // of it. The track holds one back until it sees the next one start, which would put
+                // it a sample behind the timing worked out here; flushing keeps the two together. It
+                // also takes the parameter sets out into the sample entry as it goes.
+                foreach (var nalu in muxTrack.ParseSample(new MemoryStream(encoded, 0, length)))
+                    muxTrack.ProcessSample(nalu.Array, nalu.Offset, nalu.Count, out _, out _);
 
-                int basePoc = poc % SingleLayerRewriter.PocScale == 0 ? poc : poc - 1;
-                if (!pending.TryGetValue(basePoc, out var baseView)) return;
-                if (!pending.TryGetValue(basePoc + 1, out var dependentView)) return;
+                muxTrack.ProcessSample(null, out var accessUnit, out bool isRandomAccessPoint);
+                if (accessUnit.Array == null)
+                    return;
 
-                var left = baseLayerIsLeftEye ? baseView : dependentView;
-                var right = baseLayerIsLeftEye ? dependentView : baseView;
-                var composedFrame = SbsComposer.Compose(left, right, codedWidth, (int)codedHeight, width, height);
-                pending.Remove(basePoc);
-                pending.Remove(basePoc + 1);
-
-                encoder.ProcessInput(composedFrame, composed * frameDuration);
-                composed++;
-
-                while (encoder.ProcessOutput(ref encoded, out uint length, out long timestamp) && length > 0)
-                    samples.Add((timestamp, encoded.Take((int)length).ToArray()));
+                long cts = timestamp * _track.FpsNom / 10_000_000L;
+                builder.ProcessRawSample(muxTrack.TrackID, accessUnit,
+                    (int)_track.FpsDenom, isRandomAccessPoint, (int)(cts - dts));
+                dts += _track.FpsDenom;
             }
 
-            using (var decoder = new SpatialDecoder((uint)codedWidth, codedHeight, _track.FpsNom, _track.FpsDenom))
-            {
-                decoder.SendParameterSets(parameterSets);
-                foreach (var picture in pictures.Take(count))
-                    foreach (var frame in decoder.Decode(_rewriter.RewriteSlice(picture), picture.Poc * step))
-                        Take(frame);
-                foreach (var frame in decoder.Flush())
-                    Take(frame);
-            }
-
-            encoder.BeginDrain();
-            for (int quiet = 0; quiet < 4; )
+            bool DrainEncoder()
             {
                 bool any = false;
                 while (encoder.ProcessOutput(ref encoded, out uint length, out long timestamp) && length > 0)
                 {
-                    samples.Add((timestamp, encoded.Take((int)length).ToArray()));
+                    Write((int)length, timestamp);
                     any = true;
                 }
-                if (any) quiet = 0; else quiet++;
+                return any;
             }
-            encoder.EndDrain();
 
-            // The encoder hands samples back in decode order and stamps each with its presentation
-            // time, so the composition offsets come straight from those.
-            long dts = 0;
-            foreach (var sample in samples)
+            // The two eyes are put side by side in this one picture, straight out of the decoder's
+            // own buffer: each half is written as its eye arrives, so no decoded frame is ever held
+            // or copied. The encoder copies what it is given, so the picture is free again once it
+            // has been fed.
+            var composed = new byte[width * 2 * height * 3 / 2];
+            int waitingForPartnerOf = -1;
+            int frames = 0;
+
+            void Take(byte[] frame, long timestamp)
             {
-                foreach (var nalu in SharpMP4.AnnexB.ParseNalUnits(sample.Data))
-                    muxTrack.ProcessSample(nalu, out _, out _);
+                int poc = (int)(timestamp / step);
 
-                long cts = sample.Timestamp * _track.FpsNom / 10_000_000L;
-                builder.ProcessRawSample(muxTrack.TrackID, LengthPrefixed(sample.Data),
-                    (int)_track.FpsDenom, IsIrap(sample.Data), (int)(cts - dts));
-                dts += _track.FpsDenom;
+                // The decoder hands frames back in picture order, so a dependent picture arrives
+                // just after the base picture it pairs with. One whose partner never came - the
+                // decoder can drop a frame - is left out rather than paired with the wrong one.
+                if (poc % SingleLayerRewriter.PocScale == 0)
+                {
+                    SbsComposer.PlaceEye(frame, codedWidth, (int)codedHeight, width, height, composed,
+                        rightHalf: !baseLayerIsLeftEye);
+                    waitingForPartnerOf = poc;
+                    return;
+                }
+
+                if (poc - 1 != waitingForPartnerOf)
+                    return;
+
+                SbsComposer.PlaceEye(frame, codedWidth, (int)codedHeight, width, height, composed,
+                    rightHalf: baseLayerIsLeftEye);
+                waitingForPartnerOf = -1;
+
+                encoder.ProcessInput(composed, frames * frameDuration);
+                frames++;
+                DrainEncoder();
             }
+
+            // Low latency releases each frame as soon as it can rather than holding a full reorder
+            // window. It hands back the same frames in the same order - all 760 pairs of the sample
+            // come out matched to their eyes - holds 53 MB less, and takes no longer.
+            using (var decoder = new SpatialDecoder((uint)codedWidth, codedHeight, _track.FpsNom, _track.FpsDenom,
+                lowLatency: true))
+            {
+                decoder.SendParameterSets(parameterSets);
+                foreach (var picture in pictures.Take(count))
+                    decoder.DecodeInto(new[] { _rewriter.RewriteSlice(picture) }, picture.Poc * step, Take);
+                decoder.FlushInto(Take);
+            }
+
+            encoder.BeginDrain();
+            for (int quiet = 0; quiet < 4;)
+                quiet = DrainEncoder() ? 0 : quiet + 1;
+            encoder.EndDrain();
 
             if (audioTrack != null)
             {
-                for (int i = 0; i < _track.AudioSamples.Count; i++)
-                    builder.ProcessRawSample(audioTrack.TrackID, _track.AudioSamples[i],
-                        (int)_track.AudioSampleDurations[i], true);
-                AudioSamplesWritten = _track.AudioSamples.Count;
+                foreach (var (data, duration) in MvHevcReader.StreamAudioSamples(_track))
+                {
+                    builder.ProcessRawSample(audioTrack.TrackID, data, duration, true);
+                    AudioSamplesWritten++;
+                }
             }
 
             builder.FinalizeMedia();
-            FramesWritten = composed;
-        }
-
-        private static bool IsIrap(byte[] annexB)
-        {
-            foreach (var nalu in SharpMP4.AnnexB.ParseNalUnits(annexB))
-            {
-                uint type = (uint)((nalu[0] >> 1) & 0x3F);
-                if (type >= 16 && type <= 23) return true;
-            }
-            return false;
-        }
-
-
-        /// <summary>Rewrites an Annex B access unit into the length prefixed form an MP4 sample uses.</summary>
-        private static byte[] LengthPrefixed(byte[] annexB)
-        {
-            using var memory = new MemoryStream();
-            foreach (var nalu in SharpMP4.AnnexB.ParseNalUnits(annexB))
-            {
-                memory.WriteByte((byte)(nalu.Length >> 24));
-                memory.WriteByte((byte)(nalu.Length >> 16));
-                memory.WriteByte((byte)(nalu.Length >> 8));
-                memory.WriteByte((byte)nalu.Length);
-                memory.Write(nalu, 0, nalu.Length);
-            }
-            return memory.ToArray();
+            FramesWritten = frames;
         }
     }
 }

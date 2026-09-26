@@ -9,6 +9,17 @@ namespace SharpSpatialVideo
     /// <summary>A parsed slice segment header plus the offsets needed to rewrite it.</summary>
     public sealed class ParsedSlice
     {
+        private readonly ItuStream _stream;
+        private readonly MvHevcParser _parser;
+        private ArraySegment<byte>? _payload;
+
+        /// <param name="stream">The reader the header came out of, left just behind it.</param>
+        internal ParsedSlice(ItuStream stream, MvHevcParser parser)
+        {
+            _stream = stream;
+            _parser = parser;
+        }
+
         public Nalu Nalu { get; set; }
         public NalUnit NalUnit { get; set; }
         public SliceSegmentLayerRbsp Slice { get; set; }
@@ -20,10 +31,19 @@ namespace SharpSpatialVideo
         /// through a stream that puts them in again. The header ends with byte_alignment(), so it
         /// starts on a byte boundary.
         /// </summary>
-        public byte[] Payload { get; set; }
+        /// <remarks>
+        /// Read only when it is asked for: most slices are parsed for their header alone. And read
+        /// into the parser's own buffer, which the next payload it reads goes over, so it has to be
+        /// used - or copied - before another slice's is asked for. Every caller writes it at once.
+        /// </remarks>
+        public ArraySegment<byte> Payload => _payload ??= _parser.ReadPayload(_stream, Nalu.Data.Count);
 
-        /// <summary>Picture order count derived for this picture (8.3.1).</summary>
-        public int Poc { get; set; }
+        /// <summary>
+        /// The slice segment header as it was stored, without emulation prevention bytes: the
+        /// bytes in front of <see cref="Payload"/>. Keeping it lets a caller put the picture back
+        /// together exactly as it came, rather than writing the header again from what was parsed.
+        /// </summary>
+        public byte[] HeaderBytes { get; set; }
     }
 
     /// <summary>
@@ -84,9 +104,11 @@ namespace SharpSpatialVideo
         /// <summary>Parses a slice segment header, leaving the payload untouched.</summary>
         public ParsedSlice ParseSlice(Nalu nalu)
         {
-            using var stream = new ItuStream(new MemoryStream(nalu.Data));
+            // Not disposed: the slice keeps it, to read its payload from where the header ended if
+            // it is asked for. It holds nothing but a view of the NAL unit.
+            var stream = new ItuStream(new MemoryStream(nalu.Data.Array, nalu.Data.Offset, nalu.Data.Count));
 
-            var nalUnit = new NalUnit((uint)nalu.Data.Length);
+            var nalUnit = new NalUnit((uint)nalu.Data.Count);
             Context.NalHeader = nalUnit;
             nalUnit.Read(Context, stream);
 
@@ -94,30 +116,76 @@ namespace SharpSpatialVideo
             Context.SliceSegmentLayerRbsp = slice;
             slice.Read(Context, stream);
 
-            return new ParsedSlice
+            // Where the header ends, in the bytes as stored: the stream counts the emulation
+            // prevention bytes it skipped, and a header ends on a byte boundary.
+            int headerLength = (int)((stream.Bitstream.BitsPosition + 7) / 8);
+
+            return new ParsedSlice(stream, this)
             {
                 Nalu = nalu,
                 NalUnit = nalUnit,
                 Slice = slice,
-                Payload = ReadToEnd(stream, nalu.Data.Length),
+                HeaderBytes = ToRbsp(nalu.Data, headerLength),
             };
         }
 
-        /// <summary>
-        /// The rest of a NAL unit, byte by byte through the stream so its emulation prevention
-        /// bytes are dropped on the way. The stream counts them in its position, so what is left
-        /// is measured against the stored length.
-        /// </summary>
-        private static byte[] ReadToEnd(ItuStream stream, int storedLength)
-        {
-            var payload = new List<byte>(storedLength);
-            while (stream.Bitstream.BitsPosition / 8 < storedLength)
-            {
-                stream.ReadUnsignedInt(0, 8, out byte value, null);
-                payload.Add(value);
-            }
+        /// <summary>What <see cref="ParsedSlice.Payload"/> is read into; see the lifetime it has there.</summary>
+        private byte[] _payloadBuffer = new byte[1 << 16];
 
-            return payload.ToArray();
+        /// <summary>
+        /// The rest of a NAL unit, emulation prevention bytes dropped, into the parser's buffer.
+        /// The stream counts the ones it skipped in its position, so what is left is measured
+        /// against the stored length - and there can be no more than that.
+        /// </summary>
+        internal ArraySegment<byte> ReadPayload(ItuStream stream, int storedLength)
+        {
+            int left = storedLength - (int)(stream.Bitstream.BitsPosition / 8);
+            if (left > _payloadBuffer.Length)
+                _payloadBuffer = new byte[Math.Max(left, _payloadBuffer.Length * 2)];
+
+            int read = stream.ReadBytes(_payloadBuffer, 0, left);
+            return new ArraySegment<byte>(_payloadBuffer, 0, read);
+        }
+
+        /// <summary>
+        /// A NAL unit as it is stored, out of the two pieces it comes in - a header and the slice
+        /// data it belongs to - with the emulation prevention bytes put in, including over the
+        /// join. Written through a stream, so the rule is the one the library applies everywhere
+        /// else.
+        /// </summary>
+        /// <param name="into">
+        /// What the caller collects the access unit in: the unit is appended to it and handed back
+        /// as a segment of its buffer, valid until the caller empties it for the next access unit.
+        /// </param>
+        public static ArraySegment<byte> ToEbsp(byte[] first, ArraySegment<byte> second, MemoryStream into)
+        {
+            // Not disposed, because that would dispose what it writes into; it holds nothing else.
+            int start = (int)into.Length;
+            into.Position = start;
+            var stream = new ItuStream(into);
+
+            stream.WriteBytes(first, 0, first.Length);
+            stream.WriteBytes(second.Array, second.Offset, second.Count);
+
+            return new ArraySegment<byte>(into.GetBuffer(), start, (int)into.Length - start);
+        }
+
+        /// <summary>
+        /// The first <paramref name="length"/> stored bytes of a NAL unit, without their emulation
+        /// prevention bytes. Read through a stream, so the rule is the one the library applies
+        /// everywhere else.
+        /// </summary>
+        public static byte[] ToRbsp(ArraySegment<byte> nalu, int length)
+        {
+            using var stream = new ItuStream(new MemoryStream(nalu.Array, nalu.Offset, length));
+
+            // Dropping emulation prevention bytes only ever shortens it.
+            var rbsp = new byte[length];
+            int read = stream.ReadBytes(rbsp, 0, length);
+            if (read < length)
+                Array.Resize(ref rbsp, read);
+
+            return rbsp;
         }
 
         /// <summary>
