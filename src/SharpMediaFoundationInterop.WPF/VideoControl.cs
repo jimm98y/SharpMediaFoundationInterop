@@ -32,7 +32,8 @@ namespace SharpMediaFoundationInterop.WPF
         private long _videoFrames = 0;
         private long _audioFrames = 0;
 
-        private ConcurrentQueue<byte[]> _videoOut = new ConcurrentQueue<byte[]>();
+        /// <summary>Decoded frames waiting to be shown, each with its time; -1 to be shown as it comes.</summary>
+        private ConcurrentQueue<(byte[] Frame, long Timestamp)> _videoOut = new ConcurrentQueue<(byte[] Frame, long Timestamp)>();
 
         private bool _disposedValue;
 
@@ -154,35 +155,66 @@ namespace SharpMediaFoundationInterop.WPF
             this._image = this.Template.FindName("PART_Image", this) as Image;
         }
 
+        /// <summary>
+        /// How far a frame's time may be from the clock before the clock is set by it again: a stream whose times jump -
+        /// one that starts over, a live one the sender's clock has drifted from - is followed rather than frozen on, or
+        /// raced through.
+        /// </summary>
+        private static readonly long ResyncThreshold = TimeSpan.FromSeconds(1).Ticks;
+
+        // The playback clock: the stopwatch since the first frame shown, against the frames' own times since that one's.
+        private long _clockFrameTime = -1;
+        private long _clockStart;
+
+        /// <summary>The time of the frame shown last; -1 before the first.</summary>
+        private long _lastShownTime = -1;
+
         private void CompositionTarget_Rendering(object sender, EventArgs e)
         {
-            if (_canvas == null || _videoOut.Count == 0)
+            if (_canvas == null || !_videoOut.TryPeek(out var next))
                 return;
 
-            long elapsed = _stopwatch.ElapsedMilliseconds * 10L;
-            long currentTimestamp = _videoFrames * 10000L / (_source.VideoInfo.FpsNom / _source.VideoInfo.FpsDenom);
-            long nextTimestamp = (_videoFrames + 1) * 10000L / (_source.VideoInfo.FpsNom / _source.VideoInfo.FpsDenom);
-
-            if (elapsed < currentTimestamp)
+            // Each frame is shown at its own time, as the source gives it: of the file's samples, of the RTP timestamps,
+            // of the capture. A frame of no time is shown as it comes.
+            if (next.Timestamp >= 0)
             {
-                if (Log.WarnEnabled) Log.Warn("Elapsed time is less than the current frame time!");
-                return;
+                // A frame of before the one shown - which a decoder that joined a stream between its key frames can hand
+                // out late - is dropped rather than shown out of order; a jump back as far as a resync is followed.
+                if (_lastShownTime >= 0 && next.Timestamp < _lastShownTime && _lastShownTime - next.Timestamp <= ResyncThreshold)
+                {
+                    if (_videoOut.TryDequeue(out var late))
+                        _source.ReturnVideoSample(late.Frame);
+                    return;
+                }
+
+                long now = _stopwatch.Elapsed.Ticks;
+                long due = next.Timestamp - _clockFrameTime;
+                long elapsed = now - _clockStart;
+                if (_clockFrameTime < 0 || Math.Abs(due - elapsed) > ResyncThreshold)
+                {
+                    _clockFrameTime = next.Timestamp;
+                    _clockStart = now;
+                }
+                else if (elapsed < due)
+                {
+                    return;
+                }
+
+                if (Log.InfoEnabled) Log.Info($"Video {next.Timestamp / (double)TimeSpan.TicksPerSecond}, clock {(now - _clockStart + _clockFrameTime) / (double)TimeSpan.TicksPerSecond}");
             }
 
-            if (elapsed > currentTimestamp && elapsed < nextTimestamp)
+            if (!_videoOut.TryDequeue(out next))
                 return;
 
-            if (Log.InfoEnabled) Log.Info($"Video {currentTimestamp / 10000d}, next {nextTimestamp / 10000d}");
-
-            byte[] decoded;
-            if (!_videoOut.TryDequeue(out decoded))
-                return;
-
+            byte[] decoded = next.Frame;
             _videoFrames++;
+            if (next.Timestamp >= 0)
+                _lastShownTime = next.Timestamp;
 
             var videoInfo = _source.VideoInfo;
             if(videoInfo == null)
             {
+                _source.ReturnVideoSample(decoded);
                 return;
             }
 
@@ -233,7 +265,8 @@ namespace SharpMediaFoundationInterop.WPF
 
         private Task UninitializeVideo(IVideoSource videoSource)
         {
-            _videoOut.Clear();
+            while (_videoOut.TryDequeue(out var sample))
+                videoSource.ReturnVideoSample(sample.Frame);
             _canvas = null;
 
             if (_isLooping)
@@ -295,12 +328,12 @@ namespace SharpMediaFoundationInterop.WPF
 
         private bool DecodeVideo(IVideoSource videoSource)
         {
-            var sample = videoSource.GetVideoSample();
+            var sample = videoSource.GetVideoSample(out long timestamp);
             if (sample != null)
             {
                 if (sample.Length > 0)
                 {
-                    _videoOut.Enqueue(sample);
+                    _videoOut.Enqueue((sample, timestamp));
                 }
 
                 return true;
@@ -361,14 +394,13 @@ namespace SharpMediaFoundationInterop.WPF
         private void StartPlaying()
         {
             // cleanup all samples from previous playback session
-            while (_videoOut.Count > 0)
-            {
-                if (_videoOut.TryDequeue(out var sample))
-                    _source.ReturnVideoSample(sample);
-            }
+            while (_videoOut.TryDequeue(out var sample))
+                _source.ReturnVideoSample(sample.Frame);
 
             _videoFrames = 0;
             _audioFrames = 0;
+            _clockFrameTime = -1; // set again by the first frame shown
+            _lastShownTime = -1;
             _stopwatch.Restart();
         }
 

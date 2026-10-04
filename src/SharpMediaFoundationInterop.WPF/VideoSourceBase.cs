@@ -29,7 +29,8 @@ namespace SharpMediaFoundationInterop.WPF
         protected IMediaVideoTransform _nv12Decoder;
         protected IMediaAudioTransform _audioDecoder;
 
-        protected ConcurrentQueue<byte[]> _videoRenderQueue = new ConcurrentQueue<byte[]>();
+        /// <summary>Decoded frames, each with the time it is shown at.</summary>
+        protected ConcurrentQueue<(byte[] Frame, long Timestamp)> _videoRenderQueue = new ConcurrentQueue<(byte[] Frame, long Timestamp)>();
         protected ConcurrentQueue<byte[]> _audioRenderQueue = new ConcurrentQueue<byte[]>();
 
         protected byte[] _nv12Buffer;
@@ -135,8 +136,15 @@ namespace SharpMediaFoundationInterop.WPF
             return new byte[size];
         }
 
-        public virtual byte[] GetVideoSample()
+        /// <summary>The time of the access unit decoded last: what one with no time of its own goes in at.</summary>
+        private long _lastVideoTime;
+
+        /// <summary>Whether the decoder has given up what it held at the end of the stream - see <see cref="GetVideoSample"/>.</summary>
+        private bool _videoDrained;
+
+        public virtual byte[] GetVideoSample(out long timestamp)
         {
+            timestamp = -1;
             var videoInfo = VideoInfo;
             if (videoInfo == null)
             {
@@ -149,45 +157,41 @@ namespace SharpMediaFoundationInterop.WPF
             }
 
             if (_videoRenderQueue.TryDequeue(out var sample))
-                return sample;
+            {
+                timestamp = sample.Timestamp;
+                return sample.Frame;
+            }
 
             IList<ArraySegment<byte>> au;
-            while (_videoRenderQueue.Count == 0 && (au = ReadNextVideo()) != null)
+            while (_videoRenderQueue.Count == 0 && (au = ReadNextVideo(out long auTime)) != null)
             {
+                // The source's time of the access unit, which every unit of it carries in: the decoder hands it back with
+                // the frame, in the order the frames are shown.
+                long videoTime = auTime >= 0 ? auTime : _lastVideoTime;
+                _lastVideoTime = videoTime;
                 foreach (var nalu in au)
                 {
-                    long videoTime = _videoFrames * 10000L / (videoInfo.FpsNom / videoInfo.FpsDenom);
                     if (_videoDecoder.ProcessInput(nalu, videoTime))
                     {
-                        while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out _))
-                        {
-                            _nv12Decoder.ProcessInput(_nv12Buffer, videoTime);
-
-                            if (_nv12Decoder.ProcessOutput(ref _rgbBuffer, out _))
-                            {
-                                byte[] decoded = ArrayPool<byte>.Shared.Rent(_imageBufferLen);
-
-                                BitmapUtils.CopyBitmap(
-                                    _rgbBuffer,
-                                    (int)videoInfo.Width,
-                                    (int)videoInfo.Height,
-                                    decoded,
-                                    (int)videoInfo.OriginalWidth,
-                                    (int)videoInfo.OriginalHeight,
-                                    _bytesPerPixel,
-                                    true);
-
-                                _videoRenderQueue.Enqueue(decoded);
-                                Interlocked.Increment(ref _videoFrames);
-                            }
-                        }
+                        CollectVideoFrames(videoInfo);
                     }
                 }
             }
 
+            // At the end of a file the decoder still holds the frames it was keeping to put the next ones in order - a
+            // whole group of pictures, some decoders: drained, they come out, and are shown before the end is.
+            if (_videoRenderQueue.Count == 0 && !IsStreaming && !_videoDrained)
+            {
+                _videoDrained = true;
+                _videoDecoder.BeginDrain();
+                CollectVideoFrames(videoInfo);
+                _videoDecoder.EndDrain();
+            }
+
             if (_videoRenderQueue.TryDequeue(out sample))
             {
-                return sample;
+                timestamp = sample.Timestamp;
+                return sample.Frame;
             }
             else
             {
@@ -203,15 +207,48 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
+        /// <summary>The frames the decoder has ready, made into pictures and queued, each with its time.</summary>
+        private void CollectVideoFrames(VideoInfo videoInfo)
+        {
+            while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out _, out long frameTime))
+            {
+                _nv12Decoder.ProcessInput(_nv12Buffer, frameTime);
+
+                if (_nv12Decoder.ProcessOutput(ref _rgbBuffer, out _))
+                {
+                    byte[] decoded = ArrayPool<byte>.Shared.Rent(_imageBufferLen);
+
+                    BitmapUtils.CopyBitmap(
+                        _rgbBuffer,
+                        (int)videoInfo.Width,
+                        (int)videoInfo.Height,
+                        decoded,
+                        (int)videoInfo.OriginalWidth,
+                        (int)videoInfo.OriginalHeight,
+                        _bytesPerPixel,
+                        true);
+
+                    _videoRenderQueue.Enqueue((decoded, frameTime));
+                    Interlocked.Increment(ref _videoFrames);
+                }
+            }
+        }
+
         /// <summary>
         /// The next access unit's units, as views of the source's buffer, valid until this is called again: they are
-        /// decoded before then, so the source need not copy them.
+        /// decoded before then, so the source need not copy them. Parameter sets go with the first access unit, at its
+        /// time: a decoder gives a frame the time of the first input that went into it.
         /// </summary>
-        protected abstract IList<ArraySegment<byte>> ReadNextVideo();
+        /// <param name="timestamp">
+        /// When the access unit is shown, in 100 ns units from wherever the source's clock starts - the times of one
+        /// source are measured against each other, never against a wall clock - or -1 where it has none.
+        /// </param>
+        protected abstract IList<ArraySegment<byte>> ReadNextVideo(out long timestamp);
 
         protected virtual void CompletedVideo()
         {
-            _videoDecoder.Drain();
+            // drained already, with what it gave up shown
+            _videoDrained = false;
             Interlocked.Exchange(ref _videoFrames, 0);
         }
         protected virtual void CompletedAudio() 

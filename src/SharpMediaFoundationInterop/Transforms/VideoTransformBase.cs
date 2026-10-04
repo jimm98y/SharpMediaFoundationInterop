@@ -18,8 +18,15 @@ namespace SharpMediaFoundationInterop.Transforms
         public uint Width { get; }
         public uint Height { get; }
 
+        /// <summary>The frame rate, where the stream says it; 0 over 0 where it does not.</summary>
         public uint FpsNom { get; }
         public uint FpsDenom { get; }
+
+        /// <summary>
+        /// Whether the frame rate is known. A decoder is told it only then, as a hint: it times nothing by it, and a rate
+        /// made up for a stream that has none - an RTP stream, which times every frame of its own - is no better than none.
+        /// </summary>
+        public bool HasFrameRate => FpsNom > 0 && FpsDenom > 0;
 
         public uint OutputSize { get; private set; }
 
@@ -31,7 +38,7 @@ namespace SharpMediaFoundationInterop.Transforms
         {
             FpsNom = fpsNom;
             FpsDenom = fpsDenom;
-            _sampleDuration = MediaUtils.CalculateSampleDuration(FpsNom, FpsDenom);
+            _sampleDuration = HasFrameRate ? MediaUtils.CalculateSampleDuration(FpsNom, FpsDenom) : 0;
 
             OriginalWidth = width;
             OriginalHeight = height;

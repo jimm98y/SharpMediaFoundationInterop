@@ -36,20 +36,26 @@ namespace SharpMediaFoundationInterop.WPF
         // What a read hands out, filled again by each: views of the image's sample, decoded before the next read.
         private readonly List<ArraySegment<byte>> _videoUnits = new List<ArraySegment<byte>>();
 
-        protected override IList<ArraySegment<byte>> ReadNextVideo()
+        protected override IList<ArraySegment<byte>> ReadNextVideo(out long timestamp)
         {
+            timestamp = -1;
             if (_reader.Track != null)
             {
                 _videoUnits.Clear();
                 if (_initial)
                 {
+                    // the parameter sets, in front of the picture
                     _initial = false;
                     foreach (var unit in _reader.Track.GetContainerSamples())
                         _videoUnits.Add(new ArraySegment<byte>(unit));
-                    return _videoUnits;
                 }
 
                 var sample = _reader.ReadSample();
+                if (sample == null)
+                    return null; // the image is shown
+
+                // an image is one picture, shown from the start
+                timestamp = 0;
                 foreach (var unit in _reader.ParseSample(sample.Data))
                     _videoUnits.Add(unit);
                 return _videoUnits;

@@ -14,6 +14,18 @@ namespace SharpMediaFoundationInterop.Utils
             return (value + multiple - 1) / multiple * multiple;
         }
 
+        /// <summary>Media Foundation's unit of time, 100 ns: the ticks of a second.</summary>
+        public const long TicksPerSecond = 10_000_000;
+
+        /// <summary>
+        /// A time of a clock of <paramref name="clockRate"/> ticks a second in 100 ns units, worked out wide so that no
+        /// length of stream overflows it on the way.
+        /// </summary>
+        public static long ToTicks(long time, long clockRate)
+        {
+            return (long)((Int128)time * TicksPerSecond / clockRate);
+        }
+
         public static void Check(HRESULT result)
         {
             if (result.Failed)
@@ -56,7 +68,8 @@ namespace SharpMediaFoundationInterop.Utils
 
             Check(PInvoke.MFCreateSample(out IMFSample sample));
             sample.AddBuffer(buffer);
-            sample.SetSampleDuration(sampleDuration);
+            if (sampleDuration > 0) // not known where the frame rate is not
+                sample.SetSampleDuration(sampleDuration);
             sample.SetSampleTime(timestamp); // timestamp is required
 
             return sample;

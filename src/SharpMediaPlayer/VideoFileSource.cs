@@ -60,23 +60,25 @@ namespace SharpMediaFoundationInterop.WPF
             return null;
         }
 
-        protected override IList<ArraySegment<byte>> ReadNextVideo()
+        protected override IList<ArraySegment<byte>> ReadNextVideo(out long timestamp)
         {
+            timestamp = -1;
             if (_videoTrack != null)
             {
                 _videoUnits.Clear();
                 if (_initial)
                 {
-                    // the parameter sets the sample entry holds, once
+                    // the parameter sets the sample entry holds, once, in front of the first sample and at its time
                     _initial = false;
                     foreach (var unit in _videoTrack.GetContainerSamples())
                         _videoUnits.Add(new ArraySegment<byte>(unit));
-                    return _videoUnits;
                 }
 
                 var sample = _reader.ReadSample(_videoTrack.TrackID);
                 if (sample != null)
                 {
+                    // when the sample is shown, of its decode time and composition offset
+                    timestamp = MediaUtils.ToTicks(sample.PTS, _videoTrack.Timescale);
                     foreach (var unit in _reader.ParseSample(_videoTrack.TrackID, sample.Data))
                         _videoUnits.Add(unit);
                     return _videoUnits;

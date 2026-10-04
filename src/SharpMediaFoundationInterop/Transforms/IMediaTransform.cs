@@ -39,7 +39,19 @@ namespace SharpMediaFoundationInterop.Transforms
     }
 
     public interface IMediaVideoTransform : IMediaTransform, IVideoDescriptor
-    { }
+    {
+        /// <summary>
+        /// The next frame out, and its time: the sample time of the input it came of. A decoder hands frames out in the
+        /// order they are shown, not the order they went in, so this is what places each.
+        /// </summary>
+        bool ProcessOutput(ref byte[] buffer, out uint length, out long timestamp);
+
+        /// <summary>Asks for everything the transform holds; read it out with ProcessOutput before <see cref="EndDrain"/>.</summary>
+        void BeginDrain();
+
+        /// <summary>Takes input again after a drain.</summary>
+        void EndDrain();
+    }
 
     public interface IMediaAudioTransform : IMediaTransform, IAudioDescriptor
     { }

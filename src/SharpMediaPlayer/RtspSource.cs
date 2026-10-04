@@ -34,6 +34,9 @@ namespace SharpMediaFoundationInterop.WPF
         {
             public List<ArraySegment<byte>> Units { get; } = new List<ArraySegment<byte>>();
 
+            /// <summary>When it is shown, in 100 ns units from the stream's first frame; -1 for parameter sets.</summary>
+            public long Timestamp { get; set; } = -1;
+
             public void Add(ReadOnlySpan<byte> unit)
             {
                 byte[] array = ArrayPool<byte>.Shared.Rent(unit.Length);
@@ -46,6 +49,7 @@ namespace SharpMediaFoundationInterop.WPF
                 foreach (var unit in Units)
                     ArrayPool<byte>.Shared.Return(unit.Array);
                 Units.Clear();
+                Timestamp = -1;
             }
         }
 
@@ -69,13 +73,11 @@ namespace SharpMediaFoundationInterop.WPF
             units = null;
         }
 
-        private void Enqueue(ConcurrentQueue<PooledUnits> queue, params byte[][] units)
-        {
-            var pooled = RentUnits();
-            foreach (var unit in units)
-                pooled.Add(unit);
-            queue.Enqueue(pooled);
-        }
+        /// <summary>
+        /// The parameter sets the SDP gives, put in front of the first frame received and sent at its time: a decoder gives
+        /// a frame the time of the first input that went into it, and these on their own have none.
+        /// </summary>
+        private byte[][] _parameterSets;
 
         protected override bool IsStreaming { get { return true; } }
 
@@ -136,8 +138,15 @@ namespace SharpMediaFoundationInterop.WPF
                 if (e.TrackIndex == videoTrackIndex)
                 {
                     var sample = RentUnits();
+                    var parameterSets = Interlocked.Exchange(ref _parameterSets, null);
+                    if (parameterSets != null)
+                    {
+                        foreach (var parameterSet in parameterSets)
+                            sample.Add(parameterSet);
+                    }
                     foreach (var received in e.Data.Data)
                         sample.Add(received.Span);
+                    sample.Timestamp = VideoTime(e.Data.RtpTimestamp);
 
                     // AV1 and VP9 say nothing of the picture's size in the SDP: the first sequence header, or key frame, does
                     if (videoInfo.Width == 0 || videoInfo.Height == 0)
@@ -177,7 +186,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             if (e.StreamConfigurationData is H264StreamConfigurationData h264cfg)
             {
-                Enqueue(_videoSampleQueue, h264cfg.SPS, h264cfg.PPS);
+                _parameterSets = new[] { h264cfg.SPS, h264cfg.PPS };
 
                 var decodedSPS = ParseH264SPS(h264cfg.SPS);
                 var dimensions = decodedSPS.CalculateDimensions();
@@ -194,7 +203,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
             else if (e.StreamConfigurationData is H265StreamConfigurationData h265cfg)
             {
-                Enqueue(_videoSampleQueue, h265cfg.VPS, h265cfg.SPS, h265cfg.PPS);
+                _parameterSets = new[] { h265cfg.VPS, h265cfg.SPS, h265cfg.PPS };
 
                 var decodedSPS = ParseH265SPS(h265cfg.SPS);
                 var dimensions = decodedSPS.CalculateDimensions();
@@ -224,11 +233,7 @@ namespace SharpMediaFoundationInterop.WPF
                 throw new NotSupportedException($"Video codec {e.Codec}");
             }
 
-            if (videoInfo.FpsNom == 0 || videoInfo.FpsDenom == 0)
-            {
-                videoInfo.FpsNom = 24000;
-                videoInfo.FpsDenom = 1001;
-            }
+            // A frame rate is left unknown where the stream does not say it: every frame is shown by its RTP timestamp.
 
             return videoInfo;
         }
@@ -376,12 +381,41 @@ namespace SharpMediaFoundationInterop.WPF
             return _audioInUse.Units;
         }
 
-        protected override IList<ArraySegment<byte>> ReadNextVideo()
+        protected override IList<ArraySegment<byte>> ReadNextVideo(out long timestamp)
         {
+            timestamp = -1;
             Release(ref _videoInUse);
             if (!_videoSampleQueue.TryDequeue(out _videoInUse))
                 return null;
+            timestamp = _videoInUse.Timestamp;
             return _videoInUse.Units;
+        }
+
+        /// <summary>The clock of the RTP timestamps of video: 90 kHz, for H.264, H.265, AV1 and VP9 alike.</summary>
+        private const long VideoClockRate = 90000;
+
+        private bool _hasRtpTime;
+        private uint _lastRtpTime;
+        private long _rtpTime;
+
+        /// <summary>
+        /// A frame's RTP timestamp as a time from the stream's first frame, in 100 ns units. It is 32 bits and wraps, every
+        /// thirteen hours or so at 90 kHz; it is followed from frame to frame by the signed difference, which also lets it
+        /// go back, as it does for a frame shown before the one decoded ahead of it.
+        /// </summary>
+        private long VideoTime(uint rtpTimestamp)
+        {
+            if (!_hasRtpTime)
+            {
+                _hasRtpTime = true;
+                _rtpTime = 0;
+            }
+            else
+            {
+                _rtpTime += (int)(rtpTimestamp - _lastRtpTime);
+            }
+            _lastRtpTime = rtpTimestamp;
+            return MediaUtils.ToTicks(_rtpTime, VideoClockRate);
         }
     }
 }

@@ -35,7 +35,14 @@ namespace SharpMediaFoundationInterop.WPF
     {
         VideoInfo VideoInfo { get; }
         Task InitializeAsync();
-        byte[] GetVideoSample();
+        /// <summary>
+        /// The next frame - empty when none is ready yet, null when there are no more - and when it is shown.
+        /// </summary>
+        /// <param name="timestamp">
+        /// When the frame is shown, in 100 ns units, measured against the source's other frames rather than a wall clock;
+        /// -1 for a frame to be shown as soon as it comes.
+        /// </param>
+        byte[] GetVideoSample(out long timestamp);
         void ReturnVideoSample(byte[] sample);
     }
 
