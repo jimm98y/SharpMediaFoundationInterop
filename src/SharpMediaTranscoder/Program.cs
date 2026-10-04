@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using SharpH264;
@@ -56,8 +57,7 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
                 MediaSample sample = null;
                 while ((sample = inputReader.ReadSample(inputVideoTrack.TrackID)) != null)
                 {
-                    IEnumerable<byte[]> units = inputReader.ParseSample(inputVideoTrack.TrackID, sample.Data);
-                    foreach (var sourceNALU in units)
+                    foreach (var sourceNALU in inputReader.ParseSample(inputVideoTrack.TrackID, sample.Data))
                     {
                         if (videoDecoder.ProcessInput(sourceNALU, 0))
                         {
@@ -69,11 +69,8 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
                                 {
                                     while (videoEncoder.ProcessOutput(ref naluBuffer, out var length))
                                     {
-                                        var targetAU = AnnexBUtils.ParseNalu(naluBuffer, length);
-                                        foreach (var targetNALU in targetAU)
-                                        {
-                                            outputBuilder.ProcessTrackSample(targetVideoTrack.TrackID, targetNALU);
-                                        }
+                                        // the encoder's access unit as it hands it out, start codes and all, without a copy
+                                        outputBuilder.ProcessAnnexBTrackSample(targetVideoTrack.TrackID, new ArraySegment<byte>(naluBuffer, 0, (int)length));
                                     }
                                 }
                             }

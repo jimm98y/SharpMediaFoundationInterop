@@ -29,11 +29,21 @@ namespace SharpMediaFoundationInterop.Transforms
 
         protected bool ProcessInput(IMFTransform transform, byte[] data, long sampleDuration, long timestamp)
         {
+            return ProcessInput(transform, ReadOnlySpan<byte>.Empty, data, sampleDuration, timestamp);
+        }
+
+        /// <summary>
+        /// One sample in, of <paramref name="prefix"/> and then <paramref name="data"/>, copied straight into the media
+        /// buffer - nothing is allocated on the managed heap for it.
+        /// </summary>
+        protected bool ProcessInput(IMFTransform transform, ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
+        {
             bool ret = false;
-            IMFSample sample = MediaUtils.CreateSample(data, sampleDuration, timestamp);
+            int length = prefix.Length + data.Length;
+            IMFSample sample = MediaUtils.CreateSample(prefix, data, sampleDuration, timestamp);
 
             // samples are large, so to keep the memory usage low we have to tell GC about large amounts of unmanaged memory being allocated
-            GC.AddMemoryPressure(data.Length); // approximate size
+            GC.AddMemoryPressure(length); // approximate size
 
             try
             {
@@ -42,7 +52,7 @@ namespace SharpMediaFoundationInterop.Transforms
             finally
             {
                 Marshal.ReleaseComObject(sample);
-                GC.RemoveMemoryPressure(data.Length);
+                GC.RemoveMemoryPressure(length);
             }
 
             return ret;

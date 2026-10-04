@@ -63,9 +63,12 @@ namespace SharpMediaFoundationInterop.Transforms.H264
             return transform;
         }
 
-        public override bool ProcessInput(byte[] data, long timestamp)
+        public override bool ProcessInput(ReadOnlySpan<byte> data, long timestamp)
         {
-            return base.ProcessInput(AnnexBUtils.PrefixNalu(data), timestamp);
+            // a NAL unit as a file holds it gets its start code in front of it in the media buffer, not in a new array
+            return AnnexBUtils.HasStartCode(data)
+                ? base.ProcessInput(data, timestamp)
+                : ProcessInput(AnnexBUtils.AnnexB, data, timestamp);
         }
     }
 }

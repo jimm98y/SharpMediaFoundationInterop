@@ -36,9 +36,15 @@ namespace SharpMediaFoundationInterop.Transforms
 
         protected abstract IMFTransform Create();
 
-        public virtual bool ProcessInput(byte[] data, long timestamp)
+        public bool ProcessInput(byte[] data, long timestamp)
         {
-            return ProcessInput(_transform, data, _sampleDuration, timestamp);
+            return ProcessInput(new ReadOnlySpan<byte>(data), timestamp);
+        }
+
+        /// <summary>One frame in, copied straight into the transform's media buffer: no managed copy of it is made.</summary>
+        public virtual bool ProcessInput(ReadOnlySpan<byte> data, long timestamp)
+        {
+            return ProcessInput(_transform, ReadOnlySpan<byte>.Empty, data, _sampleDuration, timestamp);
         }
 
         public bool ProcessOutput(ref byte[] buffer, out uint length)

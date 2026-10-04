@@ -32,6 +32,8 @@ namespace SharpMediaFoundationInterop.Transforms
     {
         void Initialize();
         bool ProcessInput(byte[] data, long timestamp);
+        /// <summary>A sample in without a managed copy: a view of a reader's buffer, or of a pooled one.</summary>
+        bool ProcessInput(ReadOnlySpan<byte> data, long timestamp);
         bool ProcessOutput(ref byte[] buffer, out uint length);
         bool Drain();
     }

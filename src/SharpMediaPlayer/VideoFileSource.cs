@@ -6,6 +6,7 @@ using SharpISOBMFF.Extensions;
 using SharpMediaFoundationInterop.Transforms.AV1;
 using SharpMediaFoundationInterop.Transforms.H264;
 using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Transforms.VP9;
 using SharpMediaFoundationInterop.Utils;
 using SharpMP4.Readers;
 using SharpMP4.Tracks;
@@ -38,36 +39,47 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
-        protected override IList<byte[]> ReadNextAudio()
+        // What a read hands out, filled again by each: the units are views of the reader's buffer for the track, valid until
+        // its next sample is read, by which time they have been decoded - nothing is copied.
+        private readonly List<ArraySegment<byte>> _audioUnits = new List<ArraySegment<byte>>();
+        private readonly List<ArraySegment<byte>> _videoUnits = new List<ArraySegment<byte>>();
+
+        protected override IList<ArraySegment<byte>> ReadNextAudio()
         {
             if (_audioTrack != null)
             {
                 var sample = _reader.ReadSample(_audioTrack.TrackID);
                 if (sample != null)
                 {
-                    IEnumerable<byte[]> units = _reader.ParseSample(_audioTrack.TrackID, sample.Data);
-                    return units.ToList();
+                    _audioUnits.Clear();
+                    foreach (var unit in _reader.ParseSample(_audioTrack.TrackID, sample.Data))
+                        _audioUnits.Add(unit);
+                    return _audioUnits;
                 }
             }
             return null;
         }
 
-        protected override IList<byte[]> ReadNextVideo()
+        protected override IList<ArraySegment<byte>> ReadNextVideo()
         {
             if (_videoTrack != null)
             {
+                _videoUnits.Clear();
                 if (_initial)
                 {
+                    // the parameter sets the sample entry holds, once
                     _initial = false;
-                    var videoUnits = _videoTrack.GetContainerSamples();
-                    return videoUnits.ToList();
+                    foreach (var unit in _videoTrack.GetContainerSamples())
+                        _videoUnits.Add(new ArraySegment<byte>(unit));
+                    return _videoUnits;
                 }
 
                 var sample = _reader.ReadSample(_videoTrack.TrackID);
                 if (sample != null)
                 {
-                    IEnumerable<byte[]> units = _reader.ParseSample(_videoTrack.TrackID, sample.Data);
-                    return units.ToList();
+                    foreach (var unit in _reader.ParseSample(_videoTrack.TrackID, sample.Data))
+                        _videoUnits.Add(unit);
+                    return _videoUnits;
                 }
             }
             return null;
@@ -156,6 +168,23 @@ namespace SharpMediaFoundationInterop.WPF
 
                         videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, AV1Decoder.AV1_RES_MULTIPLE);
                         videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, AV1Decoder.AV1_RES_MULTIPLE);
+                    }
+                    else if (_videoTrack is VP9Track vp9Track)
+                    {
+                        videoInfo.VideoCodec = "VP9";
+
+                        // VP9 has no parameter sets to read the size of: the sample entry gives it, as the frames do
+                        var entry = _reader.Tracks[vp9Track.TrackID].Stbl
+                            .Children.OfType<SampleDescriptionBox>().Single()
+                            .Children.OfType<VisualSampleEntry>().First();
+                        videoInfo.OriginalWidth = entry.Width;
+                        videoInfo.OriginalHeight = entry.Height;
+
+                        videoInfo.FpsNom = vp9Track.Timescale;
+                        videoInfo.FpsDenom = (uint)vp9Track.DefaultSampleDuration;
+
+                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, VP9Decoder.VP9_RES_MULTIPLE);
+                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, VP9Decoder.VP9_RES_MULTIPLE);
                     }
                     else
                     {

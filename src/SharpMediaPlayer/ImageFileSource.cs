@@ -28,25 +28,31 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
-        protected override IList<byte[]> ReadNextAudio()
+        protected override IList<ArraySegment<byte>> ReadNextAudio()
         {
             return null;
         }
 
-        protected override IList<byte[]> ReadNextVideo()
+        // What a read hands out, filled again by each: views of the image's sample, decoded before the next read.
+        private readonly List<ArraySegment<byte>> _videoUnits = new List<ArraySegment<byte>>();
+
+        protected override IList<ArraySegment<byte>> ReadNextVideo()
         {
             if (_reader.Track != null)
             {
+                _videoUnits.Clear();
                 if (_initial)
                 {
                     _initial = false;
-                    var videoUnits = _reader.Track.GetContainerSamples();
-                    return videoUnits.ToList();
+                    foreach (var unit in _reader.Track.GetContainerSamples())
+                        _videoUnits.Add(new ArraySegment<byte>(unit));
+                    return _videoUnits;
                 }
 
                 var sample = _reader.ReadSample();
-                IEnumerable<byte[]> units = _reader.ParseSample(sample.Data);
-                return units.ToList();
+                foreach (var unit in _reader.ParseSample(sample.Data))
+                    _videoUnits.Add(unit);
+                return _videoUnits;
             }
             return null;
         }

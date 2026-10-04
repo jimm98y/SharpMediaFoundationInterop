@@ -13,6 +13,7 @@ using System.Threading;
 using System.Collections.Concurrent;
 using SharpMediaFoundationInterop.Transforms.AV1;
 using SharpMediaFoundationInterop.Transforms.Opus;
+using SharpMediaFoundationInterop.Transforms.VP9;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -59,7 +60,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (_audioRenderQueue.TryDequeue(out var sample))
                 return sample;
 
-            IList<byte[]> frame;
+            IList<ArraySegment<byte>> frame;
             while (_audioRenderQueue.Count == 0 && (frame = ReadNextAudio()) != null)
             {
                 if (_audioDecoder.ProcessInput(frame[0], 0))
@@ -68,7 +69,7 @@ namespace SharpMediaFoundationInterop.WPF
                     {
                         if (_audioDecoder is OpusDecoder)
                         {
-                            byte[] decoded = new byte[(int)pcmSize];
+                            byte[] decoded = RentAudio((int)pcmSize);
                             for (int i = 0; i < pcmSize / 4; i++)
                             {
                                 float ieeeFloat = BitConverter.ToSingle(_pcmBuffer, i * 4);
@@ -84,7 +85,7 @@ namespace SharpMediaFoundationInterop.WPF
                         }
                         else
                         {
-                            byte[] decoded = new byte[(int)pcmSize];
+                            byte[] decoded = RentAudio((int)pcmSize);
                             Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
                             _audioRenderQueue.Enqueue(decoded);
                             Interlocked.Increment(ref _audioFrames);
@@ -111,7 +112,28 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
-        protected abstract IList<byte[]> ReadNextAudio();
+        /// <summary>
+        /// The next audio frame, as views of the source's buffer, valid until this is called again: it is decoded before
+        /// then, so the source need not copy it.
+        /// </summary>
+        protected abstract IList<ArraySegment<byte>> ReadNextAudio();
+
+        /// <summary>
+        /// The decoded audio frames, of one size for a stream, kept for reuse: a frame handed out is the exact size of its
+        /// PCM, which its consumer takes its length from, so ArrayPool's larger arrays would not do.
+        /// </summary>
+        private readonly ConcurrentBag<byte[]> _audioPool = new ConcurrentBag<byte[]>();
+
+        private byte[] RentAudio(int size)
+        {
+            while (_audioPool.TryTake(out var pooled))
+            {
+                if (pooled.Length == size)
+                    return pooled;
+                // a frame of a size the stream no longer decodes to is let go
+            }
+            return new byte[size];
+        }
 
         public virtual byte[] GetVideoSample()
         {
@@ -129,7 +151,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (_videoRenderQueue.TryDequeue(out var sample))
                 return sample;
 
-            IList<byte[]> au;
+            IList<ArraySegment<byte>> au;
             while (_videoRenderQueue.Count == 0 && (au = ReadNextVideo()) != null)
             {
                 foreach (var nalu in au)
@@ -181,7 +203,11 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
-        protected abstract IList<byte[]> ReadNextVideo();
+        /// <summary>
+        /// The next access unit's units, as views of the source's buffer, valid until this is called again: they are
+        /// decoded before then, so the source need not copy them.
+        /// </summary>
+        protected abstract IList<ArraySegment<byte>> ReadNextVideo();
 
         protected virtual void CompletedVideo()
         {
@@ -215,6 +241,11 @@ namespace SharpMediaFoundationInterop.WPF
             else if (info.VideoCodec == "AV1")
             {
                 _videoDecoder = new AV1Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
+                _videoDecoder.Initialize();
+            }
+            else if (info.VideoCodec == "VP9")
+            {
+                _videoDecoder = new VP9Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
                 _videoDecoder.Initialize();
             }
             else
@@ -259,7 +290,10 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public void ReturnAudioSample(byte[] decoded)
-        {  }
+        {
+            if (decoded != null && decoded.Length > 0)
+                _audioPool.Add(decoded);
+        }
 
         protected virtual void Dispose(bool disposing)
         {
