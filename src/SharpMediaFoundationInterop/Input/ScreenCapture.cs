@@ -187,7 +187,9 @@ namespace SharpMediaFoundationInterop.Input
                 }
 
                 _duplicatedOutput.AcquireNextFrame(ReadTimeoutInMilliseconds, out DXGI_OUTDUPL_FRAME_INFO duplicateFrameInformation, out _screenResource);
-                timestamp = _stopwatch.ElapsedMilliseconds * 10L;
+                // Media Foundation's time, 100 ns units, as every sample time is: in tenths of a millisecond, the encoder
+                // was given times a thousand times too small
+                timestamp = _stopwatch.Elapsed.Ticks;
 
                 if (_screenResource != null)
                 {

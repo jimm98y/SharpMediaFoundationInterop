@@ -26,9 +26,10 @@ namespace SharpMediaFoundationInterop.WPF
             VideoInfo = await OpenAsync();
         }
 
-        public byte[] GetVideoSample()
+        public byte[] GetVideoSample(out long timestamp)
         {
-            if (_device.ReadSample(_rgbaBuffer, out _))
+            // when the screen was captured, in 100 ns units
+            if (_device.ReadSample(_rgbaBuffer, out timestamp))
             {
                var decoded = ArrayPool<byte>.Shared.Rent((int)_device.OutputSize);
 
@@ -66,8 +67,9 @@ namespace SharpMediaFoundationInterop.WPF
             videoInfo.Height = _device.Height;
             videoInfo.OriginalWidth = _device.Width;
             videoInfo.OriginalHeight = _device.Height;
-            videoInfo.FpsNom = 24000;
-            videoInfo.FpsDenom = 1001;
+            // not known: each frame carries the time it was captured at, which is what it is shown by
+            videoInfo.FpsNom = 0;
+            videoInfo.FpsDenom = 0;
             videoInfo.PixelFormat = PixelFormat.BGRA32;
             return Task.FromResult(videoInfo);
         }

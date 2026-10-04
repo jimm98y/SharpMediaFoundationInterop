@@ -7,9 +7,15 @@ namespace SharpMediaFoundationInterop.Utils
     {
         public static readonly byte[] AnnexB = [0, 0, 0, 1];
 
+        /// <summary>Whether a NAL unit already starts with a start code, as <see cref="PrefixNalu"/> tells it.</summary>
+        public static bool HasStartCode(System.ReadOnlySpan<byte> nalu)
+        {
+            return !(nalu.Length < 5 || nalu[0] != 0 || nalu[1] != 0 || nalu[2] != 0 || !(nalu[3] == 1 || nalu[3] == 0 && nalu[4] == 1));
+        }
+
         public static byte[] PrefixNalu(byte[] nalu)
         {
-            if (nalu.Length < 5 || nalu[0] != 0 || nalu[1] != 0 || nalu[2] != 0 || !(nalu[3] == 1 || nalu[3] == 0 && nalu[4] == 1))
+            if (!HasStartCode(nalu))
             {
                 // this little maneuver will cost us new allocation
                 nalu = AnnexB.Concat(nalu).ToArray();

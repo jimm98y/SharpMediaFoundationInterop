@@ -48,7 +48,8 @@ namespace SharpMediaFoundationInterop.Transforms.H265
             mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Video);
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
             mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MediaUtils.EncodeAttributeValue(Width, Height));
-            mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MediaUtils.EncodeAttributeValue(FpsNom, FpsDenom));
+            if (HasFrameRate) // a hint, given only where the stream says it
+                mediaInput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MediaUtils.EncodeAttributeValue(FpsNom, FpsDenom));
             mediaInput.SetUINT32(PInvoke.MF_MT_INTERLACE_MODE, (uint)MFVideoInterlaceMode.MFVideoInterlace_MixedInterlaceOrProgressive);
             mediaInput.SetUINT64(PInvoke.MF_MT_PIXEL_ASPECT_RATIO, MediaUtils.EncodeAttributeValue(1, 1));
             if (_isLowLatency)
@@ -65,7 +66,8 @@ namespace SharpMediaFoundationInterop.Transforms.H265
             mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_SIZE, MediaUtils.EncodeAttributeValue(Width, Height));
             mediaOutput.SetUINT32(PInvoke.MF_MT_DEFAULT_STRIDE, Width);
             mediaOutput.SetUINT32(PInvoke.MF_MT_FIXED_SIZE_SAMPLES, 1);
-            mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MediaUtils.EncodeAttributeValue(FpsNom, FpsDenom));
+            if (HasFrameRate) // a hint, given only where the stream says it
+                mediaOutput.SetUINT64(PInvoke.MF_MT_FRAME_RATE, MediaUtils.EncodeAttributeValue(FpsNom, FpsDenom));
             mediaOutput.SetUINT64(PInvoke.MF_MT_PIXEL_ASPECT_RATIO, MediaUtils.EncodeAttributeValue(1, 1));
             mediaOutput.SetUINT32(PInvoke.MF_MT_ALL_SAMPLES_INDEPENDENT, 1);
             mediaOutput.SetUINT32(PInvoke.MF_MT_SAMPLE_SIZE, Width * Height * 3 / 2);
@@ -75,9 +77,12 @@ namespace SharpMediaFoundationInterop.Transforms.H265
             return transform;
         }
 
-        public override bool ProcessInput(byte[] data, long timestamp)
+        public override bool ProcessInput(ReadOnlySpan<byte> data, long timestamp)
         {
-            return base.ProcessInput(AnnexBUtils.PrefixNalu(data), timestamp);
+            // a NAL unit as a file holds it gets its start code in front of it in the media buffer, not in a new array
+            return AnnexBUtils.HasStartCode(data)
+                ? base.ProcessInput(data, timestamp)
+                : ProcessInput(AnnexBUtils.AnnexB, data, timestamp);
         }
     }
 }

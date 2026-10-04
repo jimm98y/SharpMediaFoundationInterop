@@ -80,8 +80,8 @@
 		</None>
 	</ItemGroup>
 	<ItemGroup>
-	  <PackageReference Include="SharpMP4" Version="0.3.0" />
-	  <PackageReference Include="SharpRTSPClient" Version="0.6.1" />
+	  <ProjectReference Include="..\..\..\SharpMP4\src\SharpMP4\SharpMP4.csproj" />
+	  <ProjectReference Include="..\..\..\SharpRealTimeStreaming\src\SharpRTSPClient\SharpRTSPClient.csproj" />
 	</ItemGroup>
 
 </Project>

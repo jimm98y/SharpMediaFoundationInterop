@@ -59,11 +59,8 @@ using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMod
                                 {
                                     while (videoEncoder.ProcessOutput(ref naluBuffer, out var length))
                                     {
-                                        var targetAU = AnnexBUtils.ParseNalu(naluBuffer, length);
-                                        foreach (var targetNALU in targetAU)
-                                        {
-                                            outputBuilder.ProcessTrackSample(targetVideoTrack.TrackID, targetNALU);
-                                        }
+                                        // the encoder's access unit as it hands it out, start codes and all, without a copy
+                                        outputBuilder.ProcessAnnexBTrackSample(targetVideoTrack.TrackID, new ArraySegment<byte>(naluBuffer, 0, (int)length));
                                     }
                                 }
                             }

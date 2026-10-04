@@ -14,15 +14,42 @@ namespace SharpMediaFoundationInterop.Utils
             return (value + multiple - 1) / multiple * multiple;
         }
 
+        /// <summary>Media Foundation's unit of time, 100 ns: the ticks of a second.</summary>
+        public const long TicksPerSecond = 10_000_000;
+
+        /// <summary>
+        /// A time of a clock of <paramref name="clockRate"/> ticks a second in 100 ns units, worked out wide so that no
+        /// length of stream overflows it on the way.
+        /// </summary>
+        public static long ToTicks(long time, long clockRate)
+        {
+            return (long)((Int128)time * TicksPerSecond / clockRate);
+        }
+
         public static void Check(HRESULT result)
         {
             if (result.Failed)
                 Marshal.ThrowExceptionForHR(result.Value);
         }
 
-        public static unsafe IMFSample CreateSample(byte[] data, long sampleDuration, long timestamp)
+        public static IMFSample CreateSample(byte[] data, long sampleDuration, long timestamp)
         {
-            Check(PInvoke.MFCreateMemoryBuffer((uint)data.Length, out IMFMediaBuffer buffer));
+            return CreateSample(ReadOnlySpan<byte>.Empty, data, sampleDuration, timestamp);
+        }
+
+        public static IMFSample CreateSample(ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
+        {
+            return CreateSample(ReadOnlySpan<byte>.Empty, data, sampleDuration, timestamp);
+        }
+
+        /// <summary>
+        /// A sample of <paramref name="prefix"/> and then <paramref name="data"/>, copied straight into the media buffer:
+        /// a start code goes in front of a NAL unit without the two being put together in an array first.
+        /// </summary>
+        public static unsafe IMFSample CreateSample(ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
+        {
+            uint length = (uint)(prefix.Length + data.Length);
+            Check(PInvoke.MFCreateMemoryBuffer(length, out IMFMediaBuffer buffer));
 
             try
             {
@@ -30,20 +57,19 @@ namespace SharpMediaFoundationInterop.Utils
                 uint currentLength = default;
                 byte* target = default;
                 buffer.Lock(&target, &maxLength, &currentLength);
-                fixed (byte* source = data)
-                {
-                    Unsafe.CopyBlock(target, source, (uint)data.Length);
-                }
+                prefix.CopyTo(new Span<byte>(target, prefix.Length));
+                data.CopyTo(new Span<byte>(target + prefix.Length, data.Length));
             }
             finally
             {
-                buffer.SetCurrentLength((uint)data.Length);
+                buffer.SetCurrentLength(length);
                 buffer.Unlock();
             }
 
             Check(PInvoke.MFCreateSample(out IMFSample sample));
             sample.AddBuffer(buffer);
-            sample.SetSampleDuration(sampleDuration);
+            if (sampleDuration > 0) // not known where the frame rate is not
+                sample.SetSampleDuration(sampleDuration);
             sample.SetSampleTime(timestamp); // timestamp is required
 
             return sample;

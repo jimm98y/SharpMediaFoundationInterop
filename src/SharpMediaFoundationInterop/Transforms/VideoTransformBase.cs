@@ -18,8 +18,15 @@ namespace SharpMediaFoundationInterop.Transforms
         public uint Width { get; }
         public uint Height { get; }
 
+        /// <summary>The frame rate, where the stream says it; 0 over 0 where it does not.</summary>
         public uint FpsNom { get; }
         public uint FpsDenom { get; }
+
+        /// <summary>
+        /// Whether the frame rate is known. A decoder is told it only then, as a hint: it times nothing by it, and a rate
+        /// made up for a stream that has none - an RTP stream, which times every frame of its own - is no better than none.
+        /// </summary>
+        public bool HasFrameRate => FpsNom > 0 && FpsDenom > 0;
 
         public uint OutputSize { get; private set; }
 
@@ -31,7 +38,7 @@ namespace SharpMediaFoundationInterop.Transforms
         {
             FpsNom = fpsNom;
             FpsDenom = fpsDenom;
-            _sampleDuration = MediaUtils.CalculateSampleDuration(FpsNom, FpsDenom);
+            _sampleDuration = HasFrameRate ? MediaUtils.CalculateSampleDuration(FpsNom, FpsDenom) : 0;
 
             OriginalWidth = width;
             OriginalHeight = height;
@@ -49,9 +56,24 @@ namespace SharpMediaFoundationInterop.Transforms
 
         protected abstract IMFTransform Create();
 
-        public virtual bool ProcessInput(byte[] data, long timestamp)
+        public bool ProcessInput(byte[] data, long timestamp)
         {
-            return ProcessInput(_transform, data, _sampleDuration, timestamp);
+            return ProcessInput(new ReadOnlySpan<byte>(data), timestamp);
+        }
+
+        /// <summary>
+        /// One sample in - an access unit, a NAL unit, a frame - copied straight into the transform's media buffer: a
+        /// view of a reader's buffer or of a pooled one goes in without a managed copy.
+        /// </summary>
+        public virtual bool ProcessInput(ReadOnlySpan<byte> data, long timestamp)
+        {
+            return ProcessInput(_transform, ReadOnlySpan<byte>.Empty, data, _sampleDuration, timestamp);
+        }
+
+        /// <summary>One sample in, of <paramref name="prefix"/> - a start code - and then <paramref name="data"/>.</summary>
+        protected bool ProcessInput(ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long timestamp)
+        {
+            return ProcessInput(_transform, prefix, data, _sampleDuration, timestamp);
         }
 
         public bool ProcessOutput(ref byte[] buffer, out uint length)
@@ -74,6 +96,11 @@ namespace SharpMediaFoundationInterop.Transforms
             BeginDrain();
             EndDrain();
             return true;
+        }
+
+        public virtual void Flush()
+        {
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
         }
 
         /// <summary>

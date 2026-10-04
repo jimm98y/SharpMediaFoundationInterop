@@ -33,8 +33,7 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
             MediaSample sample;
             while ((sample = inputReader.ReadSample(aacTrack.TrackID)) != null)
             {
-                IEnumerable<byte[]> audioFrames = inputReader.ParseSample(aacTrack.TrackID, sample.Data);
-                foreach (var audioFrame in audioFrames)
+                foreach (var audioFrame in inputReader.ParseSample(aacTrack.TrackID, sample.Data))
                 {
                     if (audioDecoder.ProcessInput(audioFrame, 0))
                     {

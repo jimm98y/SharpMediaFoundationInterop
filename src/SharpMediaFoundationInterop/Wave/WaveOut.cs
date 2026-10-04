@@ -94,6 +94,17 @@ namespace SharpMediaFoundationInterop.Wave
             _audioBufferIndex = 0; 
         }
 
+        /// <summary>Stops playing where it is, keeping what is queued: <see cref="Resume"/> plays on from there.</summary>
+        public void Pause()
+        {
+            PInvoke.waveOutPause(_hDevice);
+        }
+
+        public void Resume()
+        {
+            PInvoke.waveOutRestart(_hDevice);
+        }
+
         public void Close()
         {
             Reset(); // waveOutReset must be called before waveOutClose

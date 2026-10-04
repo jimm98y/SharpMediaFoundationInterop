@@ -13,6 +13,7 @@ IMFSourceReader
 MFCreateSourceReaderFromMediaSource
 waveOutOpen
 waveOutReset
+waveOutPause
 waveOutRestart
 waveOutPrepareHeader
 waveOutWrite
