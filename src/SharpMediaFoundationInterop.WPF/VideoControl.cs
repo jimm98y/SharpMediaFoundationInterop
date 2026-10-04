@@ -521,13 +521,18 @@ namespace SharpMediaFoundationInterop.WPF
 
             if (_playPauseButton != null)
                 _playPauseButton.Content = _paused || _rate != 1 ? "" : ""; // play : pause
+            // A live source is played as it comes: there is nothing to seek in, no other rate to play it at and no position
+            // to show - pausing is all there is to do, and the rest is not shown.
+            var seekOnly = canSeek ? Visibility.Visible : Visibility.Collapsed;
             if (_rewindButton != null)
-                _rewindButton.IsEnabled = canSeek;
+                _rewindButton.Visibility = seekOnly;
             if (_fastForwardButton != null)
-                _fastForwardButton.IsEnabled = canSeek;
+                _fastForwardButton.Visibility = seekOnly;
+            if (_timeText != null)
+                _timeText.Visibility = seekOnly;
             if (_seekSlider != null)
             {
-                _seekSlider.IsEnabled = canSeek;
+                _seekSlider.Visibility = seekOnly;
                 _updatingSlider = true;
                 _seekSlider.Maximum = Math.Max(1, Duration.Ticks);
                 _updatingSlider = false;
