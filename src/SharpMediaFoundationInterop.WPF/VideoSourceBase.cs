@@ -233,7 +233,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (!_videoRenderQueue.IsEmpty)
                 return Dequeue(out timestamp);
 
-            if (CanSeek && Math.Abs(Rate) >= KeyFrameRate)
+            if (CanSeek && IsKeyFramesOnly)
             {
                 // faster than the decoder keeps up with: the key frames alone, each decoded on its own
                 if (!NextKeyFrame(videoInfo))
@@ -319,7 +319,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out _, out long frameTime))
             {
-                if (frameTime < _discardBefore)
+                if (frameTime < _discardBefore || !IsShown(frameTime))
                     continue;
                 EnqueuePicture(_nv12Buffer, frameTime, videoInfo);
             }
@@ -394,10 +394,41 @@ namespace SharpMediaFoundationInterop.WPF
         private long _request;
 
         /// <summary>
-        /// Rates this fast, either way, are of key frames alone: decoding every frame at 4 times the rate cannot be counted on,
-        /// and backwards it costs more again.
+        /// Rates this fast, either way, are of key frames alone, each decoded on its own: for a machine that cannot decode
+        /// every frame so fast. 0, as it is by default, for every rate to decode every frame.
         /// </summary>
-        public const int KeyFrameRate = 4;
+        public int KeyFrameRate { get; set; }
+
+        /// <summary>
+        /// The most frames a second handed out, played fast: those between are decoded, for the frames after them, but not
+        /// made into pictures - what a screen does not show is not worth the conversion, nor, backwards, the memory.
+        /// </summary>
+        public const int ShownPerSecond = 60;
+
+        /// <summary>
+        /// How far apart the frames handed out are at the rate played, in 100 ns units: the frames shown a second, at that
+        /// rate. 0 at 1x and 2x, where every frame is handed out.
+        /// </summary>
+        public long FrameSpacing => Math.Abs(Rate) > 2 ? Math.Abs(Rate) * TimeSpan.TicksPerSecond / ShownPerSecond : 0;
+
+        // The span of FrameSpacing the frame handed out last is of: one frame is handed out of each.
+        private long _lastSpan = long.MinValue;
+
+        /// <summary>Whether a frame is handed out, forwards: the first of its span of <see cref="FrameSpacing"/>.</summary>
+        private bool IsShown(long frameTime)
+        {
+            long spacing = FrameSpacing;
+            if (spacing <= 0 || frameTime < 0)
+                return true;
+
+            long span = frameTime / spacing;
+            if (span == _lastSpan)
+                return false;
+            _lastSpan = span;
+            return true;
+        }
+
+        private bool IsKeyFramesOnly => KeyFrameRate > 0 && Math.Abs(Rate) >= KeyFrameRate;
 
         // The seek asked for and not yet done, and its number: taken together, under the lock, so that the number done is
         // always that of the time and rate done.
@@ -474,7 +505,8 @@ namespace SharpMediaFoundationInterop.WPF
             _keyCursor = -1;
             _reverseBefore = -1;
 
-            if (Math.Abs(Rate) >= KeyFrameRate)
+            _lastSpan = long.MinValue;
+            if (IsKeyFramesOnly)
             {
                 _keyCursor = seek;
                 _keyFirst = true;
@@ -562,8 +594,11 @@ namespace SharpMediaFoundationInterop.WPF
             for (int i = _reverseWindow.Count - 1; i >= 0; i--)
                 EnqueuePicture(_reverseWindow[i].Nv12, _reverseWindow[i].Time, videoInfo);
 
-            // on from the earliest of them; from before the key frame where there were none
-            _reverseBefore = _reverseWindow.Count > 0 ? _reverseWindow[0].Time : sync;
+            // on from the earliest of them - from the start of its span, played fast, whose frame has been handed out - and
+            // from before the key frame where there were none
+            long spacing = FrameSpacing;
+            long earliest = _reverseWindow.Count > 0 ? _reverseWindow[0].Time : sync;
+            _reverseBefore = _reverseWindow.Count > 0 && spacing > 0 ? earliest / spacing * spacing : earliest;
             ClearReverseWindow();
             return true;
         }
@@ -582,6 +617,17 @@ namespace SharpMediaFoundationInterop.WPF
                 if (frameTime >= _reverseBefore)
                 {
                     past = true;
+                    continue;
+                }
+                // Played fast, one frame a span is handed out: backwards, the last of it, the first played - a frame of the
+                // span of the one kept before it takes its place.
+                long spacing = FrameSpacing;
+                int count = _reverseWindow.Count;
+                if (spacing > 0 && count > 0 && _reverseWindow[count - 1].Time / spacing == frameTime / spacing)
+                {
+                    var same = _reverseWindow[count - 1];
+                    Buffer.BlockCopy(_nv12Buffer, 0, same.Nv12, 0, (int)Math.Min(length, (uint)_nv12Buffer.Length));
+                    _reverseWindow[count - 1] = (same.Nv12, frameTime);
                     continue;
                 }
 

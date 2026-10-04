@@ -686,9 +686,9 @@ namespace SharpMediaFoundationInterop.WPF
                 }
                 _lateFramesDropped = 0;
 
-                // A stream's times may jump either way, and are followed. A file's are its own - key frames alone, played
-                // fast, are seconds apart - and a frame ahead of the clock is waited for: only a clock run ahead of frames
-                // decoded too slowly is set again.
+                // A stream's times may jump either way, and are followed. A file's are its own - played fast, or of key
+                // frames alone, frames can be far apart - and a frame ahead of the clock is waited for: only a clock run
+                // ahead of frames decoded too slowly is set again.
                 long off = SeekableSource == null ? Math.Abs(ahead) : -ahead;
                 if (_clockFrameTime < 0 || off > ResyncThreshold * Math.Abs(rate))
                 {
