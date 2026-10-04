@@ -6,7 +6,15 @@ namespace SharpMediaFoundationInterop.WPF
     public enum PixelFormat
     {
         BGR24,
-        BGRA32
+        BGRA32,
+
+        /// <summary>
+        /// As a decoder makes it: a plane of luma, then one of chroma at half the size each way, of the coded size -
+        /// <see cref="VideoInfo.Width"/> by <see cref="VideoInfo.Height"/> - the picture its top left
+        /// <see cref="VideoInfo.OriginalWidth"/> by <see cref="VideoInfo.OriginalHeight"/>. What a GPU converts for
+        /// itself, where the others are converted on the CPU.
+        /// </summary>
+        NV12
     }
 
     public class VideoInfo
@@ -35,6 +43,13 @@ namespace SharpMediaFoundationInterop.WPF
     {
         VideoInfo VideoInfo { get; }
         Task InitializeAsync();
+
+        /// <summary>
+        /// Asks for frames of a format other than the source's own, before it is initialized: what a control that converts
+        /// frames for itself would rather have. <see cref="VideoInfo.PixelFormat"/> says what the frames are.
+        /// </summary>
+        /// <returns>Whether the source gives frames of it.</returns>
+        bool TrySetOutputFormat(PixelFormat format) => false;
         /// <summary>
         /// The next frame - empty when none is ready yet, null when there are no more - and when it is shown.
         /// </summary>

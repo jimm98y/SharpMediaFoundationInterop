@@ -19,7 +19,34 @@ namespace SharpMediaFoundationInterop.WPF
 {
     public abstract class VideoSourceBase : ISeekableVideoSource, IAudioSource
     {
-        public VideoInfo VideoInfo { get; protected set; }
+        /// <summary>The video's format - and, of the frames handed out, as asked for: see <see cref="TrySetOutputFormat"/>.</summary>
+        public VideoInfo VideoInfo
+        {
+            get => _videoInfo;
+            protected set
+            {
+                if (value != null && _outputFormat == PixelFormat.NV12)
+                    value.PixelFormat = PixelFormat.NV12;
+                _videoInfo = value;
+            }
+        }
+        private VideoInfo _videoInfo;
+
+        private PixelFormat _outputFormat = PixelFormat.BGR24;
+
+        /// <summary>
+        /// NV12 hands frames out as the decoder makes them, not converted to BGR24 on the CPU: for a control that converts
+        /// them on the GPU. Asked for before the source is initialized.
+        /// </summary>
+        public bool TrySetOutputFormat(PixelFormat format)
+        {
+            if (format != PixelFormat.NV12 && format != PixelFormat.BGR24)
+                return false;
+            _outputFormat = format;
+            if (_videoInfo != null)
+                _videoInfo.PixelFormat = format;
+            return true;
+        }
         public AudioInfo AudioInfo { get; protected set; }
 
         protected virtual bool IsStreaming { get; }
@@ -328,6 +355,17 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>A decoded frame made into the picture shown, in an array of the pool, and queued with its time.</summary>
         private void EnqueuePicture(byte[] nv12, long frameTime, VideoInfo videoInfo)
         {
+            if (_outputFormat == PixelFormat.NV12)
+            {
+                // as the decoder made it, of its coded size: the GPU converts it
+                int size = (int)(videoInfo.Width * videoInfo.Height * 3 / 2);
+                byte[] frame = ArrayPool<byte>.Shared.Rent(size);
+                Buffer.BlockCopy(nv12, 0, frame, 0, Math.Min(size, nv12.Length));
+                _videoRenderQueue.Enqueue((frame, frameTime));
+                Interlocked.Increment(ref _videoFrames);
+                return;
+            }
+
             _nv12Decoder.ProcessInput(nv12, frameTime);
 
             if (_nv12Decoder.ProcessOutput(ref _rgbBuffer, out _))
