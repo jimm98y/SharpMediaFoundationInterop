@@ -98,6 +98,11 @@ namespace SharpMediaFoundationInterop.Transforms
             return true;
         }
 
+        public virtual void Flush()
+        {
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
+        }
+
         /// <summary>
         /// Asks the transform to emit everything it still holds. Call <see cref="ProcessOutput(ref byte[], out uint)"/>
         /// until it returns false before calling <see cref="EndDrain"/>, otherwise restarting the

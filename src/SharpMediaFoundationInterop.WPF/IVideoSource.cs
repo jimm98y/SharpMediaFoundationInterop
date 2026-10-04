@@ -46,6 +46,41 @@ namespace SharpMediaFoundationInterop.WPF
         void ReturnVideoSample(byte[] sample);
     }
 
+    /// <summary>
+    /// A source whose frames can be had from any time, at any rate, either way: a file. A seek, or a new rate, is asked for
+    /// from any thread and done by the thread that reads the frames, before the next is handed out.
+    /// </summary>
+    public interface ISeekableVideoSource : IVideoSource
+    {
+        /// <summary>Whether it can be: a live stream cannot.</summary>
+        bool CanSeek { get; }
+
+        /// <summary>How long the video is, from <see cref="StartTime"/>, in 100 ns units; -1 where it is not known.</summary>
+        long Duration { get; }
+
+        /// <summary>The time of the first frame, which a position is counted from.</summary>
+        long StartTime { get; }
+
+        /// <summary>
+        /// The rate frames are handed out at: 1 is forwards as recorded, 2, 4 and 8 that many times faster, and the same
+        /// numbers below 0 backwards - in the order they are shown at that rate, each with its own time.
+        /// </summary>
+        int Rate { get; }
+
+        /// <summary>
+        /// Moves to a time, to play on from it at a rate: the frame handed out next is the one shown at it, or the first
+        /// after - not the key frame before, which decoding starts at.
+        /// </summary>
+        /// <returns>
+        /// The number of the request, which <see cref="Request"/> is once it is done: frames handed out before then are of
+        /// the time before it.
+        /// </returns>
+        long Seek(long time, int rate);
+
+        /// <summary>The number of the last seek done: that of the frame handed out last.</summary>
+        long Request { get; }
+    }
+
     public interface IAudioSource : IDisposable
     {
         AudioInfo AudioInfo { get; }

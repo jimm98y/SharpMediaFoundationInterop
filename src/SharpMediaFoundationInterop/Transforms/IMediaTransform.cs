@@ -36,6 +36,12 @@ namespace SharpMediaFoundationInterop.Transforms
         bool ProcessInput(ReadOnlySpan<byte> data, long timestamp);
         bool ProcessOutput(ref byte[] buffer, out uint length);
         bool Drain();
+
+        /// <summary>
+        /// Lets go of everything the transform holds, without its being put out: what a seek needs, after which the input
+        /// starts again elsewhere - at a key frame.
+        /// </summary>
+        void Flush();
     }
 
     public interface IMediaVideoTransform : IMediaTransform, IVideoDescriptor

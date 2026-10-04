@@ -8,12 +8,19 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 namespace SharpMediaFoundationInterop.WPF
 {
-    [TemplatePart(Name = "PART_image", Type = typeof(Image))]
+    [TemplatePart(Name = "PART_Image", Type = typeof(Image))]
+    [TemplatePart(Name = "PART_PlayPause", Type = typeof(ButtonBase))]
+    [TemplatePart(Name = "PART_Rewind", Type = typeof(ButtonBase))]
+    [TemplatePart(Name = "PART_FastForward", Type = typeof(ButtonBase))]
+    [TemplatePart(Name = "PART_Seek", Type = typeof(Slider))]
+    [TemplatePart(Name = "PART_Time", Type = typeof(TextBlock))]
     public class VideoControl : Control, IDisposable
     {
         private static object _syncRoot = new object();
@@ -24,6 +31,11 @@ namespace SharpMediaFoundationInterop.WPF
         private WaveOut _waveOut;
 
         private Image _image;
+        private ButtonBase _playPauseButton;
+        private ButtonBase _rewindButton;
+        private ButtonBase _fastForwardButton;
+        private Slider _seekSlider;
+        private TextBlock _timeText;
         private Int32Rect _videoRect;
         private WriteableBitmap _canvas;
 
@@ -32,8 +44,11 @@ namespace SharpMediaFoundationInterop.WPF
         private long _videoFrames = 0;
         private long _audioFrames = 0;
 
-        /// <summary>Decoded frames waiting to be shown, each with its time; -1 to be shown as it comes.</summary>
-        private ConcurrentQueue<(byte[] Frame, long Timestamp)> _videoOut = new ConcurrentQueue<(byte[] Frame, long Timestamp)>();
+        /// <summary>
+        /// Decoded frames waiting to be shown, each with its time - -1 to be shown as it comes - and the number of the seek
+        /// it is of, which a later seek leaves it behind.
+        /// </summary>
+        private ConcurrentQueue<(byte[] Frame, long Timestamp, long Request)> _videoOut = new ConcurrentQueue<(byte[] Frame, long Timestamp, long Request)>();
 
         private bool _disposedValue;
 
@@ -107,6 +122,81 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
+        #region Trick play properties
+
+        /// <summary>Whether the bar of buttons, the seek bar and the time are shown over the bottom of the video.</summary>
+        public bool ShowControls
+        {
+            get { return (bool)GetValue(ShowControlsProperty); }
+            set { SetValue(ShowControlsProperty, value); }
+        }
+
+        public static readonly DependencyProperty ShowControlsProperty =
+            DependencyProperty.Register("ShowControls", typeof(bool), typeof(VideoControl), new PropertyMetadata(true));
+
+        public bool IsPaused
+        {
+            get { return (bool)GetValue(IsPausedProperty); }
+            set { SetValue(IsPausedProperty, value); }
+        }
+
+        public static readonly DependencyProperty IsPausedProperty =
+            DependencyProperty.Register("IsPaused", typeof(bool), typeof(VideoControl), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnIsPausedChanged));
+
+        private static void OnIsPausedChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            ((VideoControl)d).SetPaused((bool)e.NewValue);
+        }
+
+        /// <summary>
+        /// How fast, and which way, the video plays: 1 forwards as recorded, 2, 4 and 8 that many times faster, and the same
+        /// below 0 backwards. Only a source that can be sought in plays at any other than 1.
+        /// </summary>
+        public int PlaybackRate
+        {
+            get { return (int)GetValue(PlaybackRateProperty); }
+            private set { SetValue(PlaybackRatePropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey PlaybackRatePropertyKey =
+            DependencyProperty.RegisterReadOnly("PlaybackRate", typeof(int), typeof(VideoControl), new PropertyMetadata(1));
+        public static readonly DependencyProperty PlaybackRateProperty = PlaybackRatePropertyKey.DependencyProperty;
+
+        /// <summary>The time of the frame shown, from the start of the video.</summary>
+        public TimeSpan Position
+        {
+            get { return (TimeSpan)GetValue(PositionProperty); }
+            private set { SetValue(PositionPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey PositionPropertyKey =
+            DependencyProperty.RegisterReadOnly("Position", typeof(TimeSpan), typeof(VideoControl), new PropertyMetadata(TimeSpan.Zero));
+        public static readonly DependencyProperty PositionProperty = PositionPropertyKey.DependencyProperty;
+
+        /// <summary>How long the video is; zero where it is not known - a live stream.</summary>
+        public TimeSpan Duration
+        {
+            get { return (TimeSpan)GetValue(DurationProperty); }
+            private set { SetValue(DurationPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey DurationPropertyKey =
+            DependencyProperty.RegisterReadOnly("Duration", typeof(TimeSpan), typeof(VideoControl), new PropertyMetadata(TimeSpan.Zero));
+        public static readonly DependencyProperty DurationProperty = DurationPropertyKey.DependencyProperty;
+
+        /// <summary>Whether the video can be sought in, and played at other rates: a file can, a live stream cannot.</summary>
+        public bool CanSeek
+        {
+            get { return (bool)GetValue(CanSeekProperty); }
+            private set { SetValue(CanSeekPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey CanSeekPropertyKey =
+            DependencyProperty.RegisterReadOnly("CanSeek", typeof(bool), typeof(VideoControl), new PropertyMetadata(false));
+        public static readonly DependencyProperty CanSeekProperty = CanSeekPropertyKey.DependencyProperty;
+
+        #endregion
+
         static VideoControl()
         {
             DefaultStyleKeyProperty.OverrideMetadata(typeof(VideoControl), new FrameworkPropertyMetadata(typeof(VideoControl)));
@@ -153,7 +243,311 @@ namespace SharpMediaFoundationInterop.WPF
         {
             base.OnApplyTemplate();
             this._image = this.Template.FindName("PART_Image", this) as Image;
+
+            if (_playPauseButton != null) _playPauseButton.Click -= PlayPauseButton_Click;
+            if (_rewindButton != null) _rewindButton.Click -= RewindButton_Click;
+            if (_fastForwardButton != null) _fastForwardButton.Click -= FastForwardButton_Click;
+            if (_seekSlider != null)
+            {
+                _seekSlider.ValueChanged -= SeekSlider_ValueChanged;
+                _seekSlider.RemoveHandler(Thumb.DragStartedEvent, (DragStartedEventHandler)SeekSlider_DragStarted);
+                _seekSlider.RemoveHandler(Thumb.DragCompletedEvent, (DragCompletedEventHandler)SeekSlider_DragCompleted);
+            }
+
+            _playPauseButton = this.Template.FindName("PART_PlayPause", this) as ButtonBase;
+            _rewindButton = this.Template.FindName("PART_Rewind", this) as ButtonBase;
+            _fastForwardButton = this.Template.FindName("PART_FastForward", this) as ButtonBase;
+            _seekSlider = this.Template.FindName("PART_Seek", this) as Slider;
+            _timeText = this.Template.FindName("PART_Time", this) as TextBlock;
+
+            if (_playPauseButton != null) _playPauseButton.Click += PlayPauseButton_Click;
+            if (_rewindButton != null) _rewindButton.Click += RewindButton_Click;
+            if (_fastForwardButton != null) _fastForwardButton.Click += FastForwardButton_Click;
+            if (_seekSlider != null)
+            {
+                _seekSlider.ValueChanged += SeekSlider_ValueChanged;
+                _seekSlider.AddHandler(Thumb.DragStartedEvent, (DragStartedEventHandler)SeekSlider_DragStarted);
+                _seekSlider.AddHandler(Thumb.DragCompletedEvent, (DragCompletedEventHandler)SeekSlider_DragCompleted);
+            }
+
+            UpdateControls();
         }
+
+        #region Trick play
+
+        // The state the user asked for, kept here for the decode thread and the renderer: the dependency properties are the
+        // UI thread's.
+        private volatile bool _paused;
+        private volatile int _rate = 1;
+
+        /// <summary>The number of the seek asked for last: frames of the ones before it are not shown.</summary>
+        private long _request;
+
+        /// <summary>The number of the seek the frame shown last was of: the first of another is shown even paused.</summary>
+        private long _shownRequest = -1;
+
+        /// <summary>The number of the seek the clock was set for, by its first frame.</summary>
+        private long _anchoredRequest = -1;
+
+        /// <summary>The time the seek asked for last is to: what the clock starts at, of a file.</summary>
+        private long _seekTime = -1;
+
+        /// <summary>The number of the seek whose frames ran out - the end, or the start backwards; -1 while there are frames.</summary>
+        private long _endedRequest = -1;
+
+        // The sound waits from a seek until the first frame of it is shown, the video having to be decoded from the key frame
+        // before: the queued sound of before it is let go of, on the decode thread, which the wave device is written from.
+        private volatile bool _audioHold;
+        private volatile bool _audioReset;
+
+        // Whether the seek bar is being dragged, and whether its value is being set by playback, not by the user.
+        private bool _dragging;
+        private bool _updatingSlider;
+
+        private ISeekableVideoSource SeekableSource => _source is ISeekableVideoSource seekable && seekable.CanSeek ? seekable : null;
+
+        /// <summary>Plays forwards, at 1x - from the start again, where the video had come to its end.</summary>
+        public void Play()
+        {
+            var seekable = SeekableSource;
+            if (seekable != null && Interlocked.Read(ref _endedRequest) == Interlocked.Read(ref _request))
+                SeekTo(seekable.StartTime, 1);
+            else if (_rate != 1)
+                SeekTo(CurrentTime(), 1);
+            IsPaused = false;
+        }
+
+        public void Pause()
+        {
+            IsPaused = true;
+        }
+
+        public void TogglePlayPause()
+        {
+            if (IsPaused || _rate != 1)
+                Play();
+            else
+                Pause();
+        }
+
+        /// <summary>Moves to a time from the start of the video, playing on, or paused, as before.</summary>
+        public void Seek(TimeSpan position)
+        {
+            var seekable = SeekableSource;
+            if (seekable == null)
+                return;
+
+            long time = seekable.StartTime + Math.Max(0, position.Ticks);
+            if (seekable.Duration >= 0)
+                time = Math.Min(time, seekable.StartTime + seekable.Duration);
+            SeekTo(time, _rate);
+        }
+
+        /// <summary>Moves by a time, forwards or - below 0 - backwards.</summary>
+        public void SeekBy(TimeSpan offset)
+        {
+            var seekable = SeekableSource;
+            if (seekable == null)
+                return;
+            Seek(TimeSpan.FromTicks(CurrentTime() - seekable.StartTime + offset.Ticks));
+        }
+
+        /// <summary>Plays forwards faster: 2x, then 4x, then 8x, then 2x again.</summary>
+        public void FastForward()
+        {
+            SetRate(_rate >= 2 && _rate < 8 ? _rate * 2 : 2);
+        }
+
+        /// <summary>Plays backwards: 1x, then 2x, 4x and 8x, then 1x again.</summary>
+        public void Rewind()
+        {
+            SetRate(_rate <= -1 && _rate > -8 ? _rate * 2 : -1);
+        }
+
+        /// <summary>Plays at a rate, from the frame shown: see <see cref="PlaybackRate"/>.</summary>
+        public void SetRate(int rate)
+        {
+            var seekable = SeekableSource;
+            if (seekable == null)
+                return;
+            SeekTo(CurrentTime(), rate);
+            IsPaused = false;
+        }
+
+        /// <summary>The time of the frame shown: what a new rate plays on from.</summary>
+        private long CurrentTime()
+        {
+            var seekable = SeekableSource;
+            long shown = Interlocked.Read(ref _lastShownTime);
+            return shown >= 0 ? shown : seekable?.StartTime ?? 0;
+        }
+
+        private void SeekTo(long time, int rate)
+        {
+            var seekable = SeekableSource;
+            if (seekable == null)
+                return;
+
+            _rate = rate;
+            PlaybackRate = rate;
+            _seekTime = time;
+            Interlocked.Exchange(ref _request, seekable.Seek(time, rate));
+            _audioHold = true;
+            _audioReset = true;
+            UpdateControls();
+        }
+
+        private void SetPaused(bool paused)
+        {
+            _paused = paused;
+            if (paused)
+                _stopwatch.Stop();
+            else
+                _stopwatch.Start();
+            lock (_waveSync)
+            {
+                if (paused)
+                    _waveOut?.Pause();
+                else
+                    _waveOut?.Resume();
+            }
+            UpdateControls();
+        }
+
+        /// <summary>The frames ran out, at the end or, backwards, the start: paused there, or, looping, from the start again.</summary>
+        private void OnEnded(long request)
+        {
+            Interlocked.Exchange(ref _endedRequest, request);
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (Interlocked.Read(ref _request) != request)
+                    return; // sought elsewhere since
+
+                if (_isLooping && _rate > 0)
+                {
+                    Interlocked.Exchange(ref _endedRequest, -1);
+                    SeekTo(SeekableSource?.StartTime ?? 0, _rate);
+                }
+                else
+                {
+                    IsPaused = true;
+                }
+            });
+        }
+
+        private void PlayPauseButton_Click(object sender, RoutedEventArgs e) => TogglePlayPause();
+        private void RewindButton_Click(object sender, RoutedEventArgs e) => Rewind();
+        private void FastForwardButton_Click(object sender, RoutedEventArgs e) => FastForward();
+
+        private void SeekSlider_DragStarted(object sender, DragStartedEventArgs e) => _dragging = true;
+
+        private void SeekSlider_DragCompleted(object sender, DragCompletedEventArgs e)
+        {
+            _dragging = false;
+            Seek(TimeSpan.FromTicks((long)_seekSlider.Value));
+        }
+
+        private void SeekSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            // The user's, by a click on the bar, or a drag of its thumb: dragged, each move is a seek, which the source
+            // takes the last of when it gets to it - the video follows the thumb as fast as it can be decoded.
+            if (_updatingSlider)
+                return;
+            Seek(TimeSpan.FromTicks((long)e.NewValue));
+        }
+
+        protected override void OnMouseDown(MouseButtonEventArgs e)
+        {
+            base.OnMouseDown(e);
+            Focus();
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.Handled)
+                return;
+
+            switch (e.Key)
+            {
+                case Key.Space:
+                case Key.K:
+                    TogglePlayPause();
+                    break;
+                case Key.J:
+                    Rewind();
+                    break;
+                case Key.L:
+                    FastForward();
+                    break;
+                case Key.Left:
+                    SeekBy(TimeSpan.FromSeconds(-5));
+                    break;
+                case Key.Right:
+                    SeekBy(TimeSpan.FromSeconds(5));
+                    break;
+                case Key.Home:
+                    Seek(TimeSpan.Zero);
+                    break;
+                case Key.End:
+                    Seek(Duration);
+                    break;
+                default:
+                    return;
+            }
+            e.Handled = true;
+        }
+
+        private void UpdateControls()
+        {
+            bool canSeek = SeekableSource != null;
+            CanSeek = canSeek;
+
+            if (_playPauseButton != null)
+                _playPauseButton.Content = _paused || _rate != 1 ? "" : ""; // play : pause
+            if (_rewindButton != null)
+                _rewindButton.IsEnabled = canSeek;
+            if (_fastForwardButton != null)
+                _fastForwardButton.IsEnabled = canSeek;
+            if (_seekSlider != null)
+            {
+                _seekSlider.IsEnabled = canSeek;
+                _updatingSlider = true;
+                _seekSlider.Maximum = Math.Max(1, Duration.Ticks);
+                _updatingSlider = false;
+            }
+            UpdatePosition();
+        }
+
+        private void UpdatePosition()
+        {
+            var seekable = SeekableSource;
+            long shown = Interlocked.Read(ref _lastShownTime);
+            if (seekable != null && shown >= 0)
+                Position = TimeSpan.FromTicks(Math.Max(0, shown - seekable.StartTime));
+
+            if (_seekSlider != null && !_dragging)
+            {
+                _updatingSlider = true;
+                _seekSlider.Value = Math.Min(_seekSlider.Maximum, Position.Ticks);
+                _updatingSlider = false;
+            }
+
+            if (_timeText != null)
+            {
+                string rate = _rate == 1 ? "" : _rate > 0 ? $"  ×{_rate}" : $"  ◀×{-_rate}";
+                _timeText.Text = Duration > TimeSpan.Zero
+                    ? $"{FormatTime(Position)} / {FormatTime(Duration)}{rate}"
+                    : $"{FormatTime(Position)}{rate}";
+            }
+        }
+
+        private static string FormatTime(TimeSpan time)
+        {
+            return time.TotalHours >= 1 ? time.ToString(@"h\:mm\:ss") : time.ToString(@"m\:ss");
+        }
+
+        #endregion
 
         /// <summary>
         /// How far a frame's time may be from the clock before the clock is set by it again: a stream whose times jump -
@@ -162,7 +556,8 @@ namespace SharpMediaFoundationInterop.WPF
         /// </summary>
         private static readonly long ResyncThreshold = TimeSpan.FromSeconds(1).Ticks;
 
-        // The playback clock: the stopwatch since the first frame shown, against the frames' own times since that one's.
+        // The playback clock: the stopwatch since the first frame shown, against the frames' own times since that one's, at
+        // the rate played - backwards, the clock runs down.
         private long _clockFrameTime = -1;
         private long _clockStart;
 
@@ -171,36 +566,68 @@ namespace SharpMediaFoundationInterop.WPF
 
         private void CompositionTarget_Rendering(object sender, EventArgs e)
         {
-            if (_canvas == null || !_videoOut.TryPeek(out var next))
+            if (_canvas == null)
                 return;
 
-            // Each frame is shown at its own time, as the source gives it: of the file's samples, of the RTP timestamps,
-            // of the capture. A frame of no time is shown as it comes.
-            if (next.Timestamp >= 0)
+            (byte[] Frame, long Timestamp, long Request) next;
+            long request = Interlocked.Read(ref _request);
+            while (true)
+            {
+                if (!_videoOut.TryPeek(out next))
+                    return;
+                if (next.Request >= request)
+                    break;
+                // of before a seek
+                if (_videoOut.TryDequeue(out var stale))
+                    _source.ReturnVideoSample(stale.Frame);
+            }
+
+            // The first frame of a seek sets the clock: at the time sought, of a file - the key frame after it, played fast,
+            // is shown when the clock gets to it - else at the frame's own. It is shown even paused: it is what was sought to.
+            bool first = next.Request != _shownRequest;
+            if (next.Request != _anchoredRequest && next.Timestamp >= 0)
+            {
+                _anchoredRequest = next.Request;
+                _clockFrameTime = SeekableSource != null && _seekTime >= 0 ? _seekTime : next.Timestamp;
+                _clockStart = _stopwatch.Elapsed.Ticks;
+            }
+            if (_paused && !first)
+                return;
+
+            int rate = _rate;
+            if (next.Timestamp >= 0 && !(first && _paused))
             {
                 // A frame of before the one shown - which a decoder that joined a stream between its key frames can hand
                 // out late - is dropped rather than shown out of order; a jump back as far as a resync is followed.
-                if (_lastShownTime >= 0 && next.Timestamp < _lastShownTime && _lastShownTime - next.Timestamp <= ResyncThreshold)
+                long behind = rate > 0 ? _lastShownTime - next.Timestamp : next.Timestamp - _lastShownTime;
+                if (!first && _lastShownTime >= 0 && behind > 0 && behind <= ResyncThreshold)
                 {
                     if (_videoOut.TryDequeue(out var late))
                         _source.ReturnVideoSample(late.Frame);
                     return;
                 }
 
+                // Each frame is shown at its own time, as the source gives it - of the file's samples, of the RTP
+                // timestamps, of the capture - against the clock, at the rate played.
                 long now = _stopwatch.Elapsed.Ticks;
-                long due = next.Timestamp - _clockFrameTime;
-                long elapsed = now - _clockStart;
-                if (_clockFrameTime < 0 || Math.Abs(due - elapsed) > ResyncThreshold)
+                long clock = _clockFrameTime + (now - _clockStart) * rate;
+                long ahead = (next.Timestamp - clock) * Math.Sign(rate);
+
+                // A stream's times may jump either way, and are followed. A file's are its own - key frames alone, played
+                // fast, are seconds apart - and a frame ahead of the clock is waited for: only a clock run ahead of frames
+                // decoded too slowly is set again.
+                long off = SeekableSource == null ? Math.Abs(ahead) : -ahead;
+                if (_clockFrameTime < 0 || off > ResyncThreshold * Math.Abs(rate))
                 {
                     _clockFrameTime = next.Timestamp;
                     _clockStart = now;
                 }
-                else if (elapsed < due)
+                else if (ahead > 0)
                 {
                     return;
                 }
 
-                if (Log.InfoEnabled) Log.Info($"Video {next.Timestamp / (double)TimeSpan.TicksPerSecond}, clock {(now - _clockStart + _clockFrameTime) / (double)TimeSpan.TicksPerSecond}");
+                if (Log.InfoEnabled) Log.Info($"Video {next.Timestamp / (double)TimeSpan.TicksPerSecond}, clock {clock / (double)TimeSpan.TicksPerSecond}");
             }
 
             if (!_videoOut.TryDequeue(out next))
@@ -208,8 +635,11 @@ namespace SharpMediaFoundationInterop.WPF
 
             byte[] decoded = next.Frame;
             _videoFrames++;
+            _shownRequest = next.Request;
             if (next.Timestamp >= 0)
-                _lastShownTime = next.Timestamp;
+                Interlocked.Exchange(ref _lastShownTime, next.Timestamp);
+            if (first)
+                _audioHold = false;
 
             var videoInfo = _source.VideoInfo;
             if(videoInfo == null)
@@ -218,7 +648,7 @@ namespace SharpMediaFoundationInterop.WPF
                 return;
             }
 
-            _canvas.Lock();           
+            _canvas.Lock();
 
             // TODO: bitmap stride?
             Marshal.Copy(
@@ -232,6 +662,8 @@ namespace SharpMediaFoundationInterop.WPF
             _canvas.Unlock();
 
             _source.ReturnVideoSample(decoded);
+
+            UpdatePosition();
         }
 
         private async Task InitializeVideo(IVideoSource videoSource)
@@ -257,7 +689,14 @@ namespace SharpMediaFoundationInterop.WPF
                         this._canvas = canvas;
 
                         this._videoRect = new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight);
-                        this._stopwatch.Restart();
+                        if (_paused)
+                            this._stopwatch.Reset();
+                        else
+                            this._stopwatch.Restart();
+
+                        var seekable = SeekableSource;
+                        Duration = seekable != null && seekable.Duration > 0 ? TimeSpan.FromTicks(seekable.Duration) : TimeSpan.Zero;
+                        UpdateControls();
                     }
                 });
             }
@@ -285,6 +724,7 @@ namespace SharpMediaFoundationInterop.WPF
 
                 foreach (var control in controls)
                 {
+                    var seekable = control.SeekableSource;
                     if (control._source is IVideoSource videoSource)
                     {
                         if (control._canvas == null)
@@ -292,14 +732,26 @@ namespace SharpMediaFoundationInterop.WPF
                             await control.InitializeVideo(videoSource);
                         }
 
-                        if (control._videoOut.Count < 1)
+                        // the frames ran out: nothing more to decode, until a seek
+                        bool ended = seekable != null && Interlocked.Read(ref control._endedRequest) == Interlocked.Read(ref control._request);
+
+                        if (!ended && control._videoOut.Count < 1)
                         {
                             rendered = control.DecodeVideo(videoSource);
 
                             if (!rendered)
                             {
-                                await control.UninitializeVideo(videoSource);
+                                if (seekable != null)
+                                    control.OnEnded(seekable.Request);
+                                else
+                                    await control.UninitializeVideo(videoSource);
                             }
+                        }
+                        else if (control._paused && seekable == null && control._videoOut.Count >= 1)
+                        {
+                            // live, paused: what comes is let go of, to show what is live again on play
+                            if (control._videoOut.TryDequeue(out var dropped))
+                                videoSource.ReturnVideoSample(dropped.Frame);
                         }
                     }
 
@@ -310,14 +762,36 @@ namespace SharpMediaFoundationInterop.WPF
                             await control.InitializeAudio(audioSource);
                         }
 
-                        if (control._waveOut != null && control._waveOut.QueuedFrames < 5)
+                        if (control._audioReset)
                         {
-                            rendered = control.DecodeAudio(audioSource);
+                            control._audioReset = false;
+                            lock (control._waveSync)
+                            {
+                                if (control._waveOut != null)
+                                {
+                                    control._waveOut.Reset();
+                                    if (control._paused)
+                                        control._waveOut.Pause();
+                                    else
+                                        control._waveOut.Resume();
+                                }
+                            }
+                        }
+
+                        // as much sound as the queue is short of - several frames at a time, where the loop was held up -
+                        // or, live and paused, whatever comes, to let go of
+                        bool live = seekable == null;
+                        while (control._waveOut != null && !control._audioHold && (control.IsAudioQueueShort() || (live && control._paused)))
+                        {
+                            rendered = control.DecodeAudio(audioSource, drop: live && control._paused, out bool queued);
 
                             if (!rendered)
                             {
                                 await control.UninitializeAudio(audioSource);
+                                break;
                             }
+                            if (!queued)
+                                break; // none ready yet
                         }
                     }
                 }
@@ -333,7 +807,9 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 if (sample.Length > 0)
                 {
-                    _videoOut.Enqueue((sample, timestamp));
+                    // read after the frame: a seek is done before the frame after it is handed out, on this thread
+                    long request = videoSource is ISeekableVideoSource seekable ? seekable.Request : 0;
+                    _videoOut.Enqueue((sample, timestamp, request));
                 }
 
                 return true;
@@ -353,6 +829,8 @@ namespace SharpMediaFoundationInterop.WPF
                 {
                     this._waveOut = new WaveOut();
                     this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.ChannelCount, audioInfo.BitsPerSample);
+                    if (_paused)
+                        this._waveOut.Pause();
                }
             }
         }
@@ -368,20 +846,51 @@ namespace SharpMediaFoundationInterop.WPF
             return Task.CompletedTask;
         }
 
-        private bool DecodeAudio(IAudioSource audioSource)
+        /// <summary>
+        /// How much sound is kept queued to play: what the decode thread, held up by a frame of video, or the machine, by
+        /// another thread, may be late by without the sound stopping. It costs no delay - a seek resets the device, a
+        /// pause pauses it - only memory.
+        /// </summary>
+        private static readonly long AudioQueueTime = TimeSpan.FromMilliseconds(300).Ticks;
+
+        /// <summary>How long the last frame of sound queued plays for: what the queue's frames are counted in.</summary>
+        private long _audioFrameTime;
+
+        private bool IsAudioQueueShort()
         {
+            int frames = _audioFrameTime > 0 ? (int)Math.Clamp(AudioQueueTime / _audioFrameTime, 2, 100) : 5;
+            return _waveOut.QueuedFrames < frames;
+        }
+
+        /// <param name="drop">Whether to let the sound go rather than play it: live, and paused.</param>
+        /// <param name="queued">Whether a frame of sound was had, to play or to let go of: none is ready where it was not.</param>
+        private bool DecodeAudio(IAudioSource audioSource, bool drop, out bool queued)
+        {
+            queued = false;
             var sample = audioSource.GetAudioSample();
             if (sample != null)
             {
                 if (sample.Length > 0)
                 {
-                    if (_isMute)
-                    {
-                        Array.Fill<byte>(sample, 0);
-                    }
+                    queued = true;
+                    var audioInfo = audioSource.AudioInfo;
+                    long bytesPerSecond = audioInfo == null ? 0 : (long)audioInfo.SampleRate * audioInfo.ChannelCount * audioInfo.BitsPerSample / 8;
+                    if (bytesPerSecond > 0)
+                        _audioFrameTime = sample.Length * TimeSpan.TicksPerSecond / bytesPerSecond;
 
-                    _waveOut.Enqueue(sample, (uint)sample.Length);
-                    Interlocked.Increment(ref _audioFrames);
+                    if (!drop)
+                    {
+                        if (_isMute)
+                        {
+                            Array.Fill<byte>(sample, 0);
+                        }
+
+                        lock (_waveSync)
+                        {
+                            _waveOut?.Enqueue(sample, (uint)sample.Length);
+                        }
+                        Interlocked.Increment(ref _audioFrames);
+                    }
                     ((IAudioSource)_source).ReturnAudioSample(sample);
                 }
 
@@ -400,8 +909,18 @@ namespace SharpMediaFoundationInterop.WPF
             _videoFrames = 0;
             _audioFrames = 0;
             _clockFrameTime = -1; // set again by the first frame shown
-            _lastShownTime = -1;
-            _stopwatch.Restart();
+            Interlocked.Exchange(ref _lastShownTime, -1);
+            _shownRequest = -1;
+            _anchoredRequest = -1;
+            _seekTime = -1;
+            Interlocked.Exchange(ref _endedRequest, -1);
+            Interlocked.Exchange(ref _request, _source is ISeekableVideoSource seekable ? seekable.Request : 0);
+            _rate = 1;
+            PlaybackRate = 1;
+            if (!_paused)
+                _stopwatch.Restart();
+            else
+                _stopwatch.Reset();
         }
 
         protected virtual void Dispose(bool disposing)

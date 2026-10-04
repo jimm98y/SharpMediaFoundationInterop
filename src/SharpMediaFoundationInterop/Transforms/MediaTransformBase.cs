@@ -93,7 +93,7 @@ namespace SharpMediaFoundationInterop.Transforms
             return ret;
         }
 
-        private unsafe bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length, out long timestamp)
+        private unsafe bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length, out long timestamp, bool changed = false)
         {
             timestamp = 0;
             bool ret = false;
@@ -131,15 +131,15 @@ namespace SharpMediaFoundationInterop.Transforms
                 }
 
                 // Enumerate the new type and list all the changes
-                i = 0; 
                 StringBuilder log = new StringBuilder();
                 try
                 {
-                    while (true)
+                    mediaType.GetCount(out uint count);
+                    for (i = 0; i < count; i++)
                     {
                         Guid guid;
                         PROPVARIANT_unmanaged variant = default;
-                        mediaType.GetItemByIndex(i++, &guid, &variant);
+                        mediaType.GetItemByIndex(i, &guid, &variant);
                         
                         if(guid == PInvoke.MF_MT_GEOMETRIC_APERTURE ||
                             guid == PInvoke.MF_MT_PAN_SCAN_APERTURE ||
@@ -179,11 +179,12 @@ namespace SharpMediaFoundationInterop.Transforms
                 transform.GetAttributes(out IMFAttributes attributes);
                 try
                 {
-                    while (true)
+                    attributes.GetCount(out uint count);
+                    for (i = 0; i < count; i++)
                     {
                         Guid guid;
                         PROPVARIANT_unmanaged variant = default;
-                        attributes.GetItemByIndex(i++, &guid, &variant);
+                        attributes.GetItemByIndex(i, &guid, &variant);
                         log.AppendLine($"{guid}: {variant.Anonymous.Anonymous.Anonymous.uhVal}");
                     }
                 }
@@ -218,6 +219,11 @@ namespace SharpMediaFoundationInterop.Transforms
                 // because the subtype has not changed, do not flush, otherwise we'd lose frames:
                 //transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
                 dataBuffer[0].dwStatus = 0;
+
+                // The frame that brought the change is ready, of the new type: asked for again, it comes out now, not with
+                // the next input - of which there is none, draining a key frame decoded on its own.
+                if (!changed)
+                    return Output(streamID, transform, dataBuffer, ref bytes, out length, out timestamp, changed: true);
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {

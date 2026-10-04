@@ -89,17 +89,103 @@ namespace SharpMediaFoundationInterop.WPF
 
         protected override void CompletedVideo()
         {
-            VideoInfo = null;
-            AudioInfo = null;
+            // a file that cannot be sought in is read again from the start, to play again
+            if (!CanSeek)
+            {
+                VideoInfo = null;
+                AudioInfo = null;
+            }
             base.CompletedVideo();
         }
 
         protected override void CompletedAudio()
         {
-            VideoInfo = null;
-            AudioInfo = null;
+            if (!CanSeek)
+            {
+                VideoInfo = null;
+                AudioInfo = null;
+            }
             base.CompletedAudio();
         }
+
+        #region Seeking
+
+        // The times of the video's key frames, in 100 ns units, in order, and the numbers of their samples; the times of the
+        // audio's samples, of the 'moov' and of any fragments. Null for a file whose track has no samples.
+        private long[] _syncTimes;
+        private uint[] _syncSamples;
+        private long[] _audioTimes;
+        private long _startTime;
+        private long _duration = -1;
+
+        public override bool CanSeek => _syncTimes != null && _syncTimes.Length > 0;
+        public override long Duration => _duration;
+        public override long StartTime => _startTime;
+
+        protected override long SeekVideoToSync(long time, bool after)
+        {
+            if (!CanSeek)
+                return -1;
+
+            int i = Array.BinarySearch(_syncTimes, time);
+            if (after)
+                i = i >= 0 ? i + 1 : ~i;          // the first after it
+            else
+                i = i >= 0 ? i : ~i - 1;          // the last at or before it
+            if (i < 0 || i >= _syncTimes.Length)
+                return -1;
+
+            // the parameter sets go in again, with the key frame
+            _initial = true;
+            _reader.SeekSample(_videoTrack.TrackID, _syncSamples[i]);
+            return _syncTimes[i];
+        }
+
+        protected override void SeekAudio(long time)
+        {
+            if (_audioTimes == null)
+                return;
+
+            int i = Array.BinarySearch(_audioTimes, time);
+            i = i >= 0 ? i : Math.Max(0, ~i - 1);
+            _reader.SeekSample(_audioTrack.TrackID, (uint)i);
+        }
+
+        /// <summary>The times of the samples, which seeking finds its way by.</summary>
+        private void ReadSampleTimes()
+        {
+            _syncTimes = null;
+            _syncSamples = null;
+            _audioTimes = null;
+            _startTime = 0;
+            _duration = -1;
+
+            var video = _videoTrack == null ? null : _reader.GetSampleTimings(_videoTrack.TrackID);
+            if (video == null || video.Length == 0)
+                return;
+
+            var syncs = new List<(long Time, uint Sample)>();
+            long start = long.MaxValue, end = long.MinValue;
+            for (int i = 0; i < video.Length; i++)
+            {
+                long time = MediaUtils.ToTicks(video[i].PTS, _videoTrack.Timescale);
+                start = Math.Min(start, time);
+                end = Math.Max(end, MediaUtils.ToTicks(video[i].PTS + video[i].Duration, _videoTrack.Timescale));
+                if (video[i].IsSyncSample)
+                    syncs.Add((time, (uint)i));
+            }
+            syncs.Sort((a, b) => a.Time.CompareTo(b.Time));
+            _syncTimes = syncs.Select(s => s.Time).ToArray();
+            _syncSamples = syncs.Select(s => s.Sample).ToArray();
+            _startTime = start;
+            _duration = end - start;
+
+            var audio = _audioTrack == null ? null : _reader.GetSampleTimings(_audioTrack.TrackID);
+            if (audio != null)
+                _audioTimes = audio.Select(a => MediaUtils.ToTicks(a.PTS, _audioTrack.Timescale)).ToArray();
+        }
+
+        #endregion
 
         private Task<(VideoInfo Video, AudioInfo Audio)> LoadFileAsync(string fileName)
         {
@@ -126,6 +212,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (_videoTrack != null || _audioTrack != null)
             {
                 _initial = true;
+                ReadSampleTimes();
 
                 if (_videoTrack != null)
                 {

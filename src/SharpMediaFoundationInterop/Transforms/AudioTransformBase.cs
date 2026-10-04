@@ -62,6 +62,11 @@ namespace SharpMediaFoundationInterop.Transforms
             return true;
         }
 
+        public virtual void Flush()
+        {
+            _transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
+        }
+
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposedValue)
