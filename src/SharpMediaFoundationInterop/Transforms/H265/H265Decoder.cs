@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
@@ -13,6 +14,12 @@ namespace SharpMediaFoundationInterop.Transforms.H265
         public override Guid OutputFormat => PInvoke.MFVideoFormat_NV12;
 
         private bool _isLowLatency = false;
+
+        /// <summary>
+        /// Decoder properties applied through ICodecAPI once the MFT exists and before its media
+        /// types are set. Unsupported ones are skipped rather than failing, since support varies.
+        /// </summary>
+        public IDictionary<Guid, object> CodecProperties { get; } = new Dictionary<Guid, object>();
 
         public H265Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false)
             : base(H265_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
@@ -30,6 +37,11 @@ namespace SharpMediaFoundationInterop.Transforms.H265
             IMFTransform transform = CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG.MFT_ENUM_FLAG_HARDWARE, input, output);
             if (transform == null) transform = CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT, input, output);
             if (transform == null) throw new NotSupportedException($"Unsupported transform! Input: {InputFormat}, Output: {OutputFormat}");
+
+            var codec = transform as ICodecApi;
+            foreach (var property in CodecProperties)
+                if (codec.IsPropertySupported(property.Key))
+                    codec.TrySetProperty(property.Key, property.Value);
 
             IMFMediaType mediaInput;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));
