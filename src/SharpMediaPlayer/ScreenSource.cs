@@ -1,5 +1,4 @@
 ﻿using SharpMediaFoundationInterop.Input;
-using SharpMediaFoundationInterop.Utils;
 using System.Buffers;
 using System.Windows.Media;
 
@@ -14,8 +13,6 @@ namespace SharpMediaFoundationInterop.WPF
         private ScreenCapture _device;
         private bool _disposedValue;
 
-        private byte[] _rgbaBuffer;
-        private int _bytesPerPixel;
 
         public byte[] Empty { get; private set; } = new byte[0];
 
@@ -28,25 +25,14 @@ namespace SharpMediaFoundationInterop.WPF
 
         public byte[] GetVideoSample(out long timestamp)
         {
-            // when the screen was captured, in 100 ns units
-            if (_device.ReadSample(_rgbaBuffer, out timestamp))
-            {
-               var decoded = ArrayPool<byte>.Shared.Rent((int)_device.OutputSize);
+            // the frame top-down, as the bitmap it is shown in is, straight into the array handed out; and when the screen
+            // was captured, in 100 ns units
+            var frame = ArrayPool<byte>.Shared.Rent((int)_device.OutputSize);
+            if (_device.ReadSample(frame, bottomUp: false, out timestamp))
+                return frame;
 
-                BitmapUtils.CopyBitmap(
-                    _rgbaBuffer,
-                    (int)VideoInfo.Width,
-                    (int)VideoInfo.Height,
-                    decoded,
-                    (int)VideoInfo.OriginalWidth,
-                    (int)VideoInfo.OriginalHeight,
-                    _bytesPerPixel,
-                    true);
-
-                return decoded;
-            }
-
-            return Empty; // indicates whether the stream has ended
+            ArrayPool<byte>.Shared.Return(frame);
+            return Empty; // the screen has not changed
         }
 
         private Task<VideoInfo> OpenAsync()
@@ -56,10 +42,6 @@ namespace SharpMediaFoundationInterop.WPF
                 var screens = ScreenCapture.Enumerate();
                 _device = new ScreenCapture();
                 _device.Initialize(screens.First());
-
-                _bytesPerPixel = 4;
-
-                _rgbaBuffer = new byte[_device.OutputSize];
             }
         
             var videoInfo = new VideoInfo();

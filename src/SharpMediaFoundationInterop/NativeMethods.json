@@ -4,6 +4,6 @@
   "wideCharOnly": false,
   "allowMarshaling": true,
   "comInterop": {
-    "preserveSigMethods": [ "IMFTransform" ]
+    "preserveSigMethods": [ "IMFTransform", "IDXGIOutputDuplication" ]
   }
 }

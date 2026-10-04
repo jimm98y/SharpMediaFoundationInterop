@@ -41,10 +41,10 @@ namespace SharpMediaFoundationInterop.WPF
         private long _audioFrames = 0;
 
         /// <summary>
-        /// Decoded frames waiting to be shown, each with its time - -1 to be shown as it comes - and the number of the seek
-        /// it is of, which a later seek leaves it behind.
+        /// Decoded frames waiting to be shown, each with its time - -1 to be shown as it comes - the number of the seek it is
+        /// of, which a later seek leaves it behind, and when it was queued, on the clock's stopwatch.
         /// </summary>
-        private ConcurrentQueue<(byte[] Frame, long Timestamp, long Request)> _videoOut = new ConcurrentQueue<(byte[] Frame, long Timestamp, long Request)>();
+        private ConcurrentQueue<(byte[] Frame, long Timestamp, long Request, long Queued)> _videoOut = new ConcurrentQueue<(byte[] Frame, long Timestamp, long Request, long Queued)>();
 
         private bool _disposedValue;
 
@@ -521,13 +521,18 @@ namespace SharpMediaFoundationInterop.WPF
 
             if (_playPauseButton != null)
                 _playPauseButton.Content = _paused || _rate != 1 ? "" : ""; // play : pause
+            // A live source is played as it comes: there is nothing to seek in, no other rate to play it at and no position
+            // to show - pausing is all there is to do, and the rest is not shown.
+            var seekOnly = canSeek ? Visibility.Visible : Visibility.Collapsed;
             if (_rewindButton != null)
-                _rewindButton.IsEnabled = canSeek;
+                _rewindButton.Visibility = seekOnly;
             if (_fastForwardButton != null)
-                _fastForwardButton.IsEnabled = canSeek;
+                _fastForwardButton.Visibility = seekOnly;
+            if (_timeText != null)
+                _timeText.Visibility = seekOnly;
             if (_seekSlider != null)
             {
-                _seekSlider.IsEnabled = canSeek;
+                _seekSlider.Visibility = seekOnly;
                 _updatingSlider = true;
                 _seekSlider.Maximum = Math.Max(1, Duration.Ticks);
                 _updatingSlider = false;
@@ -585,11 +590,12 @@ namespace SharpMediaFoundationInterop.WPF
         private const int MaxLateFramesDropped = 10;
         private int _lateFramesDropped;
 
-        // The sound's clock: the time of the first frame of sound played since the device was reset or made, and how many
-        // bytes it plays a second - its position, in bytes, is how far on from that frame it is. -1 where the sound has
-        // no time: of a source that gives none, or none played yet.
+        // The sound's clock: the time the device's position 0 is at - from the first frame of a time queued since it was
+        // reset or made, and the bytes queued before it - and how many bytes it plays a second, its position counting on
+        // from there. -1 where the sound has no time: of a source that gives none, or none of a time queued yet.
         private long _audioClockStart = -1;
         private long _audioBytesPerSecond;
+        private long _audioBytesQueued;
 
         /// <summary>
         /// The time of the sound the device is playing, on the clock of the video's frames: -1 where none of a time plays -
@@ -620,7 +626,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (_canvas == null)
                 return;
 
-            (byte[] Frame, long Timestamp, long Request) next;
+            (byte[] Frame, long Timestamp, long Request, long Queued) next;
             long request = Interlocked.Read(ref _request);
             while (true)
             {
@@ -636,12 +642,16 @@ namespace SharpMediaFoundationInterop.WPF
 
             // The first frame of a seek sets the clock: at the time sought, of a file - the key frame after it, played fast,
             // is shown when the clock gets to it - else at the frame's own. It is shown even paused: it is what was sought to.
+            // A file's clock starts as its first frame is shown; a live source's as its first frame came, so that showing it
+            // late - the first, held up by the bitmap made for it - does not hold every frame after it back by as long, and
+            // the source with them, whose next frame waits for room.
             bool first = next.Request != _shownRequest;
             if (next.Request != _anchoredRequest && next.Timestamp >= 0)
             {
                 _anchoredRequest = next.Request;
-                _clockFrameTime = SeekableSource != null && _seekTime >= 0 ? _seekTime : next.Timestamp;
-                _clockStart = _stopwatch.Elapsed.Ticks;
+                bool live = SeekableSource == null;
+                _clockFrameTime = !live && _seekTime >= 0 ? _seekTime : next.Timestamp;
+                _clockStart = live ? next.Queued : _stopwatch.Elapsed.Ticks;
             }
             if (_paused && !first)
                 return;
@@ -672,6 +682,21 @@ namespace SharpMediaFoundationInterop.WPF
                     _clockStart = now;
                 }
                 long clock = _clockFrameTime + (now - _clockStart) * rate;
+
+                // A live frame cannot come early. One that came ahead of the clock shows that the clock is behind the
+                // source - by as much more as the frame it was set by took to come, the first, made slow by buffers
+                // touched for the first time - and moves it on: the clock keeps to the quickest the frames have come,
+                // and none waits for a delay that was another's.
+                if (audio < 0 && SeekableSource == null && _clockFrameTime >= 0)
+                {
+                    long early = next.Timestamp - (_clockFrameTime + (next.Queued - _clockStart));
+                    if (early > 0)
+                    {
+                        _clockFrameTime += early;
+                        clock += early;
+                    }
+                }
+
                 long ahead = (next.Timestamp - clock) * Math.Sign(rate);
 
                 // Behind the sound, frames are let go of until one is in time - as many as are behind, but never so many in
@@ -686,14 +711,16 @@ namespace SharpMediaFoundationInterop.WPF
                 }
                 _lateFramesDropped = 0;
 
-                // A stream's times may jump either way, and are followed. A file's are its own - played fast, or of key
-                // frames alone, frames can be far apart - and a frame ahead of the clock is waited for: only a clock run
-                // ahead of frames decoded too slowly is set again.
-                long off = SeekableSource == null ? Math.Abs(ahead) : -ahead;
+                // A stream's times may jump either way, and are followed - from when the frame came, as the clock starts:
+                // set from when it is shown, a frame late in the queue would leave every frame after it waiting as long.
+                // A file's are its own - played fast, or of key frames alone, frames can be far apart - and a frame ahead
+                // of the clock is waited for: only a clock run ahead of frames decoded too slowly is set again.
+                bool live = SeekableSource == null;
+                long off = live ? Math.Abs(ahead) : -ahead;
                 if (_clockFrameTime < 0 || off > ResyncThreshold * Math.Abs(rate))
                 {
                     _clockFrameTime = next.Timestamp;
-                    _clockStart = now;
+                    _clockStart = live ? next.Queued : now;
                 }
                 else if (ahead > 0)
                 {
@@ -705,6 +732,20 @@ namespace SharpMediaFoundationInterop.WPF
 
             if (!_videoOut.TryDequeue(out next))
                 return;
+
+            // Live, a frame with a frame behind it that is due too is late: it is let go of, and the newer shown - the
+            // newest of a screen captured faster than it is drawn. A frame not yet due behind it, as a decoder hands a
+            // group of pictures out at once, waits its turn: frames are let go of for being late, not for being older.
+            if (SeekableSource == null && _clockFrameTime >= 0)
+            {
+                long clockNow = _clockFrameTime + (_stopwatch.Elapsed.Ticks - _clockStart);
+                while (_videoOut.TryPeek(out var behind) && behind.Timestamp >= 0 && behind.Timestamp <= clockNow
+                    && _videoOut.TryDequeue(out var newer))
+                {
+                    _source.ReturnVideoSample(next.Frame);
+                    next = newer;
+                }
+            }
 
             byte[] decoded = next.Frame;
             _videoFrames++;
@@ -894,6 +935,9 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
+        /// <summary>How many frames of a live source are taken ahead of the one shown: a group of pictures' worth, roughly.</summary>
+        private const int LiveQueueLength = 4;
+
         /// <returns>Whether a frame was made, or let go of: there may be more to do at once.</returns>
         private bool DecodeVideoPass(IVideoSource videoSource)
         {
@@ -908,7 +952,14 @@ namespace SharpMediaFoundationInterop.WPF
             // the frames ran out: nothing more to decode, until a seek
             bool ended = seekable != null && Interlocked.Read(ref _endedRequest) == Interlocked.Read(ref _request);
 
-            if (!ended && _videoOut.Count < 1)
+            // A file's frames are each shown at a time of their own, decoded one ahead. A live source's are taken as they come,
+            // a few ahead - the next frame of a screen captured as the last is drawn, a group of pictures a decoder hands out
+            // at once - each shown at its own time, and those late let go of by the renderer. Paused, the oldest is let go
+            // of to take the next, so that what is live is what is shown on play.
+            bool live = seekable == null;
+            if (live && _paused && _videoOut.Count >= LiveQueueLength && _videoOut.TryDequeue(out var stale))
+                videoSource.ReturnVideoSample(stale.Frame);
+            if (!ended && _videoOut.Count < (live ? LiveQueueLength : 1))
             {
                 var sample = videoSource.GetVideoSample(out long timestamp);
                 if (sample == null)
@@ -925,14 +976,7 @@ namespace SharpMediaFoundationInterop.WPF
 
                 // read after the frame: a seek is done before the frame after it is handed out, on this thread
                 long request = seekable?.Request ?? 0;
-                _videoOut.Enqueue((sample, timestamp, request));
-                return true;
-            }
-            else if (_paused && seekable == null && _videoOut.Count >= 1)
-            {
-                // live, paused: what comes is let go of, to show what is live again on play
-                if (_videoOut.TryDequeue(out var dropped))
-                    videoSource.ReturnVideoSample(dropped.Frame);
+                _videoOut.Enqueue((sample, timestamp, request, _stopwatch.Elapsed.Ticks));
                 return true;
             }
 
@@ -944,6 +988,10 @@ namespace SharpMediaFoundationInterop.WPF
         {
             if (_waveOut == null)
             {
+                // a source of video is initialized by the video's thread: the sound waits for it rather than initialize it
+                // a second time beside it
+                if (audioSource.AudioInfo == null && _source is IVideoSource)
+                    return false;
                 InitializeAudio(audioSource);
                 if (_waveOut == null)
                     return false;
@@ -958,6 +1006,7 @@ namespace SharpMediaFoundationInterop.WPF
                     {
                         _waveOut.Reset();
                         _audioClockStart = -1;
+                        _audioBytesQueued = 0;
                         if (IsHalted)
                             _waveOut.Pause();
                         else
@@ -966,8 +1015,9 @@ namespace SharpMediaFoundationInterop.WPF
                 }
             }
 
-            // a source of no video has no frame for the sound to wait for
-            if (_audioHold && (_source as IVideoSource)?.VideoInfo == null)
+            // A source of no video has no frame for the sound to wait for; a live one keeps sending while it would wait, and
+            // what it sent would be played that late - the video follows the sound's clock instead, where it has one.
+            if (_audioHold && ((_source as IVideoSource)?.VideoInfo == null || SeekableSource == null))
                 _audioHold = false;
 
             // as much sound as the queue is short of, or, live and paused, whatever comes, to let go of
@@ -1001,6 +1051,7 @@ namespace SharpMediaFoundationInterop.WPF
                     this._waveOut = new WaveOut();
                     this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.ChannelCount, audioInfo.BitsPerSample);
                     this._audioClockStart = -1;
+                    this._audioBytesQueued = 0;
                     this._audioBytesPerSecond = (long)audioInfo.SampleRate * audioInfo.ChannelCount * audioInfo.BitsPerSample / 8;
                     // a buffer played is room for the next
                     this._waveOut.OnPlaybackCompleted += (s, e) => _audioWake.Set();
@@ -1067,10 +1118,11 @@ namespace SharpMediaFoundationInterop.WPF
                         {
                             if (_waveOut != null)
                             {
-                                // the first frame since the device was reset is where its position counts from
-                                if (_audioClockStart < 0 && _waveOut.QueuedFrames == 0 && timestamp >= 0)
-                                    _audioClockStart = timestamp;
+                                // the first frame of a time since the device was reset, after what was queued before it
+                                if (_audioClockStart < 0 && timestamp >= 0 && _audioBytesPerSecond > 0)
+                                    _audioClockStart = timestamp - _audioBytesQueued * TimeSpan.TicksPerSecond / _audioBytesPerSecond;
                                 _waveOut.Enqueue(sample, (uint)sample.Length);
+                                _audioBytesQueued += sample.Length;
                             }
                         }
                         Interlocked.Increment(ref _audioFrames);
