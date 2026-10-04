@@ -29,14 +29,24 @@ namespace SharpMediaFoundationInterop.WPF
             this._path = path ?? throw new ArgumentNullException(nameof(path));
         }
 
-        public async override Task InitializeAsync()
+        /// <summary>
+        /// The reader, and the stream under it, are read by the video's thread and the sound's: one at a time, a sample, a
+        /// seek or the file read again. What is read is in the track's own buffer, so the lock is not held while it is decoded.
+        /// </summary>
+        private readonly object _readerLock = new object();
+
+        public override Task InitializeAsync()
         {
-            if (VideoInfo == null)
+            lock (_readerLock)
             {
-                var ret = await LoadFileAsync(_path);
-                VideoInfo = ret.Video;
-                AudioInfo = ret.Audio;
+                if (VideoInfo == null)
+                {
+                    var ret = LoadFileAsync(_path).GetAwaiter().GetResult();
+                    VideoInfo = ret.Video;
+                    AudioInfo = ret.Audio;
+                }
             }
+            return Task.CompletedTask;
         }
 
         // What a read hands out, filled again by each: the units are views of the reader's buffer for the track, valid until
@@ -44,13 +54,24 @@ namespace SharpMediaFoundationInterop.WPF
         private readonly List<ArraySegment<byte>> _audioUnits = new List<ArraySegment<byte>>();
         private readonly List<ArraySegment<byte>> _videoUnits = new List<ArraySegment<byte>>();
 
-        protected override IList<ArraySegment<byte>> ReadNextAudio()
+        protected override IList<ArraySegment<byte>> ReadNextAudio() => ReadNextAudio(out _);
+
+        protected override IList<ArraySegment<byte>> ReadNextAudio(out long timestamp)
         {
+            lock (_readerLock)
+                return ReadNextAudioLocked(out timestamp);
+        }
+
+        private IList<ArraySegment<byte>> ReadNextAudioLocked(out long timestamp)
+        {
+            timestamp = -1;
             if (_audioTrack != null)
             {
                 var sample = _reader.ReadSample(_audioTrack.TrackID);
                 if (sample != null)
                 {
+                    // of the track's own timescale, on the clock of the video's samples: both count from the file's start
+                    timestamp = MediaUtils.ToTicks(sample.PTS, _audioTrack.Timescale);
                     _audioUnits.Clear();
                     foreach (var unit in _reader.ParseSample(_audioTrack.TrackID, sample.Data))
                         _audioUnits.Add(unit);
@@ -61,6 +82,12 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         protected override IList<ArraySegment<byte>> ReadNextVideo(out long timestamp)
+        {
+            lock (_readerLock)
+                return ReadNextVideoLocked(out timestamp);
+        }
+
+        private IList<ArraySegment<byte>> ReadNextVideoLocked(out long timestamp)
         {
             timestamp = -1;
             if (_videoTrack != null)
@@ -124,6 +151,12 @@ namespace SharpMediaFoundationInterop.WPF
 
         protected override long SeekVideoToSync(long time, bool after)
         {
+            lock (_readerLock)
+                return SeekVideoToSyncLocked(time, after);
+        }
+
+        private long SeekVideoToSyncLocked(long time, bool after)
+        {
             if (!CanSeek)
                 return -1;
 
@@ -142,6 +175,12 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         protected override void SeekAudio(long time)
+        {
+            lock (_readerLock)
+                SeekAudioLocked(time);
+        }
+
+        private void SeekAudioLocked(long time)
         {
             if (_audioTimes == null)
                 return;
@@ -322,10 +361,13 @@ namespace SharpMediaFoundationInterop.WPF
         {
             if(disposing)
             {
-                if(_fs != null)
+                lock (_readerLock)
                 {
-                    _fs.Dispose();  
-                    _fs = null;
+                    if(_fs != null)
+                    {
+                        _fs.Dispose();
+                        _fs = null;
+                    }
                 }
             }
         }

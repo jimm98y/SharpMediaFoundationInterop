@@ -23,10 +23,6 @@ namespace SharpMediaFoundationInterop.WPF
     [TemplatePart(Name = "PART_Time", Type = typeof(TextBlock))]
     public class VideoControl : Control, IDisposable
     {
-        private static object _syncRoot = new object();
-        private static VideoControl[] _controls = Array.Empty<VideoControl>();
-        private static Task _decodeThread;
-
         private object _waveSync = new object();
         private WaveOut _waveOut;
 
@@ -72,6 +68,7 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 sender.StartPlaying();
             }
+            sender.Wake();
         }
 
         private bool _isLooping = false;
@@ -200,34 +197,38 @@ namespace SharpMediaFoundationInterop.WPF
         static VideoControl()
         {
             DefaultStyleKeyProperty.OverrideMetadata(typeof(VideoControl), new FrameworkPropertyMetadata(typeof(VideoControl)));
-            _decodeThread = Task.Factory.StartNew(DecodeThread, TaskCreationOptions.LongRunning);
         }
 
         public VideoControl()
         {
             Loaded += VideoControl_Loaded;
             Unloaded += VideoControl_Unloaded;
+            IsVisibleChanged += VideoControl_IsVisibleChanged;
             CompositionTarget.Rendering += CompositionTarget_Rendering;
         }
 
         private void VideoControl_Unloaded(object sender, RoutedEventArgs e)
         {
-            lock (_syncRoot)
-            {
-                var controls = _controls.ToHashSet();
-                controls.Remove(this);
-                _controls = controls.ToArray();
-            }
+            _hidden = true;
+            ApplyRunning();
+        }
+
+        /// <summary>
+        /// Out of sight - on another tab, collapsed - nothing of the control is decoded, made or started. The sound and the
+        /// clock wait with the video, rather than the sound queued playing out alone, and go on where they were when it is
+        /// in sight again.
+        /// </summary>
+        private void VideoControl_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            _hidden = !(bool)e.NewValue;
+            ApplyRunning();
         }
 
         private void VideoControl_Loaded(object sender, RoutedEventArgs e)
         {
-            lock (_syncRoot)
-            {
-                var controls = _controls.ToHashSet();
-                controls.Add(this);
-                _controls = controls.ToArray();
-            }
+            _hidden = !IsVisible;
+            ApplyRunning();
+            StartThreads();
 
             var window = Window.GetWindow(this);
             if (window != null)
@@ -235,6 +236,7 @@ namespace SharpMediaFoundationInterop.WPF
                 window.Closing += (s1, e1) =>
                 {
                     CompositionTarget.Rendering -= CompositionTarget_Rendering;
+                    StopThreads();
                 };
             }
         }
@@ -394,24 +396,38 @@ namespace SharpMediaFoundationInterop.WPF
             Interlocked.Exchange(ref _request, seekable.Seek(time, rate));
             _audioHold = true;
             _audioReset = true;
+            Wake();
             UpdateControls();
         }
 
         private void SetPaused(bool paused)
         {
             _paused = paused;
-            if (paused)
+            ApplyRunning();
+            UpdateControls();
+        }
+
+        /// <summary>Whether the control is out of sight - not yet shown, on another tab, collapsed - and nothing of it decoded.</summary>
+        private volatile bool _hidden = true;
+
+        /// <summary>Whether the clock and the sound stand still: paused, or out of sight.</summary>
+        private bool IsHalted => _paused || _hidden;
+
+        /// <summary>Runs the clock and the sound, or stops them where they are, as <see cref="IsHalted"/> says.</summary>
+        private void ApplyRunning()
+        {
+            Wake();
+            if (IsHalted)
                 _stopwatch.Stop();
             else
                 _stopwatch.Start();
             lock (_waveSync)
             {
-                if (paused)
+                if (IsHalted)
                     _waveOut?.Pause();
                 else
                     _waveOut?.Resume();
             }
-            UpdateControls();
         }
 
         /// <summary>The frames ran out, at the end or, backwards, the start: paused there, or, looping, from the start again.</summary>
@@ -564,6 +580,41 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>The time of the frame shown last; -1 before the first.</summary>
         private long _lastShownTime = -1;
 
+        /// <summary>How late after the sound a frame may be shown: later, it is let go of, for the video to catch up.</summary>
+        private static readonly long LateFrame = TimeSpan.FromMilliseconds(100).Ticks;
+        private const int MaxLateFramesDropped = 10;
+        private int _lateFramesDropped;
+
+        // The sound's clock: the time of the first frame of sound played since the device was reset or made, and how many
+        // bytes it plays a second - its position, in bytes, is how far on from that frame it is. -1 where the sound has
+        // no time: of a source that gives none, or none played yet.
+        private long _audioClockStart = -1;
+        private long _audioBytesPerSecond;
+
+        /// <summary>
+        /// The time of the sound the device is playing, on the clock of the video's frames: -1 where none of a time plays -
+        /// paused, sought and not yet playing, played at another rate than 1, or all of it played.
+        /// </summary>
+        private long AudioClock()
+        {
+            if (IsHalted || _rate != 1 || _audioHold)
+                return -1;
+
+            lock (_waveSync)
+            {
+                if (_waveOut == null || _audioClockStart < 0 || _audioBytesPerSecond <= 0 || _waveOut.QueuedFrames <= 0)
+                    return -1;
+                try
+                {
+                    return _audioClockStart + _waveOut.GetPosition() * TimeSpan.TicksPerSecond / _audioBytesPerSecond;
+                }
+                catch (Exception)
+                {
+                    return -1; // a device that does not tell its position in bytes
+                }
+            }
+        }
+
         private void CompositionTarget_Rendering(object sender, EventArgs e)
         {
             if (_canvas == null)
@@ -580,6 +631,7 @@ namespace SharpMediaFoundationInterop.WPF
                 // of before a seek
                 if (_videoOut.TryDequeue(out var stale))
                     _source.ReturnVideoSample(stale.Frame);
+                _videoWake.Set();
             }
 
             // The first frame of a seek sets the clock: at the time sought, of a file - the key frame after it, played fast,
@@ -604,14 +656,35 @@ namespace SharpMediaFoundationInterop.WPF
                 {
                     if (_videoOut.TryDequeue(out var late))
                         _source.ReturnVideoSample(late.Frame);
+                    _videoWake.Set();
                     return;
                 }
 
                 // Each frame is shown at its own time, as the source gives it - of the file's samples, of the RTP
-                // timestamps, of the capture - against the clock, at the rate played.
+                // timestamps, of the capture - against the clock, at the rate played. Where sound plays, of a time, the
+                // clock is the sound's: what of it the device has played. The stopwatch carries on from there where the
+                // sound stops - at its end, or the decode thread held up - and sound playing again takes the clock back.
                 long now = _stopwatch.Elapsed.Ticks;
+                long audio = AudioClock();
+                if (audio >= 0)
+                {
+                    _clockFrameTime = audio;
+                    _clockStart = now;
+                }
                 long clock = _clockFrameTime + (now - _clockStart) * rate;
                 long ahead = (next.Timestamp - clock) * Math.Sign(rate);
+
+                // Behind the sound, frames are let go of until one is in time - as many as are behind, but never so many in
+                // a row that a decoder slower than the video shows nothing.
+                if (audio >= 0 && -ahead > LateFrame && _lateFramesDropped < MaxLateFramesDropped)
+                {
+                    if (_videoOut.TryDequeue(out var behindSound))
+                        _source.ReturnVideoSample(behindSound.Frame);
+                    _videoWake.Set();
+                    _lateFramesDropped++;
+                    return;
+                }
+                _lateFramesDropped = 0;
 
                 // A stream's times may jump either way, and are followed. A file's are its own - key frames alone, played
                 // fast, are seconds apart - and a frame ahead of the clock is waited for: only a clock run ahead of frames
@@ -638,8 +711,12 @@ namespace SharpMediaFoundationInterop.WPF
             _shownRequest = next.Request;
             if (next.Timestamp >= 0)
                 Interlocked.Exchange(ref _lastShownTime, next.Timestamp);
-            if (first)
+            if (first && _audioHold)
+            {
                 _audioHold = false;
+                _audioWake.Set();
+            }
+            _videoWake.Set(); // room for the next frame
 
             var videoInfo = _source.VideoInfo;
             if(videoInfo == null)
@@ -668,7 +745,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         private async Task InitializeVideo(IVideoSource videoSource)
         {
-            await videoSource.InitializeAsync();
+            InitializeSource(videoSource);
 
             var videoInfo = videoSource.VideoInfo;
             if (videoInfo != null)
@@ -689,7 +766,7 @@ namespace SharpMediaFoundationInterop.WPF
                         this._canvas = canvas;
 
                         this._videoRect = new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight);
-                        if (_paused)
+                        if (IsHalted)
                             this._stopwatch.Reset();
                         else
                             this._stopwatch.Restart();
@@ -715,112 +792,206 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
 
-        private static async Task DecodeThread()
+        #region Decode threads
+
+        // Each control decodes on two threads of its own, the video's and the sound's: neither waits for the other, nor
+        // for another control - a camera started, a file opened, a seek decoded through a long group of pictures. Each
+        // sleeps until there is room for what it makes - a frame shown, a buffer of sound played - or something is asked
+        // of it, and looks again after IdleWait where its source had nothing ready.
+        private Thread _videoThread;
+        private Thread _audioThread;
+        private readonly AutoResetEvent _videoWake = new AutoResetEvent(false);
+        private readonly AutoResetEvent _audioWake = new AutoResetEvent(false);
+        private StopFlag _stop;
+
+        /// <summary>Asks a pair of threads to end: each pair has its own, so threads started again never run beside old ones.</summary>
+        private sealed class StopFlag
         {
-            while (true)
+            public volatile bool Requested;
+        }
+        private const int IdleWait = 5;
+
+        // A source is initialized by one thread at a time: both need it, and its initialization reads the file, or
+        // connects, once.
+        private readonly object _initLock = new object();
+
+        private void InitializeSource(object source)
+        {
+            lock (_initLock)
             {
-                bool rendered = false;
-                var controls = _controls;
-
-                foreach (var control in controls)
-                {
-                    var seekable = control.SeekableSource;
-                    if (control._source is IVideoSource videoSource)
-                    {
-                        if (control._canvas == null)
-                        {
-                            await control.InitializeVideo(videoSource);
-                        }
-
-                        // the frames ran out: nothing more to decode, until a seek
-                        bool ended = seekable != null && Interlocked.Read(ref control._endedRequest) == Interlocked.Read(ref control._request);
-
-                        if (!ended && control._videoOut.Count < 1)
-                        {
-                            rendered = control.DecodeVideo(videoSource);
-
-                            if (!rendered)
-                            {
-                                if (seekable != null)
-                                    control.OnEnded(seekable.Request);
-                                else
-                                    await control.UninitializeVideo(videoSource);
-                            }
-                        }
-                        else if (control._paused && seekable == null && control._videoOut.Count >= 1)
-                        {
-                            // live, paused: what comes is let go of, to show what is live again on play
-                            if (control._videoOut.TryDequeue(out var dropped))
-                                videoSource.ReturnVideoSample(dropped.Frame);
-                        }
-                    }
-
-                    if (control._source is IAudioSource audioSource)
-                    {
-                        if (control._waveOut == null)
-                        {
-                            await control.InitializeAudio(audioSource);
-                        }
-
-                        if (control._audioReset)
-                        {
-                            control._audioReset = false;
-                            lock (control._waveSync)
-                            {
-                                if (control._waveOut != null)
-                                {
-                                    control._waveOut.Reset();
-                                    if (control._paused)
-                                        control._waveOut.Pause();
-                                    else
-                                        control._waveOut.Resume();
-                                }
-                            }
-                        }
-
-                        // as much sound as the queue is short of - several frames at a time, where the loop was held up -
-                        // or, live and paused, whatever comes, to let go of
-                        bool live = seekable == null;
-                        while (control._waveOut != null && !control._audioHold && (control.IsAudioQueueShort() || (live && control._paused)))
-                        {
-                            rendered = control.DecodeAudio(audioSource, drop: live && control._paused, out bool queued);
-
-                            if (!rendered)
-                            {
-                                await control.UninitializeAudio(audioSource);
-                                break;
-                            }
-                            if (!queued)
-                                break; // none ready yet
-                        }
-                    }
-                }
-
-                await Task.Delay(1);
+                if (source is IVideoSource video)
+                    video.InitializeAsync().GetAwaiter().GetResult();
+                else if (source is IAudioSource audio)
+                    audio.InitializeAsync().GetAwaiter().GetResult();
             }
         }
 
-        private bool DecodeVideo(IVideoSource videoSource)
+        private void StartThreads()
         {
-            var sample = videoSource.GetVideoSample(out long timestamp);
-            if (sample != null)
+            if (_videoThread != null)
+                return;
+
+            var stop = _stop = new StopFlag();
+            _videoThread = new Thread(() => VideoLoop(stop)) { IsBackground = true, Name = "VideoControl video" };
+            _audioThread = new Thread(() => AudioLoop(stop)) { IsBackground = true, Name = "VideoControl audio" };
+            _videoThread.Start();
+            _audioThread.Start();
+        }
+
+        /// <summary>Ends the threads, without waiting for them: what they are doing may need the UI thread.</summary>
+        private void StopThreads()
+        {
+            if (_stop != null)
+                _stop.Requested = true;
+            _videoThread = null;
+            _audioThread = null;
+            Wake();
+        }
+
+        private void Wake()
+        {
+            _videoWake.Set();
+            _audioWake.Set();
+        }
+
+        private void VideoLoop(StopFlag stop)
+        {
+            while (!stop.Requested)
             {
-                if (sample.Length > 0)
+                bool worked = false;
+                try
                 {
-                    // read after the frame: a seek is done before the frame after it is handed out, on this thread
-                    long request = videoSource is ISeekableVideoSource seekable ? seekable.Request : 0;
-                    _videoOut.Enqueue((sample, timestamp, request));
+                    if (!_hidden && _source is IVideoSource videoSource)
+                        worked = DecodeVideoPass(videoSource);
+                }
+                catch (Exception ex)
+                {
+                    if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
                 }
 
+                if (!worked)
+                    _videoWake.WaitOne(IdleWait);
+            }
+        }
+
+        private void AudioLoop(StopFlag stop)
+        {
+            while (!stop.Requested)
+            {
+                bool worked = false;
+                try
+                {
+                    if (!_hidden && _source is IAudioSource audioSource)
+                        worked = DecodeAudioPass(audioSource);
+                }
+                catch (Exception ex)
+                {
+                    if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
+                }
+
+                if (!worked)
+                    _audioWake.WaitOne(IdleWait);
+            }
+        }
+
+        /// <returns>Whether a frame was made, or let go of: there may be more to do at once.</returns>
+        private bool DecodeVideoPass(IVideoSource videoSource)
+        {
+            var seekable = SeekableSource;
+            if (_canvas == null)
+            {
+                InitializeVideo(videoSource).GetAwaiter().GetResult();
+                if (_canvas == null)
+                    return false;
+            }
+
+            // the frames ran out: nothing more to decode, until a seek
+            bool ended = seekable != null && Interlocked.Read(ref _endedRequest) == Interlocked.Read(ref _request);
+
+            if (!ended && _videoOut.Count < 1)
+            {
+                var sample = videoSource.GetVideoSample(out long timestamp);
+                if (sample == null)
+                {
+                    if (seekable != null)
+                        OnEnded(seekable.Request);
+                    else
+                        UninitializeVideo(videoSource);
+                    return false;
+                }
+
+                if (sample.Length == 0)
+                    return false; // none ready yet
+
+                // read after the frame: a seek is done before the frame after it is handed out, on this thread
+                long request = seekable?.Request ?? 0;
+                _videoOut.Enqueue((sample, timestamp, request));
+                return true;
+            }
+            else if (_paused && seekable == null && _videoOut.Count >= 1)
+            {
+                // live, paused: what comes is let go of, to show what is live again on play
+                if (_videoOut.TryDequeue(out var dropped))
+                    videoSource.ReturnVideoSample(dropped.Frame);
                 return true;
             }
 
             return false;
         }
 
-        private async Task InitializeAudio(IAudioSource audioSource)
+        /// <returns>Whether sound was queued, or let go of: there may be more to do at once.</returns>
+        private bool DecodeAudioPass(IAudioSource audioSource)
         {
-            await audioSource.InitializeAsync();
+            if (_waveOut == null)
+            {
+                InitializeAudio(audioSource);
+                if (_waveOut == null)
+                    return false;
+            }
+
+            if (_audioReset)
+            {
+                _audioReset = false;
+                lock (_waveSync)
+                {
+                    if (_waveOut != null)
+                    {
+                        _waveOut.Reset();
+                        _audioClockStart = -1;
+                        if (IsHalted)
+                            _waveOut.Pause();
+                        else
+                            _waveOut.Resume();
+                    }
+                }
+            }
+
+            // a source of no video has no frame for the sound to wait for
+            if (_audioHold && (_source as IVideoSource)?.VideoInfo == null)
+                _audioHold = false;
+
+            // as much sound as the queue is short of, or, live and paused, whatever comes, to let go of
+            bool live = SeekableSource == null;
+            bool worked = false;
+            while (_waveOut != null && !_audioHold && (IsAudioQueueShort() || (live && _paused)))
+            {
+                if (!DecodeAudio(audioSource, drop: live && _paused, out bool queued))
+                {
+                    UninitializeAudio(audioSource);
+                    return false;
+                }
+                if (!queued)
+                    break; // none ready yet
+                worked = true;
+            }
+            return worked;
+        }
+
+        #endregion
+
+        private Task InitializeAudio(IAudioSource audioSource)
+        {
+            InitializeSource(audioSource);
 
             var audioInfo = audioSource.AudioInfo;
             if (audioInfo != null)
@@ -829,10 +1000,16 @@ namespace SharpMediaFoundationInterop.WPF
                 {
                     this._waveOut = new WaveOut();
                     this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.ChannelCount, audioInfo.BitsPerSample);
-                    if (_paused)
+                    this._audioClockStart = -1;
+                    this._audioBytesPerSecond = (long)audioInfo.SampleRate * audioInfo.ChannelCount * audioInfo.BitsPerSample / 8;
+                    // a buffer played is room for the next
+                    this._waveOut.OnPlaybackCompleted += (s, e) => _audioWake.Set();
+                    if (IsHalted)
                         this._waveOut.Pause();
                }
             }
+
+            return Task.CompletedTask;
         }
 
         private Task UninitializeAudio(IAudioSource audioSource)
@@ -841,6 +1018,7 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 this._waveOut.Dispose();
                 this._waveOut = null;
+                this._audioClockStart = -1;
             }
 
             return Task.CompletedTask;
@@ -867,7 +1045,7 @@ namespace SharpMediaFoundationInterop.WPF
         private bool DecodeAudio(IAudioSource audioSource, bool drop, out bool queued)
         {
             queued = false;
-            var sample = audioSource.GetAudioSample();
+            var sample = audioSource.GetAudioSample(out long timestamp);
             if (sample != null)
             {
                 if (sample.Length > 0)
@@ -887,7 +1065,13 @@ namespace SharpMediaFoundationInterop.WPF
 
                         lock (_waveSync)
                         {
-                            _waveOut?.Enqueue(sample, (uint)sample.Length);
+                            if (_waveOut != null)
+                            {
+                                // the first frame since the device was reset is where its position counts from
+                                if (_audioClockStart < 0 && _waveOut.QueuedFrames == 0 && timestamp >= 0)
+                                    _audioClockStart = timestamp;
+                                _waveOut.Enqueue(sample, (uint)sample.Length);
+                            }
                         }
                         Interlocked.Increment(ref _audioFrames);
                     }
@@ -917,7 +1101,11 @@ namespace SharpMediaFoundationInterop.WPF
             Interlocked.Exchange(ref _request, _source is ISeekableVideoSource seekable ? seekable.Request : 0);
             _rate = 1;
             PlaybackRate = 1;
-            if (!_paused)
+
+            // The sound waits for the first frame shown, as after a seek: what comes before it - the decoder made, the
+            // first frames decoded - holds the decode thread up longer than the sound queued plays.
+            _audioHold = true;
+            if (!IsHalted)
                 _stopwatch.Restart();
             else
                 _stopwatch.Reset();
@@ -931,6 +1119,8 @@ namespace SharpMediaFoundationInterop.WPF
                 {
                     // TODO: dispose managed state (managed objects)
                 }
+
+                StopThreads();
 
                 if (_waveOut != null)
                 {

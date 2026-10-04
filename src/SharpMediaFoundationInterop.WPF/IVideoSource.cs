@@ -86,6 +86,16 @@ namespace SharpMediaFoundationInterop.WPF
         AudioInfo AudioInfo { get; }
         Task InitializeAsync();
         byte[] GetAudioSample();
+
+        /// <summary>
+        /// The next frame of sound, as <see cref="GetAudioSample()"/>, and the time it starts at, on the clock of the
+        /// video's frames: what a player keeps them in step by. -1 where the source does not know it.
+        /// </summary>
+        byte[] GetAudioSample(out long timestamp)
+        {
+            timestamp = -1;
+            return GetAudioSample();
+        }
         void ReturnAudioSample(byte[] sample);
     }
 }

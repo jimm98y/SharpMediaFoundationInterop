@@ -31,7 +31,8 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>Decoded frames, each with the time it is shown at.</summary>
         protected ConcurrentQueue<(byte[] Frame, long Timestamp)> _videoRenderQueue = new ConcurrentQueue<(byte[] Frame, long Timestamp)>();
-        protected ConcurrentQueue<byte[]> _audioRenderQueue = new ConcurrentQueue<byte[]>();
+        /// <summary>Decoded frames of sound, each with the time it starts at; -1 where the source gives none.</summary>
+        protected ConcurrentQueue<(byte[] Pcm, long Timestamp)> _audioRenderQueue = new ConcurrentQueue<(byte[] Pcm, long Timestamp)>();
 
         protected byte[] _nv12Buffer;
         protected byte[] _rgbBuffer;
@@ -45,8 +46,18 @@ namespace SharpMediaFoundationInterop.WPF
 
         public abstract Task InitializeAsync();
 
-        public virtual byte[] GetAudioSample()
+        public byte[] GetAudioSample() => GetAudioSample(out _);
+
+        /// <summary>
+        /// The time of the next frame of sound decoded: that of the first frame read since a seek, then on by each frame's
+        /// length - the decoder's own delay, of a frame or two, is the same for every frame, and its outputs are not timed.
+        /// -1 until a frame of a time is read.
+        /// </summary>
+        private long _audioOutTime = -1;
+
+        public virtual byte[] GetAudioSample(out long timestamp)
         {
+            timestamp = -1;
             var audioInfo = AudioInfo;
             if (audioInfo == null)
             {
@@ -58,21 +69,34 @@ namespace SharpMediaFoundationInterop.WPF
                 CreateAudioDecoder(audioInfo);
             }
 
+            ApplyPendingAudioSeek();
+
             // no sound in trick play: faster or backwards, it is noise; at 1x again, the seek to where the video is brings
             // it back in step
             if (Rate != 1 || _audioEnded)
                 return Empty;
 
             if (_audioRenderQueue.TryDequeue(out var sample))
-                return sample;
-
-            IList<ArraySegment<byte>> frame;
-            while (_audioRenderQueue.Count == 0 && (frame = ReadNextAudio()) != null)
             {
+                timestamp = sample.Timestamp;
+                return sample.Pcm;
+            }
+
+            long bytesPerSecond = (long)audioInfo.SampleRate * audioInfo.ChannelCount * audioInfo.BitsPerSample / 8;
+            IList<ArraySegment<byte>> frame;
+            while (_audioRenderQueue.Count == 0 && (frame = ReadNextAudio(out long frameTime)) != null)
+            {
+                if (_audioOutTime < 0 && frameTime >= 0)
+                    _audioOutTime = frameTime;
+
                 if (_audioDecoder.ProcessInput(frame[0], 0))
                 {
                     while (_audioDecoder.ProcessOutput(ref _pcmBuffer, out var pcmSize))
                     {
+                        long pcmTime = _audioOutTime;
+                        if (_audioOutTime >= 0 && bytesPerSecond > 0)
+                            _audioOutTime += pcmSize * TimeSpan.TicksPerSecond / bytesPerSecond;
+
                         if (_audioDecoder is OpusDecoder)
                         {
                             byte[] decoded = RentAudio((int)pcmSize);
@@ -86,14 +110,14 @@ namespace SharpMediaFoundationInterop.WPF
                                 decoded[i * 4 + 2] = (byte)((pcm & 0x00FF0000) >> 16);
                                 decoded[i * 4 + 3] = (byte)((pcm & 0xFF000000) >> 24);
                             }
-                            _audioRenderQueue.Enqueue(decoded);
+                            _audioRenderQueue.Enqueue((decoded, pcmTime));
                             Interlocked.Increment(ref _audioFrames);
                         }
                         else
                         {
                             byte[] decoded = RentAudio((int)pcmSize);
                             Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
-                            _audioRenderQueue.Enqueue(decoded);
+                            _audioRenderQueue.Enqueue((decoded, pcmTime));
                             Interlocked.Increment(ref _audioFrames);
                         }
                     }
@@ -102,7 +126,8 @@ namespace SharpMediaFoundationInterop.WPF
 
             if (_audioRenderQueue.TryDequeue(out sample))
             {
-                return sample;
+                timestamp = sample.Timestamp;
+                return sample.Pcm;
             }
             else
             {
@@ -128,11 +153,43 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>Whether the audio has come to its end, with the video still going on: see <see cref="Seek"/>.</summary>
         private bool _audioEnded;
 
+        /// <summary>The time a seek done on the video's thread is to, for the sound to follow on its own; -1 where there is none.</summary>
+        private long _pendingAudioSeek = -1;
+
+        /// <summary>
+        /// A seek's part of the sound, on the thread that reads the sound, which its decoder and its reading belong to: what
+        /// is decoded is let go of, and reading goes on from the time sought - at 1x; at another rate there is no sound.
+        /// </summary>
+        private void ApplyPendingAudioSeek()
+        {
+            long seek = Interlocked.Exchange(ref _pendingAudioSeek, -1);
+            if (seek < 0)
+                return;
+
+            _audioDecoder.Flush();
+            while (_audioRenderQueue.TryDequeue(out var audio))
+                ReturnAudioSample(audio.Pcm);
+            _audioOutTime = -1;
+            _audioEnded = false;
+            if (Rate == 1)
+                SeekAudio(seek);
+        }
+
         /// <summary>
         /// The next audio frame, as views of the source's buffer, valid until this is called again: it is decoded before
         /// then, so the source need not copy it.
         /// </summary>
         protected abstract IList<ArraySegment<byte>> ReadNextAudio();
+
+        /// <summary>
+        /// The next audio frame, as <see cref="ReadNextAudio()"/>, and its time, on the clock of the video's frames; -1
+        /// where the source does not know it.
+        /// </summary>
+        protected virtual IList<ArraySegment<byte>> ReadNextAudio(out long timestamp)
+        {
+            timestamp = -1;
+            return ReadNextAudio();
+        }
 
         /// <summary>
         /// The decoded audio frames, of one size for a stream, kept for reuse: a frame handed out is the exact size of its
@@ -409,15 +466,8 @@ namespace SharpMediaFoundationInterop.WPF
             _videoDecoder.Flush();
             _videoDrained = false;
 
-            if (_audioDecoder != null)
-            {
-                _audioDecoder.Flush();
-                while (_audioRenderQueue.TryDequeue(out var audio))
-                    ReturnAudioSample(audio);
-            }
-            _audioEnded = false;
-            if (Rate == 1)
-                SeekAudio(seek);
+            // the sound's part of it is done by the thread that reads the sound, before the next frame of it
+            Interlocked.Exchange(ref _pendingAudioSeek, seek);
 
             Interlocked.Exchange(ref _position, seek);
             _discardBefore = -1;
@@ -558,6 +608,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         protected virtual void CompletedAudio() 
         {
+            _audioOutTime = -1;
             _audioDecoder.Drain();
             Interlocked.Exchange(ref _audioFrames, 0);
         }
