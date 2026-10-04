@@ -48,7 +48,14 @@ namespace SharpMediaFoundationInterop.Input
         private IDXGIFactory1 _factory;
         private ID3D11Device3 _device;
         private ID3D11DeviceContext _context; // we need immediate context
-        private ID3D11Texture2D _captureTexture;
+
+        // The desktop's frames are copied, on the GPU, into these by turns, and each read on the call after: by then the copy
+        // is done, and reading it does not wait for the GPU. Each holds the time of its frame, and whether it is still to be
+        // read.
+        private readonly ID3D11Texture2D[] _staging = new ID3D11Texture2D[2];
+        private readonly long[] _stagingTime = new long[2];
+        private readonly bool[] _stagingFull = new bool[2];
+        private int _nextStaging;
         private IDXGIOutput _output;
         private IDXGIOutputDuplication _duplicatedOutput;
         private static readonly D3D_FEATURE_LEVEL[] _featureLevels = new[]
@@ -59,7 +66,6 @@ namespace SharpMediaFoundationInterop.Input
             D3D_FEATURE_LEVEL.D3D_FEATURE_LEVEL_10_0
         };
 
-        private nint _pData;
         private bool _disposedValue;
 
         public uint OutputSize { get; private set; }
@@ -126,44 +132,59 @@ namespace SharpMediaFoundationInterop.Input
             OutputSize = Width * Height * BYTES_PER_PIXEL;
 
             IDXGIOutput5 output = (IDXGIOutput5)outputEn;
-            D3D11_TEXTURE2D_DESC captureTextureDesc = new()
+            D3D11_TEXTURE2D_DESC stagingDesc = new()
             {
                 CPUAccessFlags = D3D11_CPU_ACCESS_FLAG.D3D11_CPU_ACCESS_READ,
-                BindFlags = D3D11_BIND_FLAG.D3D11_BIND_RENDER_TARGET,
                 Format = DXGI_FORMAT.DXGI_FORMAT_B8G8R8A8_UNORM,
                 Width = Width,
                 Height = Height,
-                MiscFlags = D3D11_RESOURCE_MISC_FLAG.D3D11_RESOURCE_MISC_SHARED,
                 MipLevels = 1,
                 ArraySize = 1,
                 SampleDesc = { Count = 1, Quality = 0 },
-                Usage = D3D11_USAGE.D3D11_USAGE_DEFAULT
+                Usage = D3D11_USAGE.D3D11_USAGE_STAGING
             };
 
             // must be set for the DuplicateOutput1 to succeed
             // in WPF app, this call requires [assembly: DisableDpiAwareness] attribute and app.manifest with Windows 10 compatibility
             PInvoke.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-            _device.CreateTexture2D(captureTextureDesc, null, out _captureTexture);
+            for (int i = 0; i < _staging.Length; i++)
+                _device.CreateTexture2D(stagingDesc, null, out _staging[i]);
 
             // TODO https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/error-when-dda-capable-app-is-against-gpu
             IDXGIOutputDuplication duplicatedOutput;
             output.DuplicateOutput1(_device, 0, new[] { DXGI_FORMAT.DXGI_FORMAT_B8G8R8A8_UNORM }, out duplicatedOutput);
             _duplicatedOutput = duplicatedOutput;
 
-            _pData = Marshal.AllocHGlobal((int)(Width * Height * BYTES_PER_PIXEL));
-
             _stopwatch.Start();
         }
 
         private IDXGIResource _screenResource;
 
-        public unsafe bool ReadSample(byte[] buffer, out long timestamp)
+        /// <summary>
+        /// The next frame of the desktop, bottom-up - the first row the bottom one - as Media Foundation's RGB formats are:
+        /// see <see cref="ReadSample(byte[], bool, out long)"/>.
+        /// </summary>
+        public bool ReadSample(byte[] buffer, out long timestamp)
+        {
+            return ReadSample(buffer, bottomUp: true, out timestamp);
+        }
+
+        /// <summary>
+        /// The next frame of the desktop that changed, into <paramref name="buffer"/>, of <see cref="OutputSize"/> bytes at
+        /// least: copied once, straight from the GPU's copy of it, in the order of rows asked for - bottom-up for Media
+        /// Foundation, top-down for a bitmap. Frames come a call late: each is read on the call after the one that took it,
+        /// when the GPU has copied it, rather than waited for.
+        /// </summary>
+        /// <param name="timestamp">When the frame was taken, in 100 ns units since <see cref="Initialize()"/>.</param>
+        /// <returns>False where there is no frame to hand out: the desktop has not changed, or the first is not yet copied.</returns>
+        public unsafe bool ReadSample(byte[] buffer, bool bottomUp, out long timestamp)
         {
             if (_disposedValue)
                 throw new ObjectDisposedException(nameof(ScreenCapture));
+            if (buffer == null || buffer.Length < OutputSize)
+                throw new ArgumentException($"A buffer of {OutputSize} bytes at least is needed.", nameof(buffer));
 
-            bool ret = false;
             timestamp = 0;
 
             try
@@ -171,13 +192,14 @@ namespace SharpMediaFoundationInterop.Input
                 if (_screenResource != null)
                 {
                     /*
-                    For performance reasons, we recommend that you release the frame just before you call the IDXGIOutputDuplication::AcquireNextFrame 
+                    For performance reasons, we recommend that you release the frame just before you call the IDXGIOutputDuplication::AcquireNextFrame
                     method to acquire the next frame. When the client does not own the frame, the operating system copies all desktop updates to the surface.
                     This can result in wasted GPU cycles if the operating system updates the same region for each frame that occurs.
                      */
                     try
                     {
                         Marshal.ReleaseComObject(_screenResource);
+                        _screenResource = null;
                         _duplicatedOutput?.ReleaseFrame();
                     }
                     catch (Exception ex)
@@ -186,42 +208,65 @@ namespace SharpMediaFoundationInterop.Input
                     }
                 }
 
-                _duplicatedOutput.AcquireNextFrame(ReadTimeoutInMilliseconds, out DXGI_OUTDUPL_FRAME_INFO duplicateFrameInformation, out _screenResource);
-                // Media Foundation's time, 100 ns units, as every sample time is: in tenths of a millisecond, the encoder
-                // was given times a thousand times too small
-                timestamp = _stopwatch.Elapsed.Ticks;
+                int written = -1;
+                // the desktop not changed by the time out is no error: what is still to be read is handed out
+                HRESULT acquired = _duplicatedOutput.AcquireNextFrame(ReadTimeoutInMilliseconds, out DXGI_OUTDUPL_FRAME_INFO frameInfo, out _screenResource);
+                if (acquired.Value == DXGI_ERROR_WAIT_TIMEOUT)
+                    _screenResource = null;
+                else
+                    MediaUtils.Check(acquired);
 
-                if (_screenResource != null)
+                // a frame of the pointer alone has the desktop's image as it was: nothing to copy
+                if (_screenResource != null && frameInfo.LastPresentTime != 0)
                 {
-                    ID3D11Texture2D screenTexture = (ID3D11Texture2D)_screenResource;
-                    _context.CopyResource(_captureTexture, screenTexture);
-
-                    const uint subresource = 0;
-                    ((ID3D11DeviceContext3)_context).Map(_captureTexture, subresource, D3D11_MAP.D3D11_MAP_READ, 0, null); 
-
-                    _device.ReadFromSubresource((void*)_pData, Width * BYTES_PER_PIXEL, Height, _captureTexture, 0);
-                    BitmapUtils.CopyBitmap(
-                            _pData,
-                            (int)Width,
-                            (int)Height,
-                            buffer,
-                            (int)Width,
-                            (int)Height,
-                            (int)BYTES_PER_PIXEL,
-                            true);
-
-                    _context.Unmap(_captureTexture, subresource);
-
-                    ret = true;
+                    written = _nextStaging;
+                    _context.CopyResource(_staging[written], (ID3D11Texture2D)_screenResource);
+                    // Media Foundation's time, 100 ns units, as every sample time is
+                    _stagingTime[written] = _stopwatch.Elapsed.Ticks;
+                    _stagingFull[written] = true;
+                    _nextStaging ^= 1;
                 }
+
+                // the frame to hand out: one copied on a call before - the older, where both are - not the one copied now
+                int older = _nextStaging, newer = _nextStaging ^ 1;
+                int read = older != written && _stagingFull[older] ? older
+                    : newer != written && _stagingFull[newer] ? newer
+                    : -1;
+                if (read < 0)
+                    return false;
+
+                D3D11_MAPPED_SUBRESOURCE mapped;
+                _context.Map(_staging[read], 0, D3D11_MAP.D3D11_MAP_READ, 0, &mapped);
+                try
+                {
+                    uint rowBytes = Width * BYTES_PER_PIXEL;
+                    fixed (byte* target = buffer)
+                    {
+                        for (uint y = 0; y < Height; y++)
+                        {
+                            byte* sourceRow = (byte*)mapped.pData + (long)y * mapped.RowPitch;
+                            byte* targetRow = target + (long)(bottomUp ? Height - 1 - y : y) * rowBytes;
+                            Buffer.MemoryCopy(sourceRow, targetRow, rowBytes, rowBytes);
+                        }
+                    }
+                }
+                finally
+                {
+                    _context.Unmap(_staging[read], 0);
+                }
+
+                _stagingFull[read] = false;
+                timestamp = _stagingTime[read];
+                return true;
             }
             catch (Exception ex)
             {
                 if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
+                return false;
             }
-
-            return ret;
         }
+
+        private const int DXGI_ERROR_WAIT_TIMEOUT = unchecked((int)0x887A0027);
 
         public static unsafe ScreenDevice[] Enumerate()
         {
@@ -344,10 +389,13 @@ namespace SharpMediaFoundationInterop.Input
                     _duplicatedOutput = null;
                 }
 
-                if (_captureTexture != null)
+                for (int i = 0; i < _staging.Length; i++)
                 {
-                    Marshal.ReleaseComObject(_captureTexture);
-                    _captureTexture = null;
+                    if (_staging[i] != null)
+                    {
+                        Marshal.ReleaseComObject(_staging[i]);
+                        _staging[i] = null;
+                    }
                 }
 
                 if (_context != null)
@@ -368,11 +416,6 @@ namespace SharpMediaFoundationInterop.Input
                     _device = null;
                 }
 
-                if (_pData != nint.Zero)
-                {
-                    Marshal.FreeHGlobal(_pData);
-                    _pData = nint.Zero;
-                }
             }
         }
 

@@ -91,7 +91,9 @@ namespace SharpMediaFoundationInterop.WPF
 
         public async override Task InitializeAsync()
         {
-            if (VideoInfo == null || _videoSampleQueue.Count == 0)
+            // One connection, made once: the client reconnects by itself, and initialized again - by the sound's thread as
+            // by the video's - a second would be made beside it, feeding the same queues and decoders.
+            if (_rtspClient == null)
             {
                 var ret = await CreateClient(_uri, _userName, _password);
                 VideoInfo = ret.Video;
@@ -146,7 +148,7 @@ namespace SharpMediaFoundationInterop.WPF
                     }
                     foreach (var received in e.Data.Data)
                         sample.Add(received.Span);
-                    sample.Timestamp = VideoTime(e.Data.RtpTimestamp);
+                    sample.Timestamp = VideoTime(e.Data);
 
                     // AV1 and VP9 say nothing of the picture's size in the SDP: the first sequence header, or key frame, does
                     if (videoInfo.Width == 0 || videoInfo.Height == 0)
@@ -165,10 +167,14 @@ namespace SharpMediaFoundationInterop.WPF
                 }
                 else if (e.TrackIndex == audioTrackIndex)
                 {
+                    // the time of the packet's first frame: that of the rest follows from the frames decoded before them
+                    long time = AudioTime(e.Data);
                     foreach (var received in e.Data.Data)
                     {
                         var frame = RentUnits();
                         frame.Add(received.Span);
+                        frame.Timestamp = time;
+                        time = -1;
                         _audioSampleQueue.Enqueue(frame);
                     }
                 }
@@ -373,11 +379,15 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
-        protected override IList<ArraySegment<byte>> ReadNextAudio()
+        protected override IList<ArraySegment<byte>> ReadNextAudio() => ReadNextAudio(out _);
+
+        protected override IList<ArraySegment<byte>> ReadNextAudio(out long timestamp)
         {
+            timestamp = -1;
             Release(ref _audioInUse);
             if (!_audioSampleQueue.TryDequeue(out _audioInUse))
                 return null;
+            timestamp = _audioInUse.Timestamp;
             return _audioInUse.Units;
         }
 
@@ -403,7 +413,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// thirteen hours or so at 90 kHz; it is followed from frame to frame by the signed difference, which also lets it
         /// go back, as it does for a frame shown before the one decoded ahead of it.
         /// </summary>
-        private long VideoTime(uint rtpTimestamp)
+        private long RtpVideoTime(uint rtpTimestamp)
         {
             if (!_hasRtpTime)
             {
@@ -416,6 +426,37 @@ namespace SharpMediaFoundationInterop.WPF
             }
             _lastRtpTime = rtpTimestamp;
             return MediaUtils.ToTicks(_rtpTime, VideoClockRate);
+        }
+
+        // The sender's clock, in its ticks, at the time 0 of the frames: set as the first sender report of the video comes,
+        // so that the frames' times go on from where their RTP timestamps had them. Both are read and written by the
+        // client's thread that receives, the one thread both streams' data comes on.
+        private bool _hasSenderEpoch;
+        private long _senderEpoch;
+
+        /// <summary>
+        /// A video frame's time, in 100 ns units: of its RTP timestamp, from the stream's first frame - and, once a sender
+        /// report has come, of the sender's clock, which the sound is timed by too. The RTP timestamps of the video and of the
+        /// sound start where the sender picked, at random: only its reports put the two on one clock.
+        /// </summary>
+        private long VideoTime(SimpleDataEventArgs data)
+        {
+            long rtpTime = RtpVideoTime(data.RtpTimestamp);
+            if (!data.HasSenderSync)
+                return _hasSenderEpoch ? -1 : rtpTime;
+
+            if (!_hasSenderEpoch)
+            {
+                _hasSenderEpoch = true;
+                _senderEpoch = data.Timestamp.Ticks - rtpTime;
+            }
+            return data.Timestamp.Ticks - _senderEpoch;
+        }
+
+        /// <summary>A packet of sound's time, on the video's clock: -1 until both are on the sender's - see <see cref="VideoTime"/>.</summary>
+        private long AudioTime(SimpleDataEventArgs data)
+        {
+            return data.HasSenderSync && _hasSenderEpoch ? data.Timestamp.Ticks - _senderEpoch : -1;
         }
     }
 }
