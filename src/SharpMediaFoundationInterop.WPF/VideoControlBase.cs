@@ -60,6 +60,12 @@ namespace SharpMediaFoundationInterop.WPF
         public static ComponentResourceKey ButtonStyleKey { get; } = new ComponentResourceKey(typeof(VideoControlBase), "ButtonStyle");
 
         /// <summary>
+        /// The style of the default template's seek bar - a thin track of the accent colour, its Foreground, and a round
+        /// thumb with a dot in it - to base another on: <c>BasedOn="{StaticResource {x:Static local:VideoControlBase.SeekSliderStyleKey}}"</c>.
+        /// </summary>
+        public static ComponentResourceKey SeekSliderStyleKey { get; } = new ComponentResourceKey(typeof(VideoControlBase), "SeekSliderStyle");
+
+        /// <summary>
         /// The data template the default template draws a subtitle with, its text the content: to draw them otherwise, one of
         /// this key in the application's resources.
         /// </summary>

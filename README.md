@@ -287,7 +287,7 @@ The bar is part of the control's template, and can be restyled or replaced from 
     </ctrl:VideoControl.Template>
 </ctrl:VideoControl>
 ```
-To restyle only the default template's buttons, base a style on `{StaticResource {x:Static ctrl:VideoControlBase.ButtonStyleKey}}`.
+To restyle only the default template's buttons, base a style on `{StaticResource {x:Static ctrl:VideoControlBase.ButtonStyleKey}}`. The seek bar - a thin track and a round thumb with a dot, as Windows 11's Media Player draws it - is `VideoControlBase.SeekSliderStyleKey`; its `Foreground` is the accent colour of the part played and the dot, and its `Background` the rest of the track.
 
 ### Subtitles
 Both controls show subtitles: of a file, its subtitle tracks (3GPP timed text, WebVTT, TTML), and SubRip or WebVTT files beside it named after it (`movie.srt`, `movie.en.srt`, `movie.de.forced.vtt`). `SubtitleTracks` lists them, and `SubtitleTrack` chooses one, -1 (the default) for none; the bar's CC button (or C) goes through them. A forced track is shown even with subtitles off. Where both eyes of a stereo video are shown side by side, the subtitle is shown over each. A source of its own gives subtitles by implementing `ISubtitleSource`, and a data template of the key `VideoControlBase.SubtitleTemplateKey` draws them otherwise.
