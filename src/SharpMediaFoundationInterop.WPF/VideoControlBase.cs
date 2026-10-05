@@ -1,6 +1,7 @@
 ﻿using SharpMediaFoundationInterop.Wave;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -34,6 +35,9 @@ namespace SharpMediaFoundationInterop.WPF
     /// is put in the visual state <c>ControlsVisible</c> or <c>ControlsHidden</c> of the group <c>ControlsStates</c>.</para>
     /// <para>Parts of the template, each optional: <c>PART_Image</c>, the image frames are drawn on; <c>PART_Seek</c>, a
     /// slider of the position, which seeks; <c>PART_ControlsBar</c>, the bar, kept shown while the mouse is over it.</para>
+    /// <para>Subtitles are the template's too: the text shown now is <see cref="SubtitleText"/>, shown twice - over each
+    /// eye's view - where <see cref="ShowsSideBySide"/>; the default template draws it with the data template
+    /// <see cref="SubtitleTemplateKey"/>.</para>
     /// </remarks>
     [TemplatePart(Name = "PART_Image", Type = typeof(Image))]
     [TemplatePart(Name = "PART_Seek", Type = typeof(Slider))]
@@ -54,6 +58,12 @@ namespace SharpMediaFoundationInterop.WPF
         /// <c>BasedOn="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"</c>.
         /// </summary>
         public static ComponentResourceKey ButtonStyleKey { get; } = new ComponentResourceKey(typeof(VideoControlBase), "ButtonStyle");
+
+        /// <summary>
+        /// The data template the default template draws a subtitle with, its text the content: to draw them otherwise, one of
+        /// this key in the application's resources.
+        /// </summary>
+        public static ComponentResourceKey SubtitleTemplateKey { get; } = new ComponentResourceKey(typeof(VideoControlBase), "SubtitleTemplate");
 
         private Image _image;
         private Slider _seekSlider;
@@ -92,6 +102,8 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 sender.StartPlaying();
             }
+            // of the source before, none: those of this one as it is initialized
+            sender.UpdateSubtitleTracks();
             sender.Wake();
         }
 
@@ -286,6 +298,200 @@ namespace SharpMediaFoundationInterop.WPF
 
         #endregion
 
+        #region Stereo and spherical view properties
+
+        /// <summary>Which eye's view of a stereo video is shown: both, as the frame has them, or one alone.</summary>
+        public EyeView EyeView
+        {
+            get { return (EyeView)GetValue(EyeViewProperty); }
+            set { SetValue(EyeViewProperty, value); }
+        }
+
+        public static readonly DependencyProperty EyeViewProperty =
+            DependencyProperty.Register("EyeView", typeof(EyeView), typeof(VideoControlBase),
+                new FrameworkPropertyMetadata(EyeView.Both, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnViewChanged));
+
+        /// <summary>
+        /// How the frames hold the eyes' views, where the source does not say, or says otherwise; null, as it is by default,
+        /// for what the source says - see <see cref="VideoInfo.StereoLayout"/>.
+        /// </summary>
+        public StereoLayout? StereoLayout
+        {
+            get { return (StereoLayout?)GetValue(StereoLayoutProperty); }
+            set { SetValue(StereoLayoutProperty, value); }
+        }
+
+        public static readonly DependencyProperty StereoLayoutProperty =
+            DependencyProperty.Register("StereoLayout", typeof(StereoLayout?), typeof(VideoControlBase), new PropertyMetadata(null, OnViewChanged));
+
+        /// <summary>
+        /// What each eye's picture is of, where the source does not say, or says otherwise; null, as it is by default, for
+        /// what the source says - see <see cref="VideoInfo.Projection"/>. An equirectangular video the source says nothing of
+        /// is taken to be of 180 degrees, as a VR180 camera's is.
+        /// </summary>
+        public VideoProjection? Projection
+        {
+            get { return (VideoProjection?)GetValue(ProjectionProperty); }
+            set { SetValue(ProjectionProperty, value); }
+        }
+
+        public static readonly DependencyProperty ProjectionProperty =
+            DependencyProperty.Register("Projection", typeof(VideoProjection?), typeof(VideoControlBase), new PropertyMetadata(null, OnViewChanged));
+
+        /// <summary>Of a spherical video, degrees to the right of straight ahead the view looks: dragged with the mouse.</summary>
+        public double Yaw
+        {
+            get { return (double)GetValue(YawProperty); }
+            set { SetValue(YawProperty, value); }
+        }
+
+        public static readonly DependencyProperty YawProperty =
+            DependencyProperty.Register("Yaw", typeof(double), typeof(VideoControlBase),
+                new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnViewChanged));
+
+        /// <summary>Of a spherical video, degrees up from straight ahead the view looks, -90 to 90: dragged with the mouse.</summary>
+        public double Pitch
+        {
+            get { return (double)GetValue(PitchProperty); }
+            set { SetValue(PitchProperty, value); }
+        }
+
+        public static readonly DependencyProperty PitchProperty =
+            DependencyProperty.Register("Pitch", typeof(double), typeof(VideoControlBase),
+                new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnViewChanged, CoercePitch));
+
+        private static object CoercePitch(DependencyObject d, object value) => Math.Clamp((double)value, -90.0, 90.0);
+
+        /// <summary>Of a spherical video, degrees across each eye's view, 20 to 150: zoomed with the mouse wheel.</summary>
+        public double FieldOfView
+        {
+            get { return (double)GetValue(FieldOfViewProperty); }
+            set { SetValue(FieldOfViewProperty, value); }
+        }
+
+        public static readonly DependencyProperty FieldOfViewProperty =
+            DependencyProperty.Register("FieldOfView", typeof(double), typeof(VideoControlBase),
+                new FrameworkPropertyMetadata(DefaultFieldOfView, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnViewChanged, CoerceFieldOfView));
+
+        private const double DefaultFieldOfView = 90;
+
+        private static object CoerceFieldOfView(DependencyObject d, object value) => Math.Clamp((double)value, 20.0, 150.0);
+
+        /// <summary>Whether the video is of two eyes' views: what an eye can be chosen of.</summary>
+        public bool IsStereo
+        {
+            get { return (bool)GetValue(IsStereoProperty); }
+            private set { SetValue(IsStereoPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey IsStereoPropertyKey =
+            DependencyProperty.RegisterReadOnly("IsStereo", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+        public static readonly DependencyProperty IsStereoProperty = IsStereoPropertyKey.DependencyProperty;
+
+        /// <summary>
+        /// Whether the video is shown as a view into a sphere, looked around with the mouse: a spherical video, in a control
+        /// that draws one - <see cref="VideoControlD3D"/>; <see cref="VideoControl"/> shows it flat.
+        /// </summary>
+        public bool IsSpherical
+        {
+            get { return (bool)GetValue(IsSphericalProperty); }
+            private set { SetValue(IsSphericalPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey IsSphericalPropertyKey =
+            DependencyProperty.RegisterReadOnly("IsSpherical", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+        public static readonly DependencyProperty IsSphericalProperty = IsSphericalPropertyKey.DependencyProperty;
+
+        /// <summary>Shows the next eye's view: both, then the left, then the right. The E key, over the video.</summary>
+        public static RoutedUICommand NextEyeViewCommand { get; } =
+            new RoutedUICommand("Next eye", "NextEyeView", typeof(VideoControlBase));
+
+        /// <summary>Looks straight ahead again, at the field of view a spherical video starts at.</summary>
+        public static RoutedUICommand ResetViewCommand { get; } =
+            new RoutedUICommand("Reset view", "ResetView", typeof(VideoControlBase));
+
+        private static void OnViewChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            ((VideoControlBase)d).OnViewChanged(e.Property);
+        }
+
+        /// <summary>
+        /// Whether what is shown is two eyes' views side by side - a stereo frame side by side, both eyes, or both eyes'
+        /// views of a spherical video: what is shown over the video, a subtitle, is shown over each.
+        /// </summary>
+        public bool ShowsSideBySide
+        {
+            get { return (bool)GetValue(ShowsSideBySideProperty); }
+            private set { SetValue(ShowsSideBySidePropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey ShowsSideBySidePropertyKey =
+            DependencyProperty.RegisterReadOnly("ShowsSideBySide", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+        public static readonly DependencyProperty ShowsSideBySideProperty = ShowsSideBySidePropertyKey.DependencyProperty;
+
+        #endregion
+
+        #region Subtitle properties
+
+        /// <summary>
+        /// The track of subtitles shown, of <see cref="SubtitleTracks"/>; -1, as it is by default, for none - but a forced
+        /// track, which is shown whether subtitles are on or not.
+        /// </summary>
+        public int SubtitleTrack
+        {
+            get { return (int)GetValue(SubtitleTrackProperty); }
+            set { SetValue(SubtitleTrackProperty, value); }
+        }
+
+        public static readonly DependencyProperty SubtitleTrackProperty =
+            DependencyProperty.Register("SubtitleTrack", typeof(int), typeof(VideoControlBase),
+                new FrameworkPropertyMetadata(-1, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnSubtitleTrackChanged));
+
+        private static void OnSubtitleTrackChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            ((VideoControlBase)d).LoadSubtitles();
+        }
+
+        /// <summary>The tracks of subtitles the source has: of a file, its own and those of files beside it.</summary>
+        public IReadOnlyList<SubtitleTrackInfo> SubtitleTracks
+        {
+            get { return (IReadOnlyList<SubtitleTrackInfo>)GetValue(SubtitleTracksProperty); }
+            private set { SetValue(SubtitleTracksPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey SubtitleTracksPropertyKey =
+            DependencyProperty.RegisterReadOnly("SubtitleTracks", typeof(IReadOnlyList<SubtitleTrackInfo>), typeof(VideoControlBase),
+                new PropertyMetadata(Array.Empty<SubtitleTrackInfo>()));
+        public static readonly DependencyProperty SubtitleTracksProperty = SubtitleTracksPropertyKey.DependencyProperty;
+
+        /// <summary>Whether the source has subtitles to choose.</summary>
+        public bool HasSubtitles
+        {
+            get { return (bool)GetValue(HasSubtitlesProperty); }
+            private set { SetValue(HasSubtitlesPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey HasSubtitlesPropertyKey =
+            DependencyProperty.RegisterReadOnly("HasSubtitles", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+        public static readonly DependencyProperty HasSubtitlesProperty = HasSubtitlesPropertyKey.DependencyProperty;
+
+        /// <summary>The subtitle shown now, of the frame shown: empty where there is none. Lines apart by line breaks.</summary>
+        public string SubtitleText
+        {
+            get { return (string)GetValue(SubtitleTextProperty); }
+            private set { SetValue(SubtitleTextPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey SubtitleTextPropertyKey =
+            DependencyProperty.RegisterReadOnly("SubtitleText", typeof(string), typeof(VideoControlBase), new PropertyMetadata(string.Empty));
+        public static readonly DependencyProperty SubtitleTextProperty = SubtitleTextPropertyKey.DependencyProperty;
+
+        /// <summary>Shows the next track of subtitles: none, then each track, then none again. The C key, over the video.</summary>
+        public static RoutedUICommand NextSubtitleTrackCommand { get; } =
+            new RoutedUICommand("Next subtitles", "NextSubtitleTrack", typeof(VideoControlBase));
+
+        #endregion
+
         static VideoControlBase()
         {
             // one template for every control made of this: each is styled as this, the drawing of frames aside
@@ -309,6 +515,12 @@ namespace SharpMediaFoundationInterop.WPF
             CommandBindings.Add(new CommandBinding(MediaCommands.Rewind, (s, e) => Rewind(), CanSeekCommand));
             CommandBindings.Add(new CommandBinding(MediaCommands.FastForward, (s, e) => FastForward(), CanSeekCommand));
             CommandBindings.Add(new CommandBinding(MediaCommands.MuteVolume, (s, e) => Mute = !Mute));
+            CommandBindings.Add(new CommandBinding(NextEyeViewCommand, (s, e) => EyeView = EyeView == EyeView.Both ? EyeView.Left : EyeView == EyeView.Left ? EyeView.Right : EyeView.Both,
+                (s, e) => e.CanExecute = IsStereo));
+            CommandBindings.Add(new CommandBinding(ResetViewCommand, (s, e) => ResetView(), (s, e) => e.CanExecute = IsSpherical));
+            CommandBindings.Add(new CommandBinding(NextSubtitleTrackCommand,
+                (s, e) => SubtitleTrack = SubtitleTrack + 1 >= SubtitleTracks.Count ? -1 : SubtitleTrack + 1,
+                (s, e) => e.CanExecute = HasSubtitles));
         }
 
         private void CanSeekCommand(object sender, CanExecuteRoutedEventArgs e)
@@ -612,6 +824,12 @@ namespace SharpMediaFoundationInterop.WPF
                 case Key.End:
                     Seek(Duration);
                     break;
+                case Key.E when IsStereo:
+                    NextEyeViewCommand.Execute(null, this);
+                    break;
+                case Key.C when HasSubtitles:
+                    NextSubtitleTrackCommand.Execute(null, this);
+                    break;
                 default:
                     return;
             }
@@ -638,6 +856,11 @@ namespace SharpMediaFoundationInterop.WPF
             if (position == _lastMouse)
                 return;
             _lastMouse = position;
+            if (_viewDrag != null)
+            {
+                DragView(position);
+                return; // looking around, not at the controls
+            }
             ShowControlsForAWhile();
         }
 
@@ -681,6 +904,8 @@ namespace SharpMediaFoundationInterop.WPF
 
         private void UpdateControls()
         {
+            UpdateViewState();
+
             // A live source is played as it comes: there is nothing to seek in, no other rate to play it at and no position
             // to show - pausing is all there is to do, and the template shows no more.
             bool canSeek = SeekableSource != null;
@@ -702,6 +927,8 @@ namespace SharpMediaFoundationInterop.WPF
 
         private void UpdatePosition()
         {
+            UpdateSubtitle();
+
             var seekable = SeekableSource;
             long shown = Interlocked.Read(ref _lastShownTime);
             if (seekable != null && shown >= 0)
@@ -790,6 +1017,251 @@ namespace SharpMediaFoundationInterop.WPF
                 }
             }
         }
+
+        #region Stereo and spherical view
+
+        /// <summary>
+        /// Whether the control draws a spherical video as a view into the sphere: if not, it shows it flat, and it is not
+        /// looked around.
+        /// </summary>
+        protected virtual bool CanShowSpherical => false;
+
+        /// <summary>
+        /// What is shown of a frame of the source: the eye and the view, of the layout and projection the source says, but
+        /// where the control's properties say otherwise. On the UI thread.
+        /// </summary>
+        protected VideoView GetView(VideoInfo info)
+        {
+            var layout = StereoLayout ?? info?.StereoLayout ?? WPF.StereoLayout.Mono;
+            var projection = Projection ?? info?.Projection ?? VideoProjection.Flat;
+            if (!CanShowSpherical)
+                projection = VideoProjection.Flat;
+            var bounds = info != null && info.Projection == VideoProjection.Equirectangular ? info.ProjectionBounds : ProjectionBounds.Half;
+            return new VideoView(EyeView, layout, projection, bounds, Yaw, Pitch, FieldOfView);
+        }
+
+        /// <summary>
+        /// Draws the frame shown last again, of the view as it is now: as the view is turned, paused. Whether the control
+        /// could - if not, the frame is decoded again.
+        /// </summary>
+        protected virtual bool RedrawView() => false;
+
+        private void UpdateViewState()
+        {
+            var view = GetView(_source?.VideoInfo);
+            bool stereo = view.Layout != WPF.StereoLayout.Mono;
+            bool spherical = view.Projection == VideoProjection.Equirectangular;
+            ShowsSideBySide = view.IsBothSpherical ||
+                (view.Projection == VideoProjection.Flat && view.Layout == WPF.StereoLayout.SideBySide && view.Eye == EyeView.Both);
+            if (IsStereo != stereo || IsSpherical != spherical)
+            {
+                IsStereo = stereo;
+                IsSpherical = spherical;
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        private void OnViewChanged(DependencyProperty property)
+        {
+            UpdateViewState();
+            if (RedrawView())
+                return;
+
+            // paused, a new frame comes only of a seek: the one shown, decoded again - not as the view is turned, which a
+            // control that can turn it redraws
+            bool turned = property == YawProperty || property == PitchProperty || property == FieldOfViewProperty;
+            if (!turned && _paused && SeekableSource != null && Interlocked.Read(ref _lastShownTime) >= 0)
+                SeekTo(CurrentTime(), _rate);
+        }
+
+        /// <summary>Looks straight ahead again, at the field of view a view starts at.</summary>
+        public void ResetView()
+        {
+            Yaw = 0;
+            Pitch = 0;
+            FieldOfView = DefaultFieldOfView;
+        }
+
+        // A drag of the view: where the mouse was last, while the left button is down over the video.
+        private Point? _viewDrag;
+
+        protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
+        {
+            base.OnMouseLeftButtonDown(e);
+            if (e.Handled || !IsSpherical || (_controlsBar?.IsMouseOver ?? false))
+                return;
+            if (e.ClickCount == 2)
+            {
+                ResetView();
+                e.Handled = true;
+                return;
+            }
+            _viewDrag = e.GetPosition(this);
+            CaptureMouse();
+            e.Handled = true;
+        }
+
+        protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+        {
+            base.OnMouseLeftButtonUp(e);
+            if (_viewDrag == null)
+                return;
+            _viewDrag = null;
+            ReleaseMouseCapture();
+            e.Handled = true;
+        }
+
+        protected override void OnLostMouseCapture(MouseEventArgs e)
+        {
+            base.OnLostMouseCapture(e);
+            _viewDrag = null;
+        }
+
+        /// <summary>
+        /// The view follows the mouse, as if the picture were held and moved: dragged right, it looks left - by as many degrees
+        /// as the pixels moved are of the field of view.
+        /// </summary>
+        private void DragView(Point position)
+        {
+            var last = _viewDrag.Value;
+            _viewDrag = position;
+            double viewWidth = Math.Max(1, ActualWidth / (GetView(_source?.VideoInfo).IsBothSpherical ? 2 : 1));
+            double degreesPerPixel = FieldOfView / viewWidth;
+            Yaw = NormalizeYaw(Yaw - (position.X - last.X) * degreesPerPixel);
+            Pitch += (position.Y - last.Y) * degreesPerPixel;
+        }
+
+        private static double NormalizeYaw(double yaw)
+        {
+            yaw %= 360;
+            return yaw > 180 ? yaw - 360 : yaw < -180 ? yaw + 360 : yaw;
+        }
+
+        protected override void OnMouseWheel(MouseWheelEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            if (e.Handled || !IsSpherical)
+                return;
+            // a notch in, a tenth closer
+            FieldOfView *= Math.Pow(0.9, e.Delta / 120.0);
+            e.Handled = true;
+        }
+
+        #endregion
+
+        #region Subtitles
+
+        // The subtitles of the track shown, and those shown now: the first and last of them, and how many.
+        private IReadOnlyList<Subtitle> _subtitles = Array.Empty<Subtitle>();
+        private (int First, int Last, int Count) _shownSubtitles = (-1, -1, 0);
+
+        /// <summary>
+        /// The source's tracks of subtitles, as it is initialized: the track chosen kept where the source has it. On the UI
+        /// thread.
+        /// </summary>
+        private void UpdateSubtitleTracks()
+        {
+            var tracks = (_source as ISubtitleSource)?.SubtitleTracks ?? Array.Empty<SubtitleTrackInfo>();
+            if (!ReferenceEquals(tracks, SubtitleTracks))
+            {
+                SubtitleTracks = tracks;
+                HasSubtitles = tracks.Count > 0;
+                CommandManager.InvalidateRequerySuggested();
+                if (SubtitleTrack >= tracks.Count)
+                    SubtitleTrack = -1;
+            }
+            LoadSubtitles();
+        }
+
+        /// <summary>The subtitles of the track chosen - or, of none, of a forced track - shown from the frame shown.</summary>
+        private void LoadSubtitles()
+        {
+            var source = _source as ISubtitleSource;
+            var tracks = SubtitleTracks;
+            int track = SubtitleTrack;
+            if (track < 0)
+            {
+                track = -1;
+                for (int i = 0; i < tracks.Count; i++)
+                    if (tracks[i].Forced) { track = i; break; }
+            }
+            _subtitles = source != null && track >= 0 && track < tracks.Count ? source.GetSubtitles(track) : Array.Empty<Subtitle>();
+            _shownSubtitles = (-1, -1, 0);
+            SubtitleText = string.Empty;
+            UpdateSubtitle();
+        }
+
+        /// <summary>
+        /// The subtitle of the frame shown: those shown at its time, all of them where they overlap. The text is made again
+        /// only as they change, not of every frame.
+        /// </summary>
+        private void UpdateSubtitle()
+        {
+            var subtitles = _subtitles;
+            long time = Interlocked.Read(ref _lastShownTime);
+            if (subtitles.Count == 0 || time < 0)
+            {
+                SetShownSubtitles(-1, -1, 0);
+                return;
+            }
+
+            // the last to start at or before the time, then back over those still shown - a few at most overlap
+            int low = 0, high = subtitles.Count - 1, last = -1;
+            while (low <= high)
+            {
+                int middle = (low + high) / 2;
+                if (subtitles[middle].Start <= time)
+                {
+                    last = middle;
+                    low = middle + 1;
+                }
+                else
+                {
+                    high = middle - 1;
+                }
+            }
+            int first = -1, count = 0, lastShown = -1;
+            for (int i = last; i >= 0 && i > last - MaxOverlappingSubtitles; i--)
+            {
+                if (subtitles[i].End > time)
+                {
+                    first = i;
+                    if (lastShown < 0)
+                        lastShown = i;
+                    count++;
+                }
+            }
+            SetShownSubtitles(first, lastShown, count);
+        }
+
+        private const int MaxOverlappingSubtitles = 8;
+
+        private void SetShownSubtitles(int first, int last, int count)
+        {
+            if (_shownSubtitles == (first, last, count))
+                return;
+            _shownSubtitles = (first, last, count);
+            if (count == 0)
+            {
+                SubtitleText = string.Empty;
+                return;
+            }
+            if (count == 1)
+            {
+                SubtitleText = _subtitles[first].Text;
+                return;
+            }
+
+            // overlapping: each shown, in the order they started
+            long time = Interlocked.Read(ref _lastShownTime);
+            var lines = new List<string>(count);
+            for (int i = first; i <= last; i++)
+                if (_subtitles[i].Start <= time && _subtitles[i].End > time)
+                    lines.Add(_subtitles[i].Text);
+            SubtitleText = string.Join("\n", lines);
+        }
+
+        #endregion
 
         #region Drawing
 
@@ -993,6 +1465,7 @@ namespace SharpMediaFoundationInterop.WPF
 
                         var seekable = SeekableSource;
                         Duration = seekable != null && seekable.Duration > 0 ? TimeSpan.FromTicks(seekable.Duration) : TimeSpan.Zero;
+                        UpdateSubtitleTracks();
                         UpdateControls();
                     }
                 });

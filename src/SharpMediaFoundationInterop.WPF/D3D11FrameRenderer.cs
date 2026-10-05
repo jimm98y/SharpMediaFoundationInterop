@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
+using System.Text;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Direct3D;
@@ -13,18 +14,24 @@ namespace SharpMediaFoundationInterop.WPF
     /// <summary>
     /// Draws frames into a BGRA texture shared with other devices - Direct3D 9's, for WPF's D3DImage - on the GPU: an NV12
     /// frame uploaded as it is and converted by the GPU's video processor, a BGRA one uploaded as it is, a BGR24 one widened
-    /// to BGRA on the way.
+    /// to BGRA on the way. That is the whole frame; or, of a <see cref="VideoView"/>, one eye's half of it copied out, or a
+    /// view into a spherical video drawn from it by a pixel shader - into a texture of the view's own size.
     /// </summary>
     internal sealed unsafe class D3D11FrameRenderer : IDisposable
     {
         private readonly VideoInfo _info;
         private readonly uint _width;    // of the picture
         private readonly uint _height;
+        private readonly uint _outputWidth;
+        private readonly uint _outputHeight;
 
         private ID3D11Device _device;
         private ID3D11DeviceContext _context;
-        private ID3D11Texture2D _output;
         private ID3D11Query _done;
+
+        // The frame, converted to BGRA; and what is shown, shared: the same texture, where the whole frame is shown.
+        private ID3D11Texture2D _picture;
+        private ID3D11Texture2D _output;
 
         // NV12: uploaded to the staging texture, copied to the input, converted from it into the output
         private ID3D11Texture2D _nv12Staging;
@@ -42,41 +49,58 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>The texture's handle, for another device to open it by.</summary>
         public IntPtr SharedHandle { get; private set; }
 
-        public uint Width => _width;
-        public uint Height => _height;
+        /// <summary>The size of what is shown: the shared texture's.</summary>
+        public uint Width => _outputWidth;
+        public uint Height => _outputHeight;
+
+        /// <summary>Whether the whole frame is shown, as it is: otherwise a view of it, of <see cref="Draw(object, in VideoView)"/>.</summary>
+        public bool IsWholeFrame { get; }
 
         /// <summary>The texture frames are drawn into, for a test to read back.</summary>
         internal ID3D11Texture2D Output => _output;
         internal ID3D11Device Device => _device;
         internal ID3D11DeviceContext Context => _context;
 
-        /// <summary>On a device of its own: for frames of the CPU's memory alone.</summary>
-        public D3D11FrameRenderer(VideoInfo info) : this(new Direct3DDevice(), info, ownsDevice: true)
+        /// <summary>On a device of its own: for frames of the CPU's memory alone. The whole frame is shown.</summary>
+        public D3D11FrameRenderer(VideoInfo info) : this(new Direct3DDevice(), info, 0, 0, true, ownsDevice: true)
         {
         }
 
         /// <summary>
         /// On the device frames are decoded on, which is what lets a frame of the GPU's memory be drawn from where it was
-        /// decoded.
+        /// decoded. The whole frame is shown.
         /// </summary>
-        public D3D11FrameRenderer(Direct3DDevice device, VideoInfo info) : this(device, info, ownsDevice: false)
+        public D3D11FrameRenderer(Direct3DDevice device, VideoInfo info) : this(device, info, 0, 0, true, ownsDevice: false)
+        {
+        }
+
+        /// <summary>
+        /// As <see cref="D3D11FrameRenderer(Direct3DDevice, VideoInfo)"/>, but showing a view of the frame - one eye's
+        /// picture, or a view into a spherical video - <paramref name="outputWidth"/> by <paramref name="outputHeight"/>.
+        /// </summary>
+        public D3D11FrameRenderer(Direct3DDevice device, VideoInfo info, uint outputWidth, uint outputHeight)
+            : this(device, info, outputWidth, outputHeight, false, ownsDevice: false)
         {
         }
 
         private readonly Direct3DDevice _shared;
         private readonly bool _ownsDevice;
 
-        private D3D11FrameRenderer(Direct3DDevice device, VideoInfo info, bool ownsDevice)
+        private D3D11FrameRenderer(Direct3DDevice device, VideoInfo info, uint outputWidth, uint outputHeight, bool wholeFrame, bool ownsDevice)
         {
             _info = info ?? throw new ArgumentNullException(nameof(info));
             _shared = device ?? throw new ArgumentNullException(nameof(device));
             _ownsDevice = ownsDevice;
             _width = info.OriginalWidth;
             _height = info.OriginalHeight;
+            IsWholeFrame = wholeFrame;
+            _outputWidth = wholeFrame ? _width : Math.Max(1, outputWidth);
+            _outputHeight = wholeFrame ? _height : Math.Max(1, outputHeight);
             _device = device.Device;
             _context = device.Context;
 
-            var outputDesc = new D3D11_TEXTURE2D_DESC
+            // the frame converted, and drawn from; shared, where it is what is shown
+            var pictureDesc = new D3D11_TEXTURE2D_DESC
             {
                 Width = _width,
                 Height = _height,
@@ -86,9 +110,21 @@ namespace SharpMediaFoundationInterop.WPF
                 SampleDesc = new DXGI_SAMPLE_DESC { Count = 1 },
                 Usage = D3D11_USAGE.D3D11_USAGE_DEFAULT,
                 BindFlags = D3D11_BIND_FLAG.D3D11_BIND_RENDER_TARGET | D3D11_BIND_FLAG.D3D11_BIND_SHADER_RESOURCE,
-                MiscFlags = D3D11_RESOURCE_MISC_FLAG.D3D11_RESOURCE_MISC_SHARED,
+                MiscFlags = wholeFrame ? D3D11_RESOURCE_MISC_FLAG.D3D11_RESOURCE_MISC_SHARED : 0,
             };
-            _device.CreateTexture2D(outputDesc, null, out _output);
+            _device.CreateTexture2D(pictureDesc, null, out _picture);
+            if (wholeFrame)
+            {
+                _output = _picture;
+            }
+            else
+            {
+                var outputDesc = pictureDesc;
+                outputDesc.Width = _outputWidth;
+                outputDesc.Height = _outputHeight;
+                outputDesc.MiscFlags = D3D11_RESOURCE_MISC_FLAG.D3D11_RESOURCE_MISC_SHARED;
+                _device.CreateTexture2D(outputDesc, null, out _output);
+            }
             HANDLE shared;
             ((IDXGIResource)_output).GetSharedHandle(&shared);
             SharedHandle = (IntPtr)shared.Value;
@@ -147,7 +183,7 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 ViewDimension = D3D11_VPOV_DIMENSION.D3D11_VPOV_DIMENSION_TEXTURE2D,
             };
-            _videoDevice.CreateVideoProcessorOutputView(_output, _enumerator, outputViewDesc, out _outputView);
+            _videoDevice.CreateVideoProcessorOutputView(_picture, _enumerator, outputViewDesc, out _outputView);
 
             // the picture is the top left of the coded frame; drawn over the whole of the output
             var source = new RECT(0, 0, (int)_width, (int)_height);
@@ -175,12 +211,273 @@ namespace SharpMediaFoundationInterop.WPF
         /// </summary>
         public void Draw(object frame)
         {
+            Convert(frame);
+            WaitForGpu();
+        }
+
+        /// <summary>
+        /// Draws a view of a frame into the shared texture, as <see cref="Draw(object)"/> does the whole frame: one eye's
+        /// picture copied out of it, or a view into a spherical video drawn from it.
+        /// </summary>
+        public void Draw(object frame, in VideoView view)
+        {
+            Convert(frame);
+            if (!IsWholeFrame)
+            {
+                if (view.Projection == VideoProjection.Equirectangular)
+                    DrawSphere(view);
+                else
+                    CopyEye(view);
+            }
+            WaitForGpu();
+        }
+
+        /// <summary>
+        /// Draws the view again from the frame drawn last, which is kept converted: as a paused view is turned. Of a renderer
+        /// of a view only.
+        /// </summary>
+        public void Redraw(in VideoView view)
+        {
+            if (IsWholeFrame)
+                return;
+            if (view.Projection == VideoProjection.Equirectangular)
+                DrawSphere(view);
+            else
+                CopyEye(view);
+            WaitForGpu();
+        }
+
+        /// <summary>The frame, converted to BGRA, into the picture texture.</summary>
+        private void Convert(object frame)
+        {
             if (frame is GpuVideoFrame gpu)
                 DrawTexture(gpu);
             else
                 Draw((byte[])frame);
-            WaitForGpu();
         }
+
+        /// <summary>One eye's half of the frame into the output, which is its size: copied as it is.</summary>
+        private void CopyEye(in VideoView view)
+        {
+            var (x, y, width, height) = view.EyeRect(_info, view.Eye == EyeView.Right);
+            var box = new D3D11_BOX
+            {
+                left = x,
+                top = y,
+                right = x + Math.Min(width, _outputWidth),
+                bottom = y + Math.Min(height, _outputHeight),
+                front = 0,
+                back = 1,
+            };
+            _context.CopySubresourceRegion(_output, 0, 0, 0, 0, _picture, 0, &box);
+        }
+
+        #region Spherical view
+
+        // A triangle over the whole output, and a pixel of the view at each pixel of it: where it looks on the sphere, by the
+        // yaw and the pitch, and where that is in the eye's equirectangular picture.
+        private const string SphereShader = @"
+cbuffer View : register(b0)
+{
+    float4 LeftEye;   // x, y, width, height of the left eye's picture, as fractions of the frame
+    float4 RightEye;
+    float4 Bounds;    // left, top, right, bottom of the whole sphere's picture cropped
+    float4 Angles;    // yaw, pitch, tan of half the field of view, 1 for both eyes' views side by side
+    float4 Output;    // the eye of a view of one, 1 the right; the output's width and height
+    float4 Texel;     // the size of a pixel of the frame, as fractions of it
+};
+Texture2D Frame : register(t0);
+SamplerState Linear : register(s0);
+
+struct Vertex { float4 Position : SV_Position; float2 Uv : TEXCOORD0; };
+
+Vertex VS(uint id : SV_VertexID)
+{
+    Vertex v;
+    v.Uv = float2((id << 1) & 2, id & 2);
+    v.Position = float4(v.Uv * float2(2, -2) + float2(-1, 1), 0, 1);
+    return v;
+}
+
+float4 PS(Vertex input) : SV_Target
+{
+    float2 uv = input.Uv;
+    float right = Output.x;
+    float width = Output.y;
+    if (Angles.w > 0.5)
+    {
+        right = uv.x >= 0.5 ? 1 : 0;
+        uv.x = frac(uv.x * 2);
+        width *= 0.5;
+    }
+    float x = (uv.x * 2 - 1) * Angles.z;
+    float y = (1 - uv.y * 2) * Angles.z * Output.z / width;
+
+    // looking up by the pitch, then turned right by the yaw
+    float cp = cos(Angles.y), sp = sin(Angles.y), cy = cos(Angles.x), sy = sin(Angles.x);
+    float y1 = y * cp + sp;
+    float z1 = -y * sp + cp;
+    float x2 = x * cy + z1 * sy;
+    float z2 = -x * sy + z1 * cy;
+    float longitude = atan2(x2, z2);
+    float latitude = atan2(y1, sqrt(x2 * x2 + z2 * z2));
+
+    // of the whole sphere's picture, then of the part the eye's picture is of
+    float u = (longitude / 6.28318530718 + 0.5 - Bounds.x) / (1 - Bounds.x - Bounds.z);
+    float v = (0.5 - latitude / 3.14159265359 - Bounds.y) / (1 - Bounds.y - Bounds.w);
+    if (u < 0 || u > 1 || v < 0 || v > 1)
+        return float4(0, 0, 0, 1);
+
+    // not across into the other eye's picture
+    float4 eye = right > 0.5 ? RightEye : LeftEye;
+    float2 p = clamp(eye.xy + float2(u, v) * eye.zw, eye.xy + Texel.xy * 0.5, eye.xy + eye.zw - Texel.xy * 0.5);
+    return float4(Frame.SampleLevel(Linear, p, 0).rgb, 1);
+}";
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SphereConstants
+        {
+            public float LeftX, LeftY, LeftWidth, LeftHeight;
+            public float RightX, RightY, RightWidth, RightHeight;
+            public float BoundsLeft, BoundsTop, BoundsRight, BoundsBottom;
+            public float Yaw, Pitch, TanHalf, BothEyes;
+            public float Eye, OutputWidth, OutputHeight, Unused;
+            public float TexelX, TexelY, Unused2, Unused3;
+        }
+
+        // compiled once, for every renderer
+        private static byte[] _vertexShaderCode;
+        private static byte[] _pixelShaderCode;
+        private static readonly object _compileLock = new object();
+
+        private ID3D11VertexShader _vertexShader;
+        private ID3D11PixelShader _pixelShader;
+        private ID3D11Buffer _constants;
+        private ID3D11SamplerState _sampler;
+        private ID3D11ShaderResourceView _pictureView;
+        private ID3D11RenderTargetView _outputTarget;
+
+        // what the context is given, made once: arrays a frame otherwise
+        private ID3D11ShaderResourceView[] _views;
+        private readonly ID3D11ShaderResourceView[] _noViews = new ID3D11ShaderResourceView[1];
+        private ID3D11SamplerState[] _samplers;
+        private ID3D11Buffer[] _buffers;
+        private ID3D11RenderTargetView[] _targets;
+
+        private void DrawSphere(in VideoView view)
+        {
+            if (_pixelShader == null)
+                CreateSphereShader();
+
+            var (lx, ly, lw, lh) = view.EyeRect(_info, false);
+            var (rx, ry, rw, rh) = view.EyeRect(_info, true);
+            float fw = _width, fh = _height;
+            var constants = new SphereConstants
+            {
+                LeftX = lx / fw, LeftY = ly / fh, LeftWidth = lw / fw, LeftHeight = lh / fh,
+                RightX = rx / fw, RightY = ry / fh, RightWidth = rw / fw, RightHeight = rh / fh,
+                BoundsLeft = (float)view.Bounds.Left, BoundsTop = (float)view.Bounds.Top,
+                BoundsRight = (float)view.Bounds.Right, BoundsBottom = (float)view.Bounds.Bottom,
+                Yaw = (float)(view.Yaw * Math.PI / 180),
+                Pitch = (float)(view.Pitch * Math.PI / 180),
+                TanHalf = (float)Math.Tan(Math.Clamp(view.FieldOfView, 1, 179) * Math.PI / 360),
+                BothEyes = view.IsBothSpherical ? 1 : 0,
+                Eye = view.Eye == EyeView.Right && view.Layout != StereoLayout.Mono ? 1 : 0,
+                OutputWidth = _outputWidth,
+                OutputHeight = _outputHeight,
+                TexelX = 1 / fw,
+                TexelY = 1 / fh,
+            };
+            _context.UpdateSubresource(_constants, 0, null, &constants, 0, 0);
+
+            var viewport = new D3D11_VIEWPORT { Width = _outputWidth, Height = _outputHeight, MaxDepth = 1 };
+            _context.OMSetRenderTargets(1, _targets, null);
+            _context.RSSetViewports(1, &viewport);
+            _context.IASetInputLayout(null);
+            _context.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY.D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            _context.VSSetShader(_vertexShader, null, 0);
+            _context.PSSetShader(_pixelShader, null, 0);
+            _context.PSSetShaderResources(0, 1, _views);
+            _context.PSSetSamplers(0, 1, _samplers);
+            _context.PSSetConstantBuffers(0, 1, _buffers);
+            _context.Draw(3, 0);
+
+            // the picture is written by the video processor next: not bound to be read as well
+            _context.PSSetShaderResources(0, 1, _noViews);
+        }
+
+        private void CreateSphereShader()
+        {
+            lock (_compileLock)
+            {
+                _vertexShaderCode ??= Compile("VS", "vs_4_0");
+                _pixelShaderCode ??= Compile("PS", "ps_4_0");
+            }
+
+            fixed (byte* code = _vertexShaderCode)
+            {
+                ID3D11VertexShader_unmanaged* shader;
+                _device.CreateVertexShader(code, (nuint)_vertexShaderCode.Length, null, &shader);
+                _vertexShader = (ID3D11VertexShader)Wrap(shader);
+            }
+            fixed (byte* code = _pixelShaderCode)
+            {
+                ID3D11PixelShader_unmanaged* shader;
+                _device.CreatePixelShader(code, (nuint)_pixelShaderCode.Length, null, &shader);
+                _pixelShader = (ID3D11PixelShader)Wrap(shader);
+            }
+
+            var bufferDesc = new D3D11_BUFFER_DESC
+            {
+                ByteWidth = (uint)sizeof(SphereConstants),
+                Usage = D3D11_USAGE.D3D11_USAGE_DEFAULT,
+                BindFlags = D3D11_BIND_FLAG.D3D11_BIND_CONSTANT_BUFFER,
+            };
+            _device.CreateBuffer(bufferDesc, null, out _constants);
+
+            var samplerDesc = new D3D11_SAMPLER_DESC
+            {
+                Filter = D3D11_FILTER.D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+                AddressU = D3D11_TEXTURE_ADDRESS_MODE.D3D11_TEXTURE_ADDRESS_CLAMP,
+                AddressV = D3D11_TEXTURE_ADDRESS_MODE.D3D11_TEXTURE_ADDRESS_CLAMP,
+                AddressW = D3D11_TEXTURE_ADDRESS_MODE.D3D11_TEXTURE_ADDRESS_CLAMP,
+                ComparisonFunc = D3D11_COMPARISON_FUNC.D3D11_COMPARISON_NEVER,
+                MaxLOD = float.MaxValue,
+            };
+            _device.CreateSamplerState(samplerDesc, out _sampler);
+            _device.CreateShaderResourceView((ID3D11Resource)_picture, null, out _pictureView);
+            _device.CreateRenderTargetView((ID3D11Resource)_output, null, out _outputTarget);
+
+            _views = new[] { _pictureView };
+            _samplers = new[] { _sampler };
+            _buffers = new[] { _constants };
+            _targets = new[] { _outputTarget };
+        }
+
+        /// <summary>A wrapper of an object made, which the wrapper then holds alone.</summary>
+        private static object Wrap(void* unknown)
+        {
+            var wrapper = Marshal.GetObjectForIUnknown((nint)unknown);
+            Marshal.Release((nint)unknown);
+            return wrapper;
+        }
+
+        private static byte[] Compile(string entryPoint, string target)
+        {
+            var source = Encoding.ASCII.GetBytes(SphereShader);
+            var hr = PInvoke.D3DCompile(source, "SphereShader", null, null, entryPoint, target, 0, 0, out ID3DBlob code, out ID3DBlob errors);
+            if (hr.Failed)
+            {
+                string message = errors == null ? hr.ToString() : Marshal.PtrToStringAnsi((nint)errors.GetBufferPointer(), (int)errors.GetBufferSize());
+                throw new InvalidOperationException($"The spherical view's {target} shader did not compile: {message}");
+            }
+            var bytes = new byte[(int)code.GetBufferSize()];
+            new ReadOnlySpan<byte>(code.GetBufferPointer(), bytes.Length).CopyTo(bytes);
+            Marshal.ReleaseComObject(code);
+            return bytes;
+        }
+
+        #endregion
 
         /// <summary>
         /// A frame decoded on the GPU, converted where it is: through a view of its texture, made once for each texture of
@@ -219,13 +516,13 @@ namespace SharpMediaFoundationInterop.WPF
 
                 case PixelFormat.BGRA32:
                     fixed (byte* data = frame)
-                        _context.UpdateSubresource(_output, 0, null, data, _width * 4, 0);
+                        _context.UpdateSubresource(_picture, 0, null, data, _width * 4, 0);
                     break;
 
                 default:
                     WidenToBgra(frame);
                     fixed (byte* data = _bgra)
-                        _context.UpdateSubresource(_output, 0, null, data, _width * 4, 0);
+                        _context.UpdateSubresource(_picture, 0, null, data, _width * 4, 0);
                     break;
             }
         }
@@ -296,6 +593,12 @@ namespace SharpMediaFoundationInterop.WPF
                 Marshal.ReleaseComObject(input.Texture);
             }
             _inputViews.Clear();
+            Release(ref _outputTarget);
+            Release(ref _pictureView);
+            Release(ref _sampler);
+            Release(ref _constants);
+            Release(ref _pixelShader);
+            Release(ref _vertexShader);
             Release(ref _outputView);
             Release(ref _inputView);
             Release(ref _processor);
@@ -303,7 +606,10 @@ namespace SharpMediaFoundationInterop.WPF
             Release(ref _nv12Input);
             Release(ref _nv12Staging);
             Release(ref _done);
-            Release(ref _output);
+            if (!ReferenceEquals(_output, _picture))
+                Release(ref _output);
+            _output = null;
+            Release(ref _picture);
             _videoContext = null;
             _videoDevice = null;
             _context = null;

@@ -17,6 +17,58 @@ namespace SharpMediaFoundationInterop.WPF
         NV12
     }
 
+    /// <summary>How a frame holds the views of the two eyes, where it holds both.</summary>
+    public enum StereoLayout
+    {
+        /// <summary>One picture, for both eyes.</summary>
+        Mono,
+
+        /// <summary>The left eye's picture in the left half of the frame, the right eye's in the right.</summary>
+        SideBySide,
+
+        /// <summary>The left eye's picture in the top half of the frame, the right eye's in the bottom.</summary>
+        TopBottom
+    }
+
+    /// <summary>What each eye's picture is of.</summary>
+    public enum VideoProjection
+    {
+        /// <summary>A flat picture, shown as it is.</summary>
+        Flat,
+
+        /// <summary>
+        /// Part of a sphere around the camera, laid out by longitude across and latitude down: of all of it, 360 by 180
+        /// degrees, less what <see cref="VideoInfo.ProjectionBounds"/> crops - a 180 degree video is half of it.
+        /// </summary>
+        Equirectangular
+    }
+
+    /// <summary>
+    /// The parts of a whole equirectangular picture - 360 degrees across, 180 down - cropped from each side, as fractions of
+    /// its width and height: a 180 degree video crops a quarter from the left and the right.
+    /// </summary>
+    public readonly struct ProjectionBounds
+    {
+        public ProjectionBounds(double left, double top, double right, double bottom)
+        {
+            Left = left;
+            Top = top;
+            Right = right;
+            Bottom = bottom;
+        }
+
+        public double Left { get; }
+        public double Top { get; }
+        public double Right { get; }
+        public double Bottom { get; }
+
+        /// <summary>The whole sphere: nothing cropped.</summary>
+        public static ProjectionBounds Full => default;
+
+        /// <summary>The half in front of the camera, 180 degrees across and the whole height.</summary>
+        public static ProjectionBounds Half => new ProjectionBounds(0.25, 0, 0.25, 0);
+    }
+
     public class VideoInfo
     {
         public string VideoCodec { get; set; }
@@ -27,6 +79,15 @@ namespace SharpMediaFoundationInterop.WPF
         public uint FpsNom { get; set; }
         public uint FpsDenom { get; set; }
         public PixelFormat PixelFormat { get; set; }
+
+        /// <summary>How the frame holds the eyes' views, as the source says: a file by its 'st3d' box.</summary>
+        public StereoLayout StereoLayout { get; set; }
+
+        /// <summary>What each eye's picture is of, as the source says: a file by its 'sv3d' box.</summary>
+        public VideoProjection Projection { get; set; }
+
+        /// <summary>Of an <see cref="VideoProjection.Equirectangular"/> picture, how much of the sphere it leaves out.</summary>
+        public ProjectionBounds ProjectionBounds { get; set; }
     }
 
     public class AudioInfo

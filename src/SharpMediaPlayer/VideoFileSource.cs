@@ -17,7 +17,7 @@ using System.IO;
 
 namespace SharpMediaFoundationInterop.WPF
 {
-    public class VideoFileSource : VideoSourceBase
+    public class VideoFileSource : VideoSourceBase, ISubtitleSource
     {
         private string _path;
         private BufferedStream _fs;
@@ -125,6 +125,151 @@ namespace SharpMediaFoundationInterop.WPF
                 }
             }
             return null;
+        }
+
+        #region Subtitles
+
+        private List<SubtitleTrackInfo> _subtitleTracks = new List<SubtitleTrackInfo>();
+        private List<List<Subtitle>> _subtitles = new List<List<Subtitle>>();
+
+        public IReadOnlyList<SubtitleTrackInfo> SubtitleTracks => _subtitleTracks;
+
+        public IReadOnlyList<Subtitle> GetSubtitles(int track) =>
+            track >= 0 && track < _subtitles.Count ? _subtitles[track] : Array.Empty<Subtitle>();
+
+        /// <summary>
+        /// The file's subtitle tracks, every cue of each read now - they are small, and so are there for any time sought to -
+        /// then the SubRip and WebVTT files beside it: of its name, or its name and a language, as movie.en.srt.
+        /// </summary>
+        private void LoadSubtitles(string fileName, IEnumerable<ITrack> tracks)
+        {
+            var names = new List<SubtitleTrackInfo>();
+            var subtitles = new List<List<Subtitle>>();
+            int number = 0;
+            foreach (var track in tracks.OfType<ISubtitleTrack>())
+            {
+                number++;
+                try
+                {
+                    subtitles.Add(ReadSubtitles(track));
+                    names.Add(new SubtitleTrackInfo($"Track {number}", LanguageOf(track), track.Forced));
+                }
+                catch (Exception ex)
+                {
+                    if (Log.ErrorEnabled) Log.Error($"Subtitle track {track.TrackID} could not be read: {ex.Message}", ex);
+                }
+            }
+
+            foreach (var (path, suffix) in SidecarFiles(fileName))
+            {
+                try
+                {
+                    var cues = SubtitleParser.ParseSrtOrWebVtt(File.ReadAllText(path));
+                    if (cues.Count == 0)
+                        continue;
+                    string language = suffix.Split('.', StringSplitOptions.RemoveEmptyEntries)
+                        .FirstOrDefault(part => part.Length is 2 or 3 && part.All(char.IsLetter) && !part.Equals("srt", StringComparison.OrdinalIgnoreCase));
+                    bool forced = suffix.Contains("forced", StringComparison.OrdinalIgnoreCase);
+                    subtitles.Add(cues);
+                    names.Add(new SubtitleTrackInfo(Path.GetFileName(path), language, forced));
+                }
+                catch (Exception ex)
+                {
+                    if (Log.ErrorEnabled) Log.Error($"Subtitles {path} could not be read: {ex.Message}", ex);
+                }
+            }
+
+            _subtitleTracks = names;
+            _subtitles = subtitles;
+        }
+
+        /// <summary>A track's language, as its media header says it: the reader leaves the track's own unset.</summary>
+        private string LanguageOf(ITrack track)
+        {
+            var media = _reader.Tracks[track.TrackID].Stbl?.GetParent()?.GetParent() as Box;
+            return media?.Children?.OfType<MediaHeaderBox>().FirstOrDefault()?.Language ?? track.Language;
+        }
+
+        /// <summary>A track's cues, on the clock of the video's frames, made plain; a TTML document's paragraphs each its own.</summary>
+        private List<Subtitle> ReadSubtitles(ISubtitleTrack track)
+        {
+            var subtitles = new List<Subtitle>();
+            uint timescale = track.Timescale;
+            MediaSample sample;
+            while ((sample = _reader.ReadSample(track.TrackID)) != null)
+            {
+                long duration = sample.LongDuration > 0 ? sample.LongDuration : Math.Max(0, track.DefaultSampleDuration);
+                var data = sample.Data;
+                foreach (var cue in track.ParseCues(data.Array, data.Offset, data.Count, sample.PTS, duration))
+                {
+                    long start = MediaUtils.ToTicks(cue.Start, timescale);
+                    long end = MediaUtils.ToTicks(cue.End, timescale);
+                    if (track is TtmlTrack)
+                    {
+                        subtitles.AddRange(SubtitleParser.ParseTtml(cue.Text, start, end));
+                        continue;
+                    }
+                    string text = SubtitleParser.ToPlainText(cue.Text);
+                    if (text.Length > 0 && end > start)
+                        subtitles.Add(new Subtitle(start, end, text));
+                }
+            }
+            subtitles.Sort((a, b) => a.Start.CompareTo(b.Start));
+            return subtitles;
+        }
+
+        /// <summary>The SubRip and WebVTT files of a video's name beside it, each with what its name has after the video's.</summary>
+        private static IEnumerable<(string Path, string Suffix)> SidecarFiles(string fileName)
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(fileName));
+            string stem = Path.GetFileNameWithoutExtension(fileName);
+            if (directory == null || !Directory.Exists(directory))
+                yield break;
+            foreach (string path in Directory.EnumerateFiles(directory, stem + "*").OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
+            {
+                string extension = Path.GetExtension(path);
+                if (!extension.Equals(".srt", StringComparison.OrdinalIgnoreCase) && !extension.Equals(".vtt", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string name = Path.GetFileNameWithoutExtension(path);
+                if (name.Length == stem.Length || name[stem.Length] == '.')
+                    yield return (path, name.Substring(stem.Length));
+            }
+        }
+
+        #endregion
+
+        /// <summary>
+        /// How the frames hold the eyes' views, and what they are of, as the video's sample entry says: Google's spherical
+        /// video boxes - 'st3d', of the stereo mode, and 'sv3d', of the projection, as a VR180 or 360 degree camera writes them.
+        /// Flat and mono where it says nothing.
+        /// </summary>
+        private void ReadStereoAndProjection(VideoInfo videoInfo)
+        {
+            var entry = _reader.Tracks[_videoTrack.TrackID].Stbl
+                .Children.OfType<SampleDescriptionBox>().SingleOrDefault()?
+                .Children.OfType<VisualSampleEntry>().FirstOrDefault();
+            if (entry?.Children == null)
+                return;
+
+            // stereo_mode: 0 mono, 1 top-bottom, 2 left-right
+            var stereo = entry.Children.OfType<Stereoscopic3D>().FirstOrDefault();
+            if (stereo != null)
+                videoInfo.StereoLayout = stereo.StereoMode == 1 ? StereoLayout.TopBottom : stereo.StereoMode == 2 ? StereoLayout.SideBySide : StereoLayout.Mono;
+
+            // the bounds are 0.32 fixed point fractions of the whole sphere's picture, cropped from each side of each eye's
+            var equirectangular = entry.Children.OfType<SphericalVideoBox>().FirstOrDefault()?
+                .Children?.OfType<ProjectionBox>().FirstOrDefault()?
+                .Children?.OfType<SharpISOBMFF.EquirectangularProjection>().FirstOrDefault();
+            if (equirectangular != null)
+            {
+                const double scale = 1.0 / 4294967296.0;
+                videoInfo.Projection = VideoProjection.Equirectangular;
+                videoInfo.ProjectionBounds = new ProjectionBounds(
+                    equirectangular.ProjectionBoundsLeft * scale,
+                    equirectangular.ProjectionBoundsTop * scale,
+                    equirectangular.ProjectionBoundsRight * scale,
+                    equirectangular.ProjectionBoundsBottom * scale);
+            }
         }
 
         /// <summary>The sample with the headers read before it in front of it, in one piece; the sample itself where none were.</summary>
@@ -283,6 +428,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             _videoTrack = inputTracks.FirstOrDefault(t => t.HandlerType == HandlerTypes.Video);
             _audioTrack = inputTracks.FirstOrDefault(t => t.HandlerType == HandlerTypes.Sound);
+            LoadSubtitles(fileName, inputTracks);
 
             if (_videoTrack != null || _audioTrack != null)
             {
@@ -375,6 +521,8 @@ namespace SharpMediaFoundationInterop.WPF
                     {
                         throw new NotSupportedException();
                     }
+
+                    ReadStereoAndProjection(videoInfo);
                 }
 
                 if (_audioTrack != null)

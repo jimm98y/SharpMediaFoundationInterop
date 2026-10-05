@@ -37,10 +37,34 @@
     </Style>
 
     <!--
+        A subtitle, its text the content: of a 720 line picture, scaled with what it is shown over, at its bottom. The
+        default template's, VideoControlBase.SubtitleTemplateKey: one of the key in an application's resources draws them
+        otherwise.
+    -->
+    <DataTemplate x:Key="{ComponentResourceKey TypeInTargetAssembly={x:Type local:VideoControlBase}, ResourceId=SubtitleTemplate}">
+        <Viewbox Stretch="Uniform" VerticalAlignment="Bottom">
+            <Grid Width="1280" Height="720">
+                <Border x:Name="Box" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                        Margin="48,0,48,56" Padding="14,4" CornerRadius="4" Background="#B0000000">
+                    <TextBlock Text="{Binding}" Foreground="White" FontFamily="Segoe UI" FontSize="40"
+                               TextAlignment="Center" TextWrapping="Wrap" />
+                </Border>
+            </Grid>
+        </Viewbox>
+        <DataTemplate.Triggers>
+            <DataTrigger Binding="{Binding}" Value="">
+                <Setter TargetName="Box" Property="Visibility" Value="Collapsed" />
+            </DataTrigger>
+        </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!--
         The video, and over its bottom the bar of controls: shown as the mouse moves over the video and faded out a while
         after it stops - the states ControlsVisible and ControlsHidden. The buttons send the control WPF's MediaCommands; what
         they show is of the control's properties - IsPlaying, CanSeek, TimeText. A template of one's own may have any of it,
         or none: PART_Image is what frames are drawn on, PART_Seek seeks, PART_ControlsBar stays while the mouse is on it.
+        The subtitle, SubtitleText, is over the picture itself - scaled with it - and over each half of it, both eyes' views,
+        where ShowsSideBySide.
     -->
     <Style TargetType="{x:Type local:VideoControlBase}">
         <Setter Property="Focusable" Value="True" />
@@ -69,7 +93,20 @@
                             </VisualStateGroup>
                         </VisualStateManager.VisualStateGroups>
 
-                        <Image x:Name="PART_Image" />
+                        <!-- the picture, and the subtitles over it: scaled together, the subtitles over the picture alone -->
+                        <Viewbox Stretch="Uniform">
+                            <Grid>
+                                <Image x:Name="PART_Image" Stretch="None" />
+                                <!-- the picture's size, not the subtitles' own: those are scaled to fit it -->
+                                <UniformGrid x:Name="SubtitleLayer" Rows="1" Columns="1" IsHitTestVisible="False"
+                                             Width="{Binding ActualWidth, ElementName=PART_Image}" Height="{Binding ActualHeight, ElementName=PART_Image}">
+                                    <ContentPresenter Content="{TemplateBinding SubtitleText}"
+                                                      ContentTemplate="{StaticResource {x:Static local:VideoControlBase.SubtitleTemplateKey}}" />
+                                    <ContentPresenter x:Name="SecondSubtitle" Visibility="Collapsed" Content="{TemplateBinding SubtitleText}"
+                                                      ContentTemplate="{StaticResource {x:Static local:VideoControlBase.SubtitleTemplateKey}}" />
+                                </UniformGrid>
+                            </Grid>
+                        </Viewbox>
                         <Border x:Name="PART_ControlsBar"
                                 VerticalAlignment="Bottom"
                                 Padding="6,14,6,4">
@@ -89,6 +126,14 @@
                                     <Button x:Name="FastForwardButton" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
                                             Command="MediaCommands.FastForward" Content="&#xEB9D;" ToolTip="Fast forward; again for faster (L)" />
                                 </StackPanel>
+                                <Button x:Name="SubtitleButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                        Width="40" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
+                                        Command="{x:Static local:VideoControlBase.NextSubtitleTrackCommand}" Content="CC"
+                                        ToolTip="Subtitles: the next track, or off (C)" Visibility="Collapsed" />
+                                <Button x:Name="EyeButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                        Width="40" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
+                                        Command="{x:Static local:VideoControlBase.NextEyeViewCommand}" Content="L R"
+                                        ToolTip="Both eyes, the left or the right (E)" Visibility="Collapsed" />
                                 <TextBlock x:Name="TimeText" DockPanel.Dock="Right"
                                            Margin="8,0,2,0" VerticalAlignment="Center"
                                            Foreground="White" FontFamily="Consolas" FontSize="12"
@@ -108,6 +153,27 @@
                             <Setter TargetName="FastForwardButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="TimeText" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="PART_Seek" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <!-- a stereo video: an eye can be chosen -->
+                        <Trigger Property="IsStereo" Value="True">
+                            <Setter TargetName="EyeButton" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <!-- of two eyes' views side by side, the subtitle over each -->
+                        <Trigger Property="ShowsSideBySide" Value="True">
+                            <Setter TargetName="SubtitleLayer" Property="Columns" Value="2" />
+                            <Setter TargetName="SecondSubtitle" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="HasSubtitles" Value="True">
+                            <Setter TargetName="SubtitleButton" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="SubtitleTrack" Value="-1">
+                            <Setter TargetName="SubtitleButton" Property="Opacity" Value="0.5" />
+                        </Trigger>
+                        <Trigger Property="EyeView" Value="Left">
+                            <Setter TargetName="EyeButton" Property="Content" Value="L" />
+                        </Trigger>
+                        <Trigger Property="EyeView" Value="Right">
+                            <Setter TargetName="EyeButton" Property="Content" Value="R" />
                         </Trigger>
                         <Trigger Property="ShowControls" Value="False">
                             <Setter TargetName="PART_ControlsBar" Property="Visibility" Value="Collapsed" />

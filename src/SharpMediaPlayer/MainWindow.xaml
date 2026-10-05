@@ -8,7 +8,19 @@
         Title="SharpMediaPlayer" Height="450" Width="800">
 
     <Grid>
-        <TabControl>
+        <TabControl x:Name="Tabs">
+            <TabItem Header="File" x:Name="FileTab">
+                <DockPanel>
+                    <ToolBar DockPanel.Dock="Top">
+                        <Button Content="Open video..." Click="OpenVideo_Click" />
+                        <Button Content="Open left and right eye..." Click="OpenStereo_Click" ToolTip="Two videos of a stereo pair, played side by side" />
+                        <Separator />
+                        <CheckBox x:Name="UseDirect3D" Content="Direct3D" IsChecked="True" Click="UseDirect3D_Click"
+                                  ToolTip="Drawn with Direct3D, which shows a 180 or 360 degree video as a view to look around in; else into a bitmap, flat" />
+                    </ToolBar>
+                    <ContentControl x:Name="FileHost" />
+                </DockPanel>
+            </TabItem>
             <TabItem Header="MP4">
                 <ctrl:VideoControl Source="{Binding MP4Source}" Looping="True" />
             </TabItem>

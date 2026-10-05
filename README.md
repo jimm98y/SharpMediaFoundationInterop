@@ -289,6 +289,19 @@ The bar is part of the control's template, and can be restyled or replaced from 
 ```
 To restyle only the default template's buttons, base a style on `{StaticResource {x:Static ctrl:VideoControlBase.ButtonStyleKey}}`.
 
+### Subtitles
+Both controls show subtitles: of a file, its subtitle tracks (3GPP timed text, WebVTT, TTML), and SubRip or WebVTT files beside it named after it (`movie.srt`, `movie.en.srt`, `movie.de.forced.vtt`). `SubtitleTracks` lists them, and `SubtitleTrack` chooses one, -1 (the default) for none; the bar's CC button (or C) goes through them. A forced track is shown even with subtitles off. Where both eyes of a stereo video are shown side by side, the subtitle is shown over each. A source of its own gives subtitles by implementing `ISubtitleSource`, and a data template of the key `VideoControlBase.SubtitleTemplateKey` draws them otherwise.
+
+### Stereo and VR video
+A stereo video's frame holds both eyes, side by side or top and bottom. `EyeView` shows both as the frame has them, or the left or right eye alone; the bar gets an eye button for it (or press E). `VideoFileSource` reads the layout from the file's `st3d` box, and `StereoLayout` overrides it for a file that does not say.
+
+Two separate videos, one per eye, play as one stereo video side by side through `StereoVideoSource`, which decodes each eye on its own thread and pairs the frames by their times:
+```cs
+var source = new StereoVideoSource(new VideoFileSource("left.mp4"), new VideoFileSource("right.mp4"));
+```
+
+A 180 or 360 degree video (equirectangular, as a VR180 camera writes it, read from the file's `sv3d` box, or forced with `Projection`) is shown by `VideoControlD3D` as a view into the sphere, drawn on the GPU: drag to look around, use the wheel to zoom, and double-click to look straight ahead again. `Yaw`, `Pitch` and `FieldOfView` hold the view and can be bound to. Of a stereo VR video, `EyeView` shows one eye's view, or both side by side. `VideoControl` shows such a video flat.
+
 ## Samples
 
 ### SharpMediaPlayer
