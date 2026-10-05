@@ -36,6 +36,80 @@
         </Setter>
     </Style>
 
+    <!-- the seek bar's two parts of the track, either side of the thumb: a thin rounded line, the whole height to click -->
+    <Style x:Key="SeekTrackPart" TargetType="{x:Type RepeatButton}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                    <Grid Background="Transparent">
+                        <Border Height="4" CornerRadius="2" VerticalAlignment="Center" Background="{TemplateBinding Background}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- the seek bar's thumb: a circle with a dot of the accent colour in it, bigger under the mouse, smaller dragged -->
+    <Style x:Key="SeekThumb" TargetType="{x:Type Thumb}">
+        <Setter Property="Width" Value="20" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                    <Grid>
+                        <Ellipse Fill="#FF454545" Stroke="#FF5C5C5C" StrokeThickness="1" />
+                        <Ellipse x:Name="Dot" Width="12" Height="12" Fill="{TemplateBinding Foreground}" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Dot" Property="Width" Value="14" />
+                            <Setter TargetName="Dot" Property="Height" Value="14" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="Dot" Property="Width" Value="10" />
+                            <Setter TargetName="Dot" Property="Height" Value="10" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+        The seek bar, as Windows 11's Media Player draws it: a thin rounded track, of the accent colour - the slider's
+        Foreground - up to the thumb and of its Background after it, and a round thumb with a dot in it. Clicked anywhere,
+        it goes there. VideoControlBase.SeekSliderStyleKey, for another style to be based on.
+    -->
+    <Style x:Key="{ComponentResourceKey TypeInTargetAssembly={x:Type local:VideoControlBase}, ResourceId=SeekSliderStyle}" TargetType="{x:Type Slider}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsMoveToPointEnabled" Value="True" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="Foreground" Value="#FF4CC2FF" />
+        <Setter Property="Background" Value="#66FFFFFF" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Slider}">
+                    <Grid Background="Transparent">
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource SeekTrackPart}" Command="Slider.DecreaseLarge" Background="{TemplateBinding Foreground}" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource SeekTrackPart}" Command="Slider.IncreaseLarge" Background="{TemplateBinding Background}" />
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource SeekThumb}" Foreground="{TemplateBinding Foreground}" />
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!--
         A subtitle, its text the content: of a 720 line picture, scaled with what it is shown over, at its bottom. The
         default template's, VideoControlBase.SubtitleTemplateKey: one of the key in an application's resources draws them
@@ -138,8 +212,8 @@
                                            Margin="8,0,2,0" VerticalAlignment="Center"
                                            Foreground="White" FontFamily="Consolas" FontSize="12"
                                            Text="{TemplateBinding TimeText}" />
-                                <Slider x:Name="PART_Seek" Margin="6,0" VerticalAlignment="Center"
-                                        Minimum="0" Maximum="1" IsMoveToPointEnabled="True" Focusable="False" />
+                                <Slider x:Name="PART_Seek" Margin="6,0" VerticalAlignment="Center" Minimum="0" Maximum="1"
+                                        Style="{StaticResource {x:Static local:VideoControlBase.SeekSliderStyleKey}}" />
                             </DockPanel>
                         </Border>
                     </Grid>
