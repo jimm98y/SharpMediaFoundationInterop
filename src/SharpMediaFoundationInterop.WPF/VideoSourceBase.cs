@@ -881,10 +881,23 @@ namespace SharpMediaFoundationInterop.WPF
             Interlocked.Exchange(ref _audioFrames, 0);
         }
 
+        /// <summary>
+        /// A decoder of the source's own, where it needs one the codec alone does not say: one that hands out only some of
+        /// the pictures it decodes, say. Null, as it is by default, for the codec's. Made on the thread the samples are
+        /// decoded on, and initialized by the source.
+        /// </summary>
+        protected virtual IMediaVideoTransform CreateCustomVideoDecoder(VideoInfo info) => null;
+
         protected virtual void CreateVideoDecoder(VideoInfo info)
         {
             // decoders must be created on the same thread as the samples
-            if (info.VideoCodec == "H264")
+            var custom = CreateCustomVideoDecoder(info);
+            if (custom != null)
+            {
+                _videoDecoder = custom;
+                InitializeVideoDecoder(info);
+            }
+            else if (info.VideoCodec == "H264")
             {
                 _videoDecoder = new H264Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
                 InitializeVideoDecoder(info);
