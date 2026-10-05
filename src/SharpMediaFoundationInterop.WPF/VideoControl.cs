@@ -38,17 +38,17 @@ namespace SharpMediaFoundationInterop.WPF
             _canvas = null;
         }
 
-        protected override void Present(byte[] frame, VideoInfo videoInfo)
+        protected override void Present(object frame, VideoInfo videoInfo)
         {
             var canvas = _canvas;
-            if (canvas == null)
+            if (canvas == null || frame is not byte[] bytes)
                 return;
 
             canvas.Lock();
 
             // TODO: bitmap stride?
             Marshal.Copy(
-                frame,
+                bytes,
                 0,
                 canvas.BackBuffer,
                 (int)(videoInfo.OriginalWidth * videoInfo.OriginalHeight * (videoInfo.PixelFormat == PixelFormat.BGRA32 ? 4 : 3))

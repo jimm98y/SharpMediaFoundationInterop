@@ -48,7 +48,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// Decoded frames waiting to be shown, each with its time - -1 to be shown as it comes - the number of the seek it is
         /// of, which a later seek leaves it behind, and when it was queued, on the clock's stopwatch.
         /// </summary>
-        private ConcurrentQueue<(byte[] Frame, long Timestamp, long Request, long Queued)> _videoOut = new ConcurrentQueue<(byte[] Frame, long Timestamp, long Request, long Queued)>();
+        private ConcurrentQueue<(object Frame, long Timestamp, long Request, long Queued)> _videoOut = new ConcurrentQueue<(object Frame, long Timestamp, long Request, long Queued)>();
 
         private bool _disposedValue;
 
@@ -647,7 +647,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// Draws a frame, in the format the source gives - see <see cref="VideoInfo.PixelFormat"/>. On the UI thread, as each
         /// is due; the frame goes back to the source after.
         /// </summary>
-        protected abstract void Present(byte[] frame, VideoInfo videoInfo);
+        protected abstract void Present(object frame, VideoInfo videoInfo);
 
         /// <summary>
         /// The source, before it is initialized: where the control would rather have frames of another format than the
@@ -662,7 +662,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (!HasSurface)
                 return;
 
-            (byte[] Frame, long Timestamp, long Request, long Queued) next;
+            (object Frame, long Timestamp, long Request, long Queued) next;
             long request = Interlocked.Read(ref _request);
             while (true)
             {
@@ -672,7 +672,7 @@ namespace SharpMediaFoundationInterop.WPF
                     break;
                 // of before a seek
                 if (_videoOut.TryDequeue(out var stale))
-                    _source.ReturnVideoSample(stale.Frame);
+                    _source.ReturnVideoFrame(stale.Frame);
                 _videoWake.Set();
             }
 
@@ -701,7 +701,7 @@ namespace SharpMediaFoundationInterop.WPF
                 if (!first && _lastShownTime >= 0 && behind > 0 && behind <= ResyncThreshold)
                 {
                     if (_videoOut.TryDequeue(out var late))
-                        _source.ReturnVideoSample(late.Frame);
+                        _source.ReturnVideoFrame(late.Frame);
                     _videoWake.Set();
                     return;
                 }
@@ -740,7 +740,7 @@ namespace SharpMediaFoundationInterop.WPF
                 if (audio >= 0 && -ahead > LateFrame && _lateFramesDropped < MaxLateFramesDropped)
                 {
                     if (_videoOut.TryDequeue(out var behindSound))
-                        _source.ReturnVideoSample(behindSound.Frame);
+                        _source.ReturnVideoFrame(behindSound.Frame);
                     _videoWake.Set();
                     _lateFramesDropped++;
                     return;
@@ -778,12 +778,12 @@ namespace SharpMediaFoundationInterop.WPF
                 while (_videoOut.TryPeek(out var behind) && behind.Timestamp >= 0 && behind.Timestamp <= clockNow
                     && _videoOut.TryDequeue(out var newer))
                 {
-                    _source.ReturnVideoSample(next.Frame);
+                    _source.ReturnVideoFrame(next.Frame);
                     next = newer;
                 }
             }
 
-            byte[] decoded = next.Frame;
+            object decoded = next.Frame;
             _videoFrames++;
             _shownRequest = next.Request;
             if (next.Timestamp >= 0)
@@ -798,13 +798,13 @@ namespace SharpMediaFoundationInterop.WPF
             var videoInfo = _source.VideoInfo;
             if(videoInfo == null)
             {
-                _source.ReturnVideoSample(decoded);
+                _source.ReturnVideoFrame(decoded);
                 return;
             }
 
             Present(decoded, videoInfo);
 
-            _source.ReturnVideoSample(decoded);
+            _source.ReturnVideoFrame(decoded);
 
             UpdatePosition();
         }
@@ -837,7 +837,7 @@ namespace SharpMediaFoundationInterop.WPF
         private Task UninitializeVideo(IVideoSource videoSource)
         {
             while (_videoOut.TryDequeue(out var sample))
-                videoSource.ReturnVideoSample(sample.Frame);
+                videoSource.ReturnVideoFrame(sample.Frame);
             ReleaseSurface();
 
             if (_isLooping)
@@ -975,10 +975,10 @@ namespace SharpMediaFoundationInterop.WPF
             // of to take the next, so that what is live is what is shown on play.
             bool live = seekable == null;
             if (live && _paused && _videoOut.Count >= LiveQueueLength && _videoOut.TryDequeue(out var stale))
-                videoSource.ReturnVideoSample(stale.Frame);
+                videoSource.ReturnVideoFrame(stale.Frame);
             if (!ended && _videoOut.Count < (live ? LiveQueueLength : 1))
             {
-                var sample = videoSource.GetVideoSample(out long timestamp);
+                var sample = videoSource.GetVideoFrame(out long timestamp);
                 if (sample == null)
                 {
                     if (seekable != null)
@@ -988,7 +988,7 @@ namespace SharpMediaFoundationInterop.WPF
                     return false;
                 }
 
-                if (sample.Length == 0)
+                if (sample is byte[] bytes && bytes.Length == 0)
                     return false; // none ready yet
 
                 // read after the frame: a seek is done before the frame after it is handed out, on this thread
@@ -1157,7 +1157,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             // cleanup all samples from previous playback session
             while (_videoOut.TryDequeue(out var sample))
-                _source.ReturnVideoSample(sample.Frame);
+                _source.ReturnVideoFrame(sample.Frame);
 
             _videoFrames = 0;
             _audioFrames = 0;

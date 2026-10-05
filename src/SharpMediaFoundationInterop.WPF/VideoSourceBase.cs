@@ -1,5 +1,8 @@
 ﻿using System;
 using System.Buffers;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Windows.Win32.Media.MediaFoundation;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.Win32;
@@ -57,7 +60,7 @@ namespace SharpMediaFoundationInterop.WPF
         protected IMediaAudioTransform _audioDecoder;
 
         /// <summary>Decoded frames, each with the time it is shown at.</summary>
-        protected ConcurrentQueue<(byte[] Frame, long Timestamp)> _videoRenderQueue = new ConcurrentQueue<(byte[] Frame, long Timestamp)>();
+        protected ConcurrentQueue<(object Frame, long Timestamp)> _videoRenderQueue = new ConcurrentQueue<(object Frame, long Timestamp)>();
         /// <summary>Decoded frames of sound, each with the time it starts at; -1 where the source gives none.</summary>
         protected ConcurrentQueue<(byte[] Pcm, long Timestamp)> _audioRenderQueue = new ConcurrentQueue<(byte[] Pcm, long Timestamp)>();
 
@@ -241,7 +244,38 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>Whether the decoder has given up what it held at the end of the stream - see <see cref="GetVideoSample"/>.</summary>
         private bool _videoDrained;
 
+        // Of a live stream: whether the decoder has been given a frame, has given one out, and when it was given the last.
+        private bool _decoderFed;
+        private bool _decoderOutput;
+        private long _lastInputAt;
+
+        /// <summary>
+        /// The decoder drained mid-stream, for a live stream's first frame: a decoder may forget the stream's parameter sets
+        /// with it, which a source that sent them once - out of band, of the session's description - sends again with the
+        /// next frame.
+        /// </summary>
+        protected virtual void OnVideoDecoderDrained() { }
+
+        /// <summary>How long a live stream's first frame may wait in the decoder for the frames after it before it is drained.</summary>
+        private static readonly TimeSpan FirstFrameDrainDelay = TimeSpan.FromMilliseconds(150);
+
+        /// <summary>The next frame, of the CPU's memory: see <see cref="GetVideoFrame"/> for frames of the GPU's.</summary>
         public virtual byte[] GetVideoSample(out long timestamp)
+        {
+            var frame = GetVideoFrame(out timestamp);
+            if (frame is GpuVideoFrame gpu)
+            {
+                gpu.Release();
+                throw new InvalidOperationException("Frames decoded on the GPU are read with GetVideoFrame.");
+            }
+            return (byte[])frame;
+        }
+
+        /// <summary>
+        /// The next frame: an array - empty where none is ready yet - or, decoded on the GPU where
+        /// <see cref="TryUseDirect3D"/> was asked for, a <see cref="GpuVideoFrame"/>; null where there are no more.
+        /// </summary>
+        public virtual object GetVideoFrame(out long timestamp)
         {
             timestamp = -1;
             var videoInfo = VideoInfo;
@@ -290,13 +324,29 @@ namespace SharpMediaFoundationInterop.WPF
                 // the frame, in the order the frames are shown.
                 long videoTime = auTime >= 0 ? auTime : _lastVideoTime;
                 _lastVideoTime = videoTime;
+                _lastInputAt = Stopwatch.GetTimestamp();
                 foreach (var nalu in au)
                 {
                     if (_videoDecoder.ProcessInput(nalu, videoTime))
                     {
+                        _decoderFed = true;
                         CollectVideoFrames(videoInfo);
                     }
                 }
+            }
+
+            // A live stream's first frame, held by the decoder for the frames after it to put it in order of showing,
+            // while none come: as a server starting a client on the last key frame it kept sends nothing more until the next
+            // one - seconds, of a group of pictures. Drained, it is shown. Only the first: drained later, on a pause in the
+            // stream, a decoder may lose the pictures the frames after it refer to.
+            if (_videoRenderQueue.IsEmpty && IsStreaming && _decoderFed && !_decoderOutput
+                && Stopwatch.GetElapsedTime(_lastInputAt) > FirstFrameDrainDelay)
+            {
+                _decoderFed = false;
+                _videoDecoder.BeginDrain();
+                CollectVideoFrames(videoInfo);
+                _videoDecoder.EndDrain();
+                OnVideoDecoderDrained();
             }
 
             // At the end of a file the decoder still holds the frames it was keeping to put the next ones in order - a
@@ -327,7 +377,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
-        private byte[] Dequeue(out long timestamp)
+        private object Dequeue(out long timestamp)
         {
             timestamp = -1;
             if (!_videoRenderQueue.TryDequeue(out var sample))
@@ -344,11 +394,15 @@ namespace SharpMediaFoundationInterop.WPF
         /// </summary>
         private void CollectVideoFrames(VideoInfo videoInfo)
         {
-            while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out _, out long frameTime))
+            while (TakeOutput(out long frameTime))
             {
+                _decoderOutput = true;
                 if (frameTime < _discardBefore || !IsShown(frameTime))
+                {
+                    DropOutput();
                     continue;
-                EnqueuePicture(_nv12Buffer, frameTime, videoInfo);
+                }
+                EnqueueOutput(frameTime, videoInfo);
             }
         }
 
@@ -509,7 +563,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         // The frames of a group of pictures being decoded to be handed out backwards: copies of the decoder's, the latest
         // before the time handed out down to, as many as the memory set aside holds.
-        private readonly List<(byte[] Nv12, long Time)> _reverseWindow = new List<(byte[] Nv12, long Time)>();
+        private readonly List<(object Frame, long Time)> _reverseWindow = new List<(object Frame, long Time)>();
         private const long ReverseWindowBytes = 256L * 1024 * 1024;
 
         /// <summary>A seek, or a new rate, asked for: done on the thread that decodes, which the decoders belong to.</summary>
@@ -530,7 +584,7 @@ namespace SharpMediaFoundationInterop.WPF
                 return;
 
             while (_videoRenderQueue.TryDequeue(out var queued))
-                ArrayPool<byte>.Shared.Return(queued.Frame);
+                ReleaseFrame(queued.Frame);
             ClearReverseWindow();
             _videoDecoder.Flush();
             _videoDrained = false;
@@ -589,8 +643,8 @@ namespace SharpMediaFoundationInterop.WPF
 
             // a key frame is all there is to decode: drained, it comes out without the frames after it going in
             _videoDecoder.BeginDrain();
-            while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out _, out long frameTime))
-                EnqueuePicture(_nv12Buffer, frameTime, videoInfo);
+            while (TakeOutput(out long frameTime))
+                EnqueueOutput(frameTime, videoInfo);
             _videoDecoder.EndDrain();
             return true;
         }
@@ -630,7 +684,20 @@ namespace SharpMediaFoundationInterop.WPF
             }
 
             for (int i = _reverseWindow.Count - 1; i >= 0; i--)
-                EnqueuePicture(_reverseWindow[i].Nv12, _reverseWindow[i].Time, videoInfo);
+            {
+                var kept = _reverseWindow[i];
+                if (kept.Frame is byte[] nv12)
+                {
+                    EnqueuePicture(nv12, kept.Time, videoInfo);
+                }
+                else
+                {
+                    // of the GPU's: handed out as it is, the window letting go of it
+                    _videoRenderQueue.Enqueue((kept.Frame, kept.Time));
+                    Interlocked.Increment(ref _videoFrames);
+                    _reverseWindow[i] = (null, kept.Time);
+                }
+            }
 
             // on from the earliest of them - from the start of its span, played fast, whose frame has been handed out - and
             // from before the key frame where there were none
@@ -650,11 +717,12 @@ namespace SharpMediaFoundationInterop.WPF
         private bool KeepForBackwards(int capacity)
         {
             bool past = false;
-            while (_videoDecoder.ProcessOutput(ref _nv12Buffer, out uint length, out long frameTime))
+            while (TakeOutput(out long frameTime))
             {
                 if (frameTime >= _reverseBefore)
                 {
                     past = true;
+                    DropOutput();
                     continue;
                 }
                 // Played fast, one frame a span is handed out: backwards, the last of it, the first played - a frame of the
@@ -664,17 +732,15 @@ namespace SharpMediaFoundationInterop.WPF
                 if (spacing > 0 && count > 0 && _reverseWindow[count - 1].Time / spacing == frameTime / spacing)
                 {
                     var same = _reverseWindow[count - 1];
-                    Buffer.BlockCopy(_nv12Buffer, 0, same.Nv12, 0, (int)Math.Min(length, (uint)_nv12Buffer.Length));
-                    _reverseWindow[count - 1] = (same.Nv12, frameTime);
+                    ReleaseFrame(same.Frame);
+                    _reverseWindow[count - 1] = (KeepOutput(), frameTime);
                     continue;
                 }
 
-                byte[] copy = ArrayPool<byte>.Shared.Rent(_nv12Buffer.Length);
-                Buffer.BlockCopy(_nv12Buffer, 0, copy, 0, (int)Math.Min(length, (uint)_nv12Buffer.Length));
-                _reverseWindow.Add((copy, frameTime));
+                _reverseWindow.Add((KeepOutput(), frameTime));
                 if (_reverseWindow.Count > capacity)
                 {
-                    ArrayPool<byte>.Shared.Return(_reverseWindow[0].Nv12);
+                    ReleaseFrame(_reverseWindow[0].Frame);
                     _reverseWindow.RemoveAt(0);
                 }
             }
@@ -684,8 +750,123 @@ namespace SharpMediaFoundationInterop.WPF
         private void ClearReverseWindow()
         {
             foreach (var frame in _reverseWindow)
-                ArrayPool<byte>.Shared.Return(frame.Nv12);
+                ReleaseFrame(frame.Frame);
             _reverseWindow.Clear();
+        }
+
+        #endregion
+
+        #region Decoding on the GPU
+
+        private Direct3DDevice _direct3D;
+        private GpuFramePool _gpuPool;
+
+        // The decoder's output in hand, decoded on the GPU: a texture of its own, copied out into one of the pool before the
+        // next is asked for. Null where the output is in the NV12 buffer, of the CPU's memory.
+        private IMFSample _gpuOutput;
+
+        /// <summary>Frames decoded on the GPU, where the decoder can: see <see cref="IVideoSource.TryUseDirect3D"/>.</summary>
+        public bool TryUseDirect3D(Direct3DDevice device)
+        {
+            _direct3D = device;
+            return device != null;
+        }
+
+        /// <summary>The decoder made, given the device first where there is one.</summary>
+        private void InitializeVideoDecoder(VideoInfo info)
+        {
+            if (_direct3D != null)
+                _videoDecoder.DeviceManager = _direct3D.Manager;
+            _videoDecoder.Initialize();
+            if (_direct3D != null && _videoDecoder.UsesDevice && _videoDecoder.ProvidesSamples && _gpuPool == null)
+                _gpuPool = new GpuFramePool(_direct3D, info.Width, info.Height);
+            if (_direct3D != null && Log.InfoEnabled)
+                Log.Info($"{info.VideoCodec} decoded on the {(_videoDecoder.UsesDevice ? "GPU" : "CPU")}");
+        }
+
+        /// <summary>
+        /// The decoder's next frame, if it has one: of the GPU's memory, held in hand, or of the CPU's, in the NV12 buffer - a
+        /// decoder on a device may hand out either.
+        /// </summary>
+        private bool TakeOutput(out long frameTime)
+        {
+            if (!_videoDecoder.ProvidesSamples)
+                return _videoDecoder.ProcessOutput(ref _nv12Buffer, out _, out frameTime);
+
+            if (!_videoDecoder.ProcessOutput(out IMFSample sample, out frameTime))
+                return false;
+
+            sample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
+            try
+            {
+                if (_gpuPool != null && buffer is IMFDXGIBuffer)
+                {
+                    _gpuOutput = sample;
+                    return true;
+                }
+
+                // of the CPU's memory after all: into the buffer, as a decoder filling ours does
+                sample.ConvertToContiguousBuffer(out IMFMediaBuffer contiguous);
+                MediaUtils.CopyBuffer(contiguous, _nv12Buffer, out _);
+                Marshal.ReleaseComObject(contiguous);
+                Marshal.ReleaseComObject(sample);
+                return true;
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(buffer);
+            }
+        }
+
+        /// <summary>Lets go of the output in hand, not shown.</summary>
+        private void DropOutput()
+        {
+            if (_gpuOutput != null)
+            {
+                Marshal.ReleaseComObject(_gpuOutput);
+                _gpuOutput = null;
+            }
+        }
+
+        /// <summary>The output in hand as a frame of its own: a texture of the pool, or an NV12 array.</summary>
+        private object KeepOutput()
+        {
+            if (_gpuOutput != null)
+            {
+                var frame = _gpuPool.CopyOf(_gpuOutput);
+                DropOutput();
+                return frame;
+            }
+
+            byte[] copy = ArrayPool<byte>.Shared.Rent(_nv12Buffer.Length);
+            Buffer.BlockCopy(_nv12Buffer, 0, copy, 0, _nv12Buffer.Length);
+            return copy;
+        }
+
+        /// <summary>The output in hand queued to be shown: of the GPU's memory as it is, of the CPU's made into a picture.</summary>
+        private void EnqueueOutput(long frameTime, VideoInfo videoInfo)
+        {
+            if (_gpuOutput != null)
+            {
+                _videoRenderQueue.Enqueue((KeepOutput(), frameTime));
+                Interlocked.Increment(ref _videoFrames);
+                return;
+            }
+            EnqueuePicture(_nv12Buffer, frameTime, videoInfo);
+        }
+
+        private static void ReleaseFrame(object frame)
+        {
+            if (frame is GpuVideoFrame gpu)
+                gpu.Release();
+            else if (frame is byte[] bytes)
+                ArrayPool<byte>.Shared.Return(bytes);
+        }
+
+        /// <summary>Gives a frame of <see cref="GetVideoFrame"/> back.</summary>
+        public void ReturnVideoFrame(object frame)
+        {
+            ReleaseFrame(frame);
         }
 
         #endregion
@@ -703,12 +884,12 @@ namespace SharpMediaFoundationInterop.WPF
             if (info.VideoCodec == "H264")
             {
                 _videoDecoder = new H264Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                _videoDecoder.Initialize();
+                InitializeVideoDecoder(info);
             }
             else if (info.VideoCodec == "H265")
             {
                 _videoDecoder = new H265Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                _videoDecoder.Initialize();
+                InitializeVideoDecoder(info);
             }
             else if (info.VideoCodec == "H266")
             {
@@ -718,12 +899,12 @@ namespace SharpMediaFoundationInterop.WPF
             else if (info.VideoCodec == "AV1")
             {
                 _videoDecoder = new AV1Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                _videoDecoder.Initialize();
+                InitializeVideoDecoder(info);
             }
             else if (info.VideoCodec == "VP9")
             {
                 _videoDecoder = new VP9Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                _videoDecoder.Initialize();
+                InitializeVideoDecoder(info);
             }
             else
             {

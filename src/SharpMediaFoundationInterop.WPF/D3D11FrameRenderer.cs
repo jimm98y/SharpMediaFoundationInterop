@@ -50,19 +50,31 @@ namespace SharpMediaFoundationInterop.WPF
         internal ID3D11Device Device => _device;
         internal ID3D11DeviceContext Context => _context;
 
-        public D3D11FrameRenderer(VideoInfo info)
+        /// <summary>On a device of its own: for frames of the CPU's memory alone.</summary>
+        public D3D11FrameRenderer(VideoInfo info) : this(new Direct3DDevice(), info, ownsDevice: true)
+        {
+        }
+
+        /// <summary>
+        /// On the device frames are decoded on, which is what lets a frame of the GPU's memory be drawn from where it was
+        /// decoded.
+        /// </summary>
+        public D3D11FrameRenderer(Direct3DDevice device, VideoInfo info) : this(device, info, ownsDevice: false)
+        {
+        }
+
+        private readonly Direct3DDevice _shared;
+        private readonly bool _ownsDevice;
+
+        private D3D11FrameRenderer(Direct3DDevice device, VideoInfo info, bool ownsDevice)
         {
             _info = info ?? throw new ArgumentNullException(nameof(info));
+            _shared = device ?? throw new ArgumentNullException(nameof(device));
+            _ownsDevice = ownsDevice;
             _width = info.OriginalWidth;
             _height = info.OriginalHeight;
-
-            var hr = PInvoke.D3D11CreateDevice(null, D3D_DRIVER_TYPE.D3D_DRIVER_TYPE_HARDWARE, HMODULE.Null,
-                D3D11_CREATE_DEVICE_FLAG.D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_FLAG.D3D11_CREATE_DEVICE_VIDEO_SUPPORT,
-                null, PInvoke.D3D11_SDK_VERSION, out _device, out _, out _context);
-            Marshal.ThrowExceptionForHR(hr);
-
-            // drawn on the UI thread, and the device may be asked of from elsewhere: one call at a time into it
-            ((ID3D10Multithread)_device).SetMultithreadProtected(true);
+            _device = device.Device;
+            _context = device.Context;
 
             var outputDesc = new D3D11_TEXTURE2D_DESC
             {
@@ -161,12 +173,47 @@ namespace SharpMediaFoundationInterop.WPF
         /// Draws a frame, of the format the source said, into the shared texture, and waits for the GPU to have done it: the
         /// other device reading it next does not wait for this one.
         /// </summary>
-        public void Draw(byte[] frame)
+        public void Draw(object frame)
+        {
+            if (frame is GpuVideoFrame gpu)
+                DrawTexture(gpu);
+            else
+                Draw((byte[])frame);
+            WaitForGpu();
+        }
+
+        /// <summary>
+        /// A frame decoded on the GPU, converted where it is: through a view of its texture, made once for each texture of
+        /// the pool, which is used again and again.
+        /// </summary>
+        private void DrawTexture(GpuVideoFrame frame)
+        {
+            if (_processor == null)
+                CreateVideoProcessor();
+
+            // the texture wrapped for this thread, the frame's being of the thread that decoded it: see Direct3DDevice
+            if (!_inputViews.TryGetValue(frame.TexturePointer, out var input))
+            {
+                var texture = (ID3D11Texture2D)Direct3DDevice.ForThisThread(frame.TexturePointer);
+                var desc = new D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC { ViewDimension = D3D11_VPIV_DIMENSION.D3D11_VPIV_DIMENSION_TEXTURE2D };
+                _videoDevice.CreateVideoProcessorInputView(texture, _enumerator, desc, out var view);
+                input = (texture, view);
+                _inputViews.Add(frame.TexturePointer, input);
+            }
+            _streams[0].pInputSurface = input.View;
+            _videoContext.VideoProcessorBlt(_processor, _outputView, 0, 1, _streams);
+        }
+
+        private readonly System.Collections.Generic.Dictionary<IntPtr, (ID3D11Texture2D Texture, ID3D11VideoProcessorInputView View)> _inputViews =
+            new System.Collections.Generic.Dictionary<IntPtr, (ID3D11Texture2D Texture, ID3D11VideoProcessorInputView View)>();
+
+        private void Draw(byte[] frame)
         {
             switch (_info.PixelFormat)
             {
                 case PixelFormat.NV12:
                     UploadNV12(frame);
+                    _streams[0].pInputSurface = _inputView;
                     _videoContext.VideoProcessorBlt(_processor, _outputView, 0, 1, _streams);
                     break;
 
@@ -181,7 +228,14 @@ namespace SharpMediaFoundationInterop.WPF
                         _context.UpdateSubresource(_output, 0, null, data, _width * 4, 0);
                     break;
             }
+        }
 
+        /// <summary>
+        /// Waits for the GPU to have drawn: the other device reading the texture next - Direct3D 9's, for WPF - does not wait
+        /// for this one.
+        /// </summary>
+        private void WaitForGpu()
+        {
             _context.End(_done);
             _context.Flush();
             // an event query's data is whether the GPU has got to it: false, and not written, until then
@@ -236,6 +290,12 @@ namespace SharpMediaFoundationInterop.WPF
 
         public void Dispose()
         {
+            foreach (var input in _inputViews.Values)
+            {
+                Marshal.ReleaseComObject(input.View);
+                Marshal.ReleaseComObject(input.Texture);
+            }
+            _inputViews.Clear();
             Release(ref _outputView);
             Release(ref _inputView);
             Release(ref _processor);
@@ -246,8 +306,11 @@ namespace SharpMediaFoundationInterop.WPF
             Release(ref _output);
             _videoContext = null;
             _videoDevice = null;
-            Release(ref _context);
-            Release(ref _device);
+            _context = null;
+            _device = null;
+            // the device is the source's too, unless it was made for this alone
+            if (_ownsDevice)
+                _shared.Dispose();
         }
 
         private static void Release<T>(ref T com) where T : class

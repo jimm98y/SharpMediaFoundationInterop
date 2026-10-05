@@ -1,4 +1,5 @@
 ﻿using System;
+using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms
 {
@@ -51,6 +52,21 @@ namespace SharpMediaFoundationInterop.Transforms
         /// order they are shown, not the order they went in, so this is what places each.
         /// </summary>
         bool ProcessOutput(ref byte[] buffer, out uint length, out long timestamp);
+
+        /// <summary>
+        /// The next frame as the transform hands it out, not copied - of the GPU's memory, decoding on a device - with its
+        /// time; the caller's to let go of. Of a transform that <see cref="ProvidesSamples"/>.
+        /// </summary>
+        bool ProcessOutput(out IMFSample sample, out long timestamp);
+
+        /// <summary>The device to decode on, given before <see cref="IMediaTransform.Initialize"/>; see <see cref="UsesDevice"/>.</summary>
+        IMFDXGIDeviceManager DeviceManager { get; set; }
+
+        /// <summary>Whether the transform took the <see cref="DeviceManager"/>.</summary>
+        bool UsesDevice { get; }
+
+        /// <summary>Whether the transform hands out samples of its own, rather than filling the caller's.</summary>
+        bool ProvidesSamples { get; }
 
         /// <summary>Asks for everything the transform holds; read it out with ProcessOutput before <see cref="EndDrain"/>.</summary>
         void BeginDrain();

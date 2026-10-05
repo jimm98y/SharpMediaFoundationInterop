@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
@@ -30,6 +31,21 @@ namespace SharpMediaFoundationInterop.Transforms
 
         public uint OutputSize { get; private set; }
 
+        /// <summary>
+        /// The device to decode on, the GPU's: given before <see cref="Initialize"/>, to a transform that can use one. Its
+        /// output is then of the GPU's memory, handed out by <see cref="ProcessOutput(out IMFSample, out long)"/>.
+        /// </summary>
+        public IMFDXGIDeviceManager DeviceManager { get; set; }
+
+        /// <summary>Whether the transform took the <see cref="DeviceManager"/>: some cannot use one.</summary>
+        public bool UsesDevice { get; private set; }
+
+        /// <summary>
+        /// Whether the transform hands out samples of its own - of the GPU's memory, as a decoder on a device does - rather
+        /// than filling one of the caller's.
+        /// </summary>
+        public bool ProvidesSamples { get; private set; }
+
         protected VideoTransformBase(uint width, uint height)
           : this(1, width, height, 1, 1)
         { }
@@ -50,8 +66,48 @@ namespace SharpMediaFoundationInterop.Transforms
         {
             _transform = Create();
             _transform.GetOutputStreamInfo(0, out var streamInfo);
-            _dataBuffer = MediaUtils.CreateOutputDataBuffer(streamInfo.cbSize);
+            ProvidesSamples = (streamInfo.dwFlags & (uint)_MFT_OUTPUT_STREAM_INFO_FLAGS.MFT_OUTPUT_STREAM_PROVIDES_SAMPLES) != 0;
+            // no sample of ours where the transform hands out its own
+            _dataBuffer = MediaUtils.CreateOutputDataBuffer(ProvidesSamples ? 0 : streamInfo.cbSize);
             OutputSize = streamInfo.cbSize;
+        }
+
+        /// <summary>
+        /// Gives the transform the <see cref="DeviceManager"/>, where there is one and the transform says it can use one: it
+        /// decodes on the GPU from then on, where the GPU can decode its format, and on the CPU into the GPU's memory where it
+        /// cannot. Called by a decoder as it is made, before its media types are set.
+        /// </summary>
+        protected void AttachDeviceManager(IMFTransform transform)
+        {
+            UsesDevice = false;
+            if (DeviceManager == null)
+                return;
+
+            transform.GetAttributes(out IMFAttributes attributes);
+            uint aware = 0;
+            try
+            {
+                attributes.GetUINT32(PInvoke.MF_SA_D3D11_AWARE, out aware);
+            }
+            catch (Exception)
+            {
+                // not said: not aware
+            }
+            if (aware == 0)
+                return;
+
+            nint manager = Marshal.GetIUnknownForObject(DeviceManager);
+            try
+            {
+                var result = transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_SET_D3D_MANAGER, (nuint)manager);
+                UsesDevice = result.Succeeded;
+                if (!UsesDevice && Log.WarnEnabled)
+                    Log.Warn($"The transform took no device: 0x{result.Value:X8}");
+            }
+            finally
+            {
+                Marshal.Release(manager);
+            }
         }
 
         protected abstract IMFTransform Create();
@@ -89,6 +145,15 @@ namespace SharpMediaFoundationInterop.Transforms
         public bool ProcessOutput(ref byte[] buffer, out uint length, out long timestamp)
         {
             return ProcessOutput(_transform, _dataBuffer, ref buffer, out length, out timestamp);
+        }
+
+        /// <summary>
+        /// The next frame as the transform hands it out, not copied - of the GPU's memory, decoding on a device - with its
+        /// time. The caller's to let go of. Of a transform that <see cref="ProvidesSamples"/>.
+        /// </summary>
+        public bool ProcessOutput(out IMFSample sample, out long timestamp)
+        {
+            return ProcessOutputSample(_transform, _dataBuffer, out sample, out timestamp);
         }
 
         public virtual bool Drain()
