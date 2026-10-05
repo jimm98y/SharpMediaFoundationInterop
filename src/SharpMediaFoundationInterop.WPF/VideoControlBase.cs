@@ -689,10 +689,18 @@ namespace SharpMediaFoundationInterop.WPF
             IsPaused = false;
         }
 
-        /// <summary>The time of the frame shown: what a new rate plays on from.</summary>
+        /// <summary>Whether a seek was asked for and none of its frames shown yet: decoding from the key frame before it.</summary>
+        private bool IsSeekPending => _seekTime >= 0 && _shownRequest != Interlocked.Read(ref _request);
+
+        /// <summary>
+        /// The time of the frame shown - or sought, where none of the seek is shown yet: what a new rate, or a seek by an
+        /// offset, plays on from. Not from the frame of before a seek, which a key pressed while it decodes would go back to.
+        /// </summary>
         private long CurrentTime()
         {
             var seekable = SeekableSource;
+            if (IsSeekPending)
+                return _seekTime;
             long shown = Interlocked.Read(ref _lastShownTime);
             return shown >= 0 ? shown : seekable?.StartTime ?? 0;
         }
@@ -929,8 +937,12 @@ namespace SharpMediaFoundationInterop.WPF
         {
             UpdateSubtitle();
 
+            // the frame shown - but sought, and none of the seek shown yet, the time sought: the bar stays where it was let go,
+            // rather than going back to the frame of before until the one after is decoded
             var seekable = SeekableSource;
             long shown = Interlocked.Read(ref _lastShownTime);
+            if (IsSeekPending)
+                shown = _seekTime;
             if (seekable != null && shown >= 0)
                 Position = TimeSpan.FromTicks(Math.Max(0, shown - seekable.StartTime));
 
