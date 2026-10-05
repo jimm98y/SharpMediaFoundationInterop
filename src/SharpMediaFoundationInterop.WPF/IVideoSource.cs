@@ -6,7 +6,15 @@ namespace SharpMediaFoundationInterop.WPF
     public enum PixelFormat
     {
         BGR24,
-        BGRA32
+        BGRA32,
+
+        /// <summary>
+        /// As a decoder makes it: a plane of luma, then one of chroma at half the size each way, of the coded size -
+        /// <see cref="VideoInfo.Width"/> by <see cref="VideoInfo.Height"/> - the picture its top left
+        /// <see cref="VideoInfo.OriginalWidth"/> by <see cref="VideoInfo.OriginalHeight"/>. What a GPU converts for
+        /// itself, where the others are converted on the CPU.
+        /// </summary>
+        NV12
     }
 
     public class VideoInfo
@@ -35,6 +43,35 @@ namespace SharpMediaFoundationInterop.WPF
     {
         VideoInfo VideoInfo { get; }
         Task InitializeAsync();
+
+        /// <summary>
+        /// Asks for frames of a format other than the source's own, before it is initialized: what a control that converts
+        /// frames for itself would rather have. <see cref="VideoInfo.PixelFormat"/> says what the frames are.
+        /// </summary>
+        /// <returns>Whether the source gives frames of it.</returns>
+        bool TrySetOutputFormat(PixelFormat format) => false;
+
+        /// <summary>
+        /// Asks for frames decoded on a device, before the source is initialized: where its decoder can decode on the GPU,
+        /// <see cref="GetVideoFrame"/> hands them out as textures of it, <see cref="GpuVideoFrame"/>s, never leaving the GPU.
+        /// </summary>
+        /// <returns>Whether the source can: that it decodes on the GPU depends on the GPU, and the format.</returns>
+        bool TryUseDirect3D(Direct3DDevice device) => false;
+
+        /// <summary>
+        /// The next frame, as <see cref="GetVideoSample"/>, or a <see cref="GpuVideoFrame"/> - decoded on the GPU, where
+        /// <see cref="TryUseDirect3D"/> was asked for. Given back with <see cref="ReturnVideoFrame"/>.
+        /// </summary>
+        object GetVideoFrame(out long timestamp) => GetVideoSample(out timestamp);
+
+        /// <summary>Gives a frame of <see cref="GetVideoFrame"/> back.</summary>
+        void ReturnVideoFrame(object frame)
+        {
+            if (frame is GpuVideoFrame gpu)
+                gpu.Release();
+            else if (frame is byte[] bytes)
+                ReturnVideoSample(bytes);
+        }
         /// <summary>
         /// The next frame - empty when none is ready yet, null when there are no more - and when it is shown.
         /// </summary>

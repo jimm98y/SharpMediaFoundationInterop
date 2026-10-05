@@ -44,6 +44,14 @@ namespace SharpMediaFoundationInterop.WPF
                 Units.Add(new ArraySegment<byte>(array, 0, unit.Length));
             }
 
+            /// <summary>A unit put in front of the others, copied as <see cref="Add"/> copies.</summary>
+            public void Prepend(ReadOnlySpan<byte> unit)
+            {
+                byte[] array = ArrayPool<byte>.Shared.Rent(unit.Length);
+                unit.CopyTo(array);
+                Units.Insert(0, new ArraySegment<byte>(array, 0, unit.Length));
+            }
+
             public void Release()
             {
                 foreach (var unit in Units)
@@ -78,6 +86,16 @@ namespace SharpMediaFoundationInterop.WPF
         /// a frame the time of the first input that went into it, and these on their own have none.
         /// </summary>
         private byte[][] _parameterSets;
+
+        // The stream's parameter sets, of its description, kept to be sent to the decoder again after it is drained; and
+        // whether to, with the next frame read.
+        private byte[][] _streamParameterSets;
+        private volatile bool _resendParameterSets;
+
+        protected override void OnVideoDecoderDrained()
+        {
+            _resendParameterSets = _streamParameterSets != null;
+        }
 
         protected override bool IsStreaming { get { return true; } }
 
@@ -192,7 +210,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             if (e.StreamConfigurationData is H264StreamConfigurationData h264cfg)
             {
-                _parameterSets = new[] { h264cfg.SPS, h264cfg.PPS };
+                _parameterSets = _streamParameterSets = new[] { h264cfg.SPS, h264cfg.PPS };
 
                 var decodedSPS = ParseH264SPS(h264cfg.SPS);
                 var dimensions = decodedSPS.CalculateDimensions();
@@ -209,7 +227,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
             else if (e.StreamConfigurationData is H265StreamConfigurationData h265cfg)
             {
-                _parameterSets = new[] { h265cfg.VPS, h265cfg.SPS, h265cfg.PPS };
+                _parameterSets = _streamParameterSets = new[] { h265cfg.VPS, h265cfg.SPS, h265cfg.PPS };
 
                 var decodedSPS = ParseH265SPS(h265cfg.SPS);
                 var dimensions = decodedSPS.CalculateDimensions();
@@ -397,6 +415,13 @@ namespace SharpMediaFoundationInterop.WPF
             Release(ref _videoInUse);
             if (!_videoSampleQueue.TryDequeue(out _videoInUse))
                 return null;
+            if (_resendParameterSets)
+            {
+                // copied in, as the units are, into arrays of the pool they all go back to
+                _resendParameterSets = false;
+                for (int i = _streamParameterSets.Length - 1; i >= 0; i--)
+                    _videoInUse.Prepend(_streamParameterSets[i]);
+            }
             timestamp = _videoInUse.Timestamp;
             return _videoInUse.Units;
         }

@@ -36,11 +36,11 @@
         </Setter>
     </Style>
 
-    <Style TargetType="{x:Type local:VideoControl}">
+    <Style TargetType="{x:Type local:VideoControlBase}">
         <Setter Property="Focusable" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="{x:Type local:VideoControl}">
+                <ControlTemplate TargetType="{x:Type local:VideoControlBase}">
                     <Grid Background="Transparent">
                         <Image x:Name="PART_Image" />
                         <Border VerticalAlignment="Bottom"

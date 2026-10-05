@@ -93,21 +93,73 @@ namespace SharpMediaFoundationInterop.Transforms
             return ret;
         }
 
-        private unsafe bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length, out long timestamp, bool changed = false)
+        /// <summary>
+        /// The next output read into <paramref name="bytes"/>: from the sample of ours the output buffer holds, used again
+        /// call after call, or from one the transform hands out - of the GPU's memory, decoding there - let go of after.
+        /// </summary>
+        private bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length, out long timestamp)
+        {
+            length = 0;
+            bool ours = dataBuffer[0].pSample != null;
+            if (!OutputSample(streamID, transform, dataBuffer, out IMFSample sample, out timestamp))
+                return false;
+
+            try
+            {
+                sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
+                try
+                {
+                    return MediaUtils.CopyBuffer(buffer, bytes, out length);
+                }
+                finally
+                {
+                    if (!ours)
+                        Marshal.ReleaseComObject(buffer);
+                }
+            }
+            finally
+            {
+                if (!ours)
+                {
+                    Marshal.ReleaseComObject(sample);
+                    dataBuffer[0].pSample = null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// The next output as the transform hands it out, not copied: of the GPU's memory, where it decodes there. The caller's
+        /// to let go of. Only of a transform that hands out samples of its own; one that fills the caller's is read with
+        /// <see cref="ProcessOutput(IMFTransform, MFT_OUTPUT_DATA_BUFFER[], ref byte[], out uint, out long)"/>.
+        /// </summary>
+        protected bool ProcessOutputSample(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, out IMFSample sample, out long timestamp)
+        {
+            if (dataBuffer[0].pSample != null)
+                throw new InvalidOperationException("The transform fills samples of its caller's: read its output into a buffer.");
+
+            bool ready = OutputSample(0, transform, dataBuffer, out sample, out timestamp);
+            dataBuffer[0].pSample = null; // the caller's now
+            return ready;
+        }
+
+        /// <summary>
+        /// The next output: whether a sample is ready, and it - the one in the output buffer - with its time. A change of
+        /// format is taken, and the output asked for again.
+        /// </summary>
+        private unsafe bool OutputSample(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, out IMFSample sample, out long timestamp, bool changed = false)
         {
             timestamp = 0;
+            sample = null;
             bool ret = false;
             const int MF_E_TRANSFORM_NEED_MORE_INPUT = unchecked((int)0xc00d6d72);
             const int MF_E_TRANSFORM_STREAM_CHANGE = unchecked((int)0xc00d6d61);
             uint decoderOutputStatus;
             HRESULT outputResult = transform.ProcessOutput(0, dataBuffer, out decoderOutputStatus);
-            IMFSample sample = dataBuffer[0].pSample;
 
             if (outputResult.Value == MF_E_TRANSFORM_STREAM_CHANGE)
             {
                 // the stream change happens every time with the H264/H265 decoder
                 if (Log.WarnEnabled) Log.Warn("MFT stream change requested");
-                length = 0;
 
                 IMFMediaType mediaType = null;
                 uint i = 0;
@@ -223,25 +275,23 @@ namespace SharpMediaFoundationInterop.Transforms
                 // The frame that brought the change is ready, of the new type: asked for again, it comes out now, not with
                 // the next input - of which there is none, draining a key frame decoded on its own.
                 if (!changed)
-                    return Output(streamID, transform, dataBuffer, ref bytes, out length, out timestamp, changed: true);
+                    return OutputSample(streamID, transform, dataBuffer, out sample, out timestamp, changed: true);
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {
                 if (Log.DebugEnabled) Log.Debug("MFT needs more input");
-                length = 0;
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {
+                sample = dataBuffer[0].pSample;
+
                 // The decoder reorders pictures, so the timestamp is the only reliable way for a
                 // caller to tell which input a decoded frame came from.
                 try { sample.GetSampleTime(out timestamp); } catch { timestamp = 0; }
-
-                sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
-                ret = MediaUtils.CopyBuffer(buffer, bytes, out length);
+                ret = true;
             }
             else
             {
-                length = 0;
                 MediaUtils.Check(outputResult);
             }
 

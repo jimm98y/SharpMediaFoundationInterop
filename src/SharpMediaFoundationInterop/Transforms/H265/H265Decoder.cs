@@ -38,6 +38,9 @@ namespace SharpMediaFoundationInterop.Transforms.H265
             if (transform == null) transform = CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_DECODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT, input, output);
             if (transform == null) throw new NotSupportedException($"Unsupported transform! Input: {InputFormat}, Output: {OutputFormat}");
 
+            // on the GPU, where a device was given and the transform can use one
+            AttachDeviceManager(transform);
+
             var codec = transform as ICodecApi;
             foreach (var property in CodecProperties)
                 if (codec.IsPropertySupported(property.Key))
