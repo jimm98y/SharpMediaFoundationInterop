@@ -5,7 +5,10 @@ using SharpISOBMFF;
 using SharpISOBMFF.Extensions;
 using SharpMediaFoundationInterop.Transforms.AV1;
 using SharpMediaFoundationInterop.Transforms.H264;
+using SharpMediaFoundationInterop.Transforms.H262;
+using SharpMediaFoundationInterop.Transforms.H263;
 using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Transforms.MPEG4;
 using SharpMediaFoundationInterop.Transforms.VP9;
 using SharpMediaFoundationInterop.Utils;
 using SharpMP4.Readers;
@@ -53,6 +56,11 @@ namespace SharpMediaFoundationInterop.WPF
         // its next sample is read, by which time they have been decoded - nothing is copied.
         private readonly List<ArraySegment<byte>> _audioUnits = new List<ArraySegment<byte>>();
         private readonly List<ArraySegment<byte>> _videoUnits = new List<ArraySegment<byte>>();
+
+        // MPEG-1/2, H.263 and MPEG-4 Part 2 pictures go to their decoders whole, not unit by unit - the headers the sample entry
+        // holds in front of the first after opening or seeking, in a buffer kept for it
+        private bool _wholeSamples;
+        private byte[] _headedSample = Array.Empty<byte>();
 
         protected override IList<ArraySegment<byte>> ReadNextAudio() => ReadNextAudio(out _);
 
@@ -106,12 +114,40 @@ namespace SharpMediaFoundationInterop.WPF
                 {
                     // when the sample is shown, of its decode time and composition offset
                     timestamp = MediaUtils.ToTicks(sample.PTS, _videoTrack.Timescale);
+                    if (_wholeSamples)
+                    {
+                        _videoUnits.Add(WithHeaders(sample.Data));
+                        return _videoUnits;
+                    }
                     foreach (var unit in _reader.ParseSample(_videoTrack.TrackID, sample.Data))
                         _videoUnits.Add(unit);
                     return _videoUnits;
                 }
             }
             return null;
+        }
+
+        /// <summary>The sample with the headers read before it in front of it, in one piece; the sample itself where none were.</summary>
+        private ArraySegment<byte> WithHeaders(ArraySegment<byte> sample)
+        {
+            if (_videoUnits.Count == 0)
+                return sample;
+
+            int length = sample.Count;
+            foreach (var header in _videoUnits)
+                length += header.Count;
+            if (_headedSample.Length < length)
+                _headedSample = new byte[length];
+
+            int offset = 0;
+            foreach (var header in _videoUnits)
+            {
+                header.AsSpan().CopyTo(_headedSample.AsSpan(offset));
+                offset += header.Count;
+            }
+            sample.AsSpan().CopyTo(_headedSample.AsSpan(offset));
+            _videoUnits.Clear();
+            return new ArraySegment<byte>(_headedSample, 0, length);
         }
 
         protected override void CompletedVideo()
@@ -255,6 +291,7 @@ namespace SharpMediaFoundationInterop.WPF
 
                 if (_videoTrack != null)
                 {
+                    _wholeSamples = _videoTrack is H262Track || _videoTrack is H263Track || _videoTrack is MPEG4Track;
                     if (_videoTrack is H264Track h264Track)
                     {
                         videoInfo.VideoCodec = "H264";
@@ -313,6 +350,26 @@ namespace SharpMediaFoundationInterop.WPF
 
                         videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, VP9Decoder.VP9_RES_MULTIPLE);
                         videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, VP9Decoder.VP9_RES_MULTIPLE);
+                    }
+                    else if (_wholeSamples)
+                    {
+                        // MPEG-1 as MPEG-2: the one decoder decodes both
+                        videoInfo.VideoCodec = _videoTrack is H262Track ? "H262" : _videoTrack is H263Track ? "H263" : "MPEG4";
+                        uint multiple = _videoTrack is H262Track ? H262Decoder.H262_RES_MULTIPLE
+                            : _videoTrack is H263Track ? H263Decoder.H263_RES_MULTIPLE : Mpeg4Decoder.MPEG4_RES_MULTIPLE;
+
+                        // the sizes the sample entry gives, as for VP9
+                        var entry = _reader.Tracks[_videoTrack.TrackID].Stbl
+                            .Children.OfType<SampleDescriptionBox>().Single()
+                            .Children.OfType<VisualSampleEntry>().First();
+                        videoInfo.OriginalWidth = entry.Width;
+                        videoInfo.OriginalHeight = entry.Height;
+
+                        videoInfo.FpsNom = _videoTrack.Timescale;
+                        videoInfo.FpsDenom = (uint)_videoTrack.DefaultSampleDuration;
+
+                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, multiple);
+                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, multiple);
                     }
                     else
                     {

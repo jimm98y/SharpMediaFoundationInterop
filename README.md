@@ -8,6 +8,11 @@ Supported video codecs are:
 - H264 (built-in Windows)
 - H265 (requires paid HEVC Video Extensions from the Microsoft Store)
 - AV1 (requires free AV1 Video Extensions from the Microsoft Store)
+- MPEG-2 and MPEG-1, decoding only (requires MPEG-2 Video Extension from the Microsoft Store)
+- H263, decoding only (built-in Windows)
+- MPEG-4 Part 2, decoding only (built-in Windows; B-frames are skipped, Windows decodes them blank)
+
+Windows has no usable encoder for MPEG-1/2, H263 or MPEG-4 Part 2, and no H261 decoder.
 
 Supported audio codecs are:
 - AAC (built-in Windows)
