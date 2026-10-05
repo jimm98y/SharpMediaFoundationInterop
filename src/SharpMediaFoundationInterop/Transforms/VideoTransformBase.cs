@@ -140,18 +140,19 @@ namespace SharpMediaFoundationInterop.Transforms
         /// <summary>
         /// Same as <see cref="ProcessOutput(ref byte[], out uint)"/>, but also reports the decoded
         /// frame's presentation time. Decoders reorder pictures, so this is what identifies which
-        /// input a frame came from.
+        /// input a frame came from. Overridden by a decoder that hands out only some of the frames.
         /// </summary>
-        public bool ProcessOutput(ref byte[] buffer, out uint length, out long timestamp)
+        public virtual bool ProcessOutput(ref byte[] buffer, out uint length, out long timestamp)
         {
             return ProcessOutput(_transform, _dataBuffer, ref buffer, out length, out timestamp);
         }
 
         /// <summary>
         /// The next frame as the transform hands it out, not copied - of the GPU's memory, decoding on a device - with its
-        /// time. The caller's to let go of. Of a transform that <see cref="ProvidesSamples"/>.
+        /// time. The caller's to let go of. Of a transform that <see cref="ProvidesSamples"/>. Overridden by a decoder that
+        /// hands out only some of the frames.
         /// </summary>
-        public bool ProcessOutput(out IMFSample sample, out long timestamp)
+        public virtual bool ProcessOutput(out IMFSample sample, out long timestamp)
         {
             return ProcessOutputSample(_transform, _dataBuffer, out sample, out timestamp);
         }
