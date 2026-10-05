@@ -775,16 +775,20 @@ namespace SharpMediaFoundationInterop.WPF
             return device != null;
         }
 
-        /// <summary>The decoder made, given the device first where there is one.</summary>
+        /// <summary>The decoder, where it is of Media Foundation's, which alone decodes on the GPU here.</summary>
+        private IMediaFoundationVideoTransform GpuDecoder => _videoDecoder as IMediaFoundationVideoTransform;
+
+        /// <summary>The decoder made, given the device first where there is one and it can take it.</summary>
         private void InitializeVideoDecoder(VideoInfo info)
         {
-            if (_direct3D != null)
-                _videoDecoder.DeviceManager = _direct3D.Manager;
+            var gpu = GpuDecoder;
+            if (_direct3D != null && gpu != null)
+                gpu.DeviceManager = _direct3D.Manager;
             _videoDecoder.Initialize();
-            if (_direct3D != null && _videoDecoder.UsesDevice && _videoDecoder.ProvidesSamples && _gpuPool == null)
+            if (_direct3D != null && gpu != null && gpu.UsesDevice && gpu.ProvidesSamples && _gpuPool == null)
                 _gpuPool = new GpuFramePool(_direct3D, info.Width, info.Height);
             if (_direct3D != null && Log.InfoEnabled)
-                Log.Info($"{info.VideoCodec} decoded on the {(_videoDecoder.UsesDevice ? "GPU" : "CPU")}");
+                Log.Info($"{info.VideoCodec} decoded on the {(gpu?.UsesDevice == true ? "GPU" : "CPU")}");
         }
 
         /// <summary>
@@ -793,10 +797,11 @@ namespace SharpMediaFoundationInterop.WPF
         /// </summary>
         private bool TakeOutput(out long frameTime)
         {
-            if (!_videoDecoder.ProvidesSamples)
+            var gpu = GpuDecoder;
+            if (gpu == null || !gpu.ProvidesSamples)
                 return _videoDecoder.ProcessOutput(ref _nv12Buffer, out _, out frameTime);
 
-            if (!_videoDecoder.ProcessOutput(out IMFSample sample, out frameTime))
+            if (!gpu.ProcessOutput(out IMFSample sample, out frameTime))
                 return false;
 
             sample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
