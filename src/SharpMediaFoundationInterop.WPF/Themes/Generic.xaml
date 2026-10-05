@@ -1,9 +1,9 @@
 ﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:SharpMediaFoundationInterop.WPF">
-    <BooleanToVisibilityConverter x:Key="BooleanToVisibility" />
 
-    <Style x:Key="VideoControlButton" TargetType="{x:Type Button}">
+    <!-- The default template's buttons: VideoControlBase.ButtonStyleKey, for another style to be based on -->
+    <Style x:Key="{ComponentResourceKey TypeInTargetAssembly={x:Type local:VideoControlBase}, ResourceId=ButtonStyle}" TargetType="{x:Type Button}">
         <Setter Property="Width" Value="36" />
         <Setter Property="Height" Value="28" />
         <Setter Property="Margin" Value="2,0" />
@@ -36,33 +36,97 @@
         </Setter>
     </Style>
 
+    <!--
+        The video, and over its bottom the bar of controls: shown as the mouse moves over the video and faded out a while
+        after it stops - the states ControlsVisible and ControlsHidden. The buttons send the control WPF's MediaCommands; what
+        they show is of the control's properties - IsPlaying, CanSeek, TimeText. A template of one's own may have any of it,
+        or none: PART_Image is what frames are drawn on, PART_Seek seeks, PART_ControlsBar stays while the mouse is on it.
+    -->
     <Style TargetType="{x:Type local:VideoControlBase}">
         <Setter Property="Focusable" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type local:VideoControlBase}">
                     <Grid Background="Transparent">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="ControlsStates">
+                                <VisualState x:Name="ControlsVisible">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="PART_ControlsBar" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15" />
+                                        <BooleanAnimationUsingKeyFrames Storyboard.TargetName="PART_ControlsBar" Storyboard.TargetProperty="IsHitTestVisible">
+                                            <DiscreteBooleanKeyFrame KeyTime="0" Value="True" />
+                                        </BooleanAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="ControlsHidden">
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="PART_ControlsBar" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.5" />
+                                        <BooleanAnimationUsingKeyFrames Storyboard.TargetName="PART_ControlsBar" Storyboard.TargetProperty="IsHitTestVisible">
+                                            <DiscreteBooleanKeyFrame KeyTime="0" Value="False" />
+                                        </BooleanAnimationUsingKeyFrames>
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+
                         <Image x:Name="PART_Image" />
-                        <Border VerticalAlignment="Bottom"
-                                Background="#B0000000"
-                                Padding="6,2"
-                                Visibility="{Binding ShowControls, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource BooleanToVisibility}}">
+                        <Border x:Name="PART_ControlsBar"
+                                VerticalAlignment="Bottom"
+                                Padding="6,14,6,4">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Offset="0" Color="#00000000" />
+                                    <GradientStop Offset="0.45" Color="#90000000" />
+                                    <GradientStop Offset="1" Color="#C0000000" />
+                                </LinearGradientBrush>
+                            </Border.Background>
                             <DockPanel LastChildFill="True">
                                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button x:Name="PART_Rewind" Style="{StaticResource VideoControlButton}" Content="&#xEB9E;" ToolTip="Play backwards; again for faster (J)" />
-                                    <Button x:Name="PART_PlayPause" Style="{StaticResource VideoControlButton}" Content="&#xE769;" ToolTip="Play or pause (Space, K)" />
-                                    <Button x:Name="PART_FastForward" Style="{StaticResource VideoControlButton}" Content="&#xEB9D;" ToolTip="Fast forward; again for faster (L)" />
+                                    <Button x:Name="RewindButton" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                            Command="MediaCommands.Rewind" Content="&#xEB9E;" ToolTip="Play backwards; again for faster (J)" />
+                                    <Button x:Name="PlayPauseButton" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                            Command="MediaCommands.TogglePlayPause" Content="&#xE768;" ToolTip="Play or pause (Space, K)" />
+                                    <Button x:Name="FastForwardButton" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                            Command="MediaCommands.FastForward" Content="&#xEB9D;" ToolTip="Fast forward; again for faster (L)" />
                                 </StackPanel>
-                                <TextBlock x:Name="PART_Time" DockPanel.Dock="Right"
+                                <TextBlock x:Name="TimeText" DockPanel.Dock="Right"
                                            Margin="8,0,2,0" VerticalAlignment="Center"
-                                           Foreground="White" FontFamily="Consolas" FontSize="12" />
+                                           Foreground="White" FontFamily="Consolas" FontSize="12"
+                                           Text="{TemplateBinding TimeText}" />
                                 <Slider x:Name="PART_Seek" Margin="6,0" VerticalAlignment="Center"
                                         Minimum="0" Maximum="1" IsMoveToPointEnabled="True" Focusable="False" />
                             </DockPanel>
                         </Border>
                     </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsPlaying" Value="True">
+                            <Setter TargetName="PlayPauseButton" Property="Content" Value="&#xE769;" />
+                        </Trigger>
+                        <!-- a live source: pausing is all there is to do -->
+                        <Trigger Property="CanSeek" Value="False">
+                            <Setter TargetName="RewindButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="FastForwardButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="TimeText" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="PART_Seek" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="ShowControls" Value="False">
+                            <Setter TargetName="PART_ControlsBar" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+        <Style.Triggers>
+            <!-- the pointer goes with the bar, as over a player's video -->
+            <MultiTrigger>
+                <MultiTrigger.Conditions>
+                    <Condition Property="IsMouseOver" Value="True" />
+                    <Condition Property="ShowControls" Value="True" />
+                    <Condition Property="AutoHideControls" Value="True" />
+                    <Condition Property="AreControlsVisible" Value="False" />
+                </MultiTrigger.Conditions>
+                <Setter Property="Cursor" Value="None" />
+            </MultiTrigger>
+        </Style.Triggers>
     </Style>
 </ResourceDictionary>

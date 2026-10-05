@@ -8,6 +8,11 @@ Supported video codecs are:
 - H264 (built-in Windows)
 - H265 (requires paid HEVC Video Extensions from the Microsoft Store)
 - AV1 (requires free AV1 Video Extensions from the Microsoft Store)
+- MPEG-2 and MPEG-1, decoding only (requires MPEG-2 Video Extension from the Microsoft Store)
+- H263, decoding only (built-in Windows)
+- MPEG-4 Part 2, decoding only (built-in Windows; B-frames are skipped, Windows decodes them blank)
+
+Windows has no usable encoder for MPEG-1/2, H263 or MPEG-4 Part 2, and no H261 decoder.
 
 Supported audio codecs are:
 - AAC (built-in Windows)
@@ -255,6 +260,35 @@ To playback audio, just enqueue it:
 byte[] pcmSample = ...
 waveOut.Enqueue(pcmSample, (uint)pcmSample.Length);
 ```
+## Video control
+`VideoControl` (drawn into a bitmap) and `VideoControlD3D` (drawn with Direct3D) play a video source, with a bar of controls over the bottom of the video. The bar shows as the mouse moves over the video and fades out after `ControlsHideDelay`, or as the mouse leaves; it stays while the video is paused. Set `AutoHideControls="False"` to always show it, or `ShowControls="False"` to never show it.
+
+The bar is part of the control's template, and can be restyled or replaced from XAML. Its buttons send WPF's `MediaCommands` (`TogglePlayPause`, `Play`, `Pause`, `Rewind`, `FastForward`, `MuteVolume`), and the control's read-only properties say what to show: `IsPlaying`, `CanSeek`, `PlaybackRate`, `Position`, `Duration`, `TimeText` and `AreControlsVisible`. The template is also put in the visual state `ControlsVisible` or `ControlsHidden`. Template parts, all optional: `PART_Image` (the frames are drawn on it), `PART_Seek` (a `Slider` that seeks) and `PART_ControlsBar` (kept shown while the mouse is over it).
+```xml
+<ctrl:VideoControl Source="{Binding Source}">
+    <ctrl:VideoControl.Template>
+        <ControlTemplate TargetType="ctrl:VideoControl">
+            <Grid Background="Transparent">
+                <Image x:Name="PART_Image" />
+                <StackPanel x:Name="Bar" Orientation="Horizontal" VerticalAlignment="Bottom" Background="#80000000">
+                    <Button x:Name="PlayPause" Command="MediaCommands.TogglePlayPause" Content="Play" Focusable="False" />
+                    <TextBlock Foreground="White" Margin="8,0" Text="{TemplateBinding TimeText}" />
+                </StackPanel>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsPlaying" Value="True">
+                    <Setter TargetName="PlayPause" Property="Content" Value="Pause" />
+                </Trigger>
+                <Trigger Property="AreControlsVisible" Value="False">
+                    <Setter TargetName="Bar" Property="Visibility" Value="Hidden" />
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+    </ctrl:VideoControl.Template>
+</ctrl:VideoControl>
+```
+To restyle only the default template's buttons, base a style on `{StaticResource {x:Static ctrl:VideoControlBase.ButtonStyleKey}}`.
+
 ## Samples
 
 ### SharpMediaPlayer

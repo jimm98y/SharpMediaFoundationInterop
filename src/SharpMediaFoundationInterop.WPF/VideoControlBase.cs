@@ -12,32 +12,52 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace SharpMediaFoundationInterop.WPF
 {
-    [TemplatePart(Name = "PART_Image", Type = typeof(Image))]
-    [TemplatePart(Name = "PART_PlayPause", Type = typeof(ButtonBase))]
-    [TemplatePart(Name = "PART_Rewind", Type = typeof(ButtonBase))]
-    [TemplatePart(Name = "PART_FastForward", Type = typeof(ButtonBase))]
-    [TemplatePart(Name = "PART_Seek", Type = typeof(Slider))]
-    [TemplatePart(Name = "PART_Time", Type = typeof(TextBlock))]
     /// <summary>
     /// What a video control does whatever it draws with: its properties, its threads, its clock, trick play and its bar of
     /// controls. Drawing a frame is left to the control made of it - <see cref="VideoControl"/> into a bitmap,
     /// <see cref="VideoControlD3D"/> with Direct3D - which makes the surface the frames are drawn on, draws each, and says
     /// what frames it takes.
     /// </summary>
+    /// <remarks>
+    /// <para>The bar of controls is the template's, and styled or templated from XAML as any control's is. Its buttons are
+    /// whatever sends the control one of WPF's <see cref="MediaCommands"/> - <see cref="MediaCommands.TogglePlayPause"/>,
+    /// <see cref="MediaCommands.Play"/>, <see cref="MediaCommands.Pause"/>, <see cref="MediaCommands.Rewind"/>,
+    /// <see cref="MediaCommands.FastForward"/>, <see cref="MediaCommands.MuteVolume"/> - from within the template or
+    /// without. What they show is of the control's properties: <see cref="IsPlaying"/>, <see cref="CanSeek"/>,
+    /// <see cref="PlaybackRate"/>, <see cref="Position"/>, <see cref="Duration"/>, <see cref="TimeText"/>.</para>
+    /// <para>The bar is shown as the mouse moves over the video, and hidden again a while after it stops, as it leaves the
+    /// video, or never - see <see cref="AutoHideControls"/>: <see cref="AreControlsVisible"/> says which, and the template
+    /// is put in the visual state <c>ControlsVisible</c> or <c>ControlsHidden</c> of the group <c>ControlsStates</c>.</para>
+    /// <para>Parts of the template, each optional: <c>PART_Image</c>, the image frames are drawn on; <c>PART_Seek</c>, a
+    /// slider of the position, which seeks; <c>PART_ControlsBar</c>, the bar, kept shown while the mouse is over it.</para>
+    /// </remarks>
+    [TemplatePart(Name = "PART_Image", Type = typeof(Image))]
+    [TemplatePart(Name = "PART_Seek", Type = typeof(Slider))]
+    [TemplatePart(Name = "PART_ControlsBar", Type = typeof(FrameworkElement))]
+    [TemplateVisualState(GroupName = ControlsStates, Name = ControlsVisibleState)]
+    [TemplateVisualState(GroupName = ControlsStates, Name = ControlsHiddenState)]
     public abstract class VideoControlBase : Control, IDisposable
     {
         private object _waveSync = new object();
         private WaveOut _waveOut;
 
+        private const string ControlsStates = "ControlsStates";
+        private const string ControlsVisibleState = "ControlsVisible";
+        private const string ControlsHiddenState = "ControlsHidden";
+
+        /// <summary>
+        /// The style of the default template's buttons, to base another on:
+        /// <c>BasedOn="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"</c>.
+        /// </summary>
+        public static ComponentResourceKey ButtonStyleKey { get; } = new ComponentResourceKey(typeof(VideoControlBase), "ButtonStyle");
+
         private Image _image;
-        private ButtonBase _playPauseButton;
-        private ButtonBase _rewindButton;
-        private ButtonBase _fastForwardButton;
         private Slider _seekSlider;
-        private TextBlock _timeText;
+        private FrameworkElement _controlsBar;
 
         private Stopwatch _stopwatch = new Stopwatch();
 
@@ -125,7 +145,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         #region Trick play properties
 
-        /// <summary>Whether the bar of buttons, the seek bar and the time are shown over the bottom of the video.</summary>
+        /// <summary>Whether the bar of buttons, the seek bar and the time are shown over the bottom of the video at all.</summary>
         public bool ShowControls
         {
             get { return (bool)GetValue(ShowControlsProperty); }
@@ -133,7 +153,47 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty ShowControlsProperty =
-            DependencyProperty.Register("ShowControls", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(true));
+            DependencyProperty.Register("ShowControls", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(true, OnControlsShownChanged));
+
+        /// <summary>
+        /// Whether the bar is shown only while the mouse moves over the video, or a key is pressed, and hidden
+        /// <see cref="ControlsHideDelay"/> after - or as the mouse leaves - as a player's is; paused, it stays. If not, it is
+        /// shown all the time.
+        /// </summary>
+        public bool AutoHideControls
+        {
+            get { return (bool)GetValue(AutoHideControlsProperty); }
+            set { SetValue(AutoHideControlsProperty, value); }
+        }
+
+        public static readonly DependencyProperty AutoHideControlsProperty =
+            DependencyProperty.Register("AutoHideControls", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(true, OnControlsShownChanged));
+
+        /// <summary>How long the bar stays after the mouse stops moving over the video.</summary>
+        public TimeSpan ControlsHideDelay
+        {
+            get { return (TimeSpan)GetValue(ControlsHideDelayProperty); }
+            set { SetValue(ControlsHideDelayProperty, value); }
+        }
+
+        public static readonly DependencyProperty ControlsHideDelayProperty =
+            DependencyProperty.Register("ControlsHideDelay", typeof(TimeSpan), typeof(VideoControlBase), new PropertyMetadata(TimeSpan.FromSeconds(2.5)));
+
+        /// <summary>Whether the bar is shown now: for a template's triggers, as the visual states say it.</summary>
+        public bool AreControlsVisible
+        {
+            get { return (bool)GetValue(AreControlsVisibleProperty); }
+            private set { SetValue(AreControlsVisiblePropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey AreControlsVisiblePropertyKey =
+            DependencyProperty.RegisterReadOnly("AreControlsVisible", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+        public static readonly DependencyProperty AreControlsVisibleProperty = AreControlsVisiblePropertyKey.DependencyProperty;
+
+        private static void OnControlsShownChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            ((VideoControlBase)d).UpdateControlsVisibility(true);
+        }
 
         public bool IsPaused
         {
@@ -143,6 +203,20 @@ namespace SharpMediaFoundationInterop.WPF
 
         public static readonly DependencyProperty IsPausedProperty =
             DependencyProperty.Register("IsPaused", typeof(bool), typeof(VideoControlBase), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnIsPausedChanged));
+
+        /// <summary>
+        /// Whether the video plays forwards at 1x: what a play/pause button pauses - paused, or played at another rate, it
+        /// plays.
+        /// </summary>
+        public bool IsPlaying
+        {
+            get { return (bool)GetValue(IsPlayingProperty); }
+            private set { SetValue(IsPlayingPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey IsPlayingPropertyKey =
+            DependencyProperty.RegisterReadOnly("IsPlaying", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+        public static readonly DependencyProperty IsPlayingProperty = IsPlayingPropertyKey.DependencyProperty;
 
         private static void OnIsPausedChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
@@ -196,6 +270,20 @@ namespace SharpMediaFoundationInterop.WPF
             DependencyProperty.RegisterReadOnly("CanSeek", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty CanSeekProperty = CanSeekPropertyKey.DependencyProperty;
 
+        /// <summary>
+        /// The position, the duration where it is known and the rate where it is not 1, as the bar shows them:
+        /// <c>1:23 / 4:56  ×2</c>.
+        /// </summary>
+        public string TimeText
+        {
+            get { return (string)GetValue(TimeTextProperty); }
+            private set { SetValue(TimeTextPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey TimeTextPropertyKey =
+            DependencyProperty.RegisterReadOnly("TimeText", typeof(string), typeof(VideoControlBase), new PropertyMetadata(string.Empty));
+        public static readonly DependencyProperty TimeTextProperty = TimeTextPropertyKey.DependencyProperty;
+
         #endregion
 
         static VideoControlBase()
@@ -210,6 +298,22 @@ namespace SharpMediaFoundationInterop.WPF
             Unloaded += VideoControl_Unloaded;
             IsVisibleChanged += VideoControl_IsVisibleChanged;
             CompositionTarget.Rendering += CompositionTarget_Rendering;
+
+            _hideTimer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher);
+            _hideTimer.Tick += HideTimer_Tick;
+
+            // the buttons of any template, or of none: WPF's media commands, routed to the control
+            CommandBindings.Add(new CommandBinding(MediaCommands.TogglePlayPause, (s, e) => TogglePlayPause()));
+            CommandBindings.Add(new CommandBinding(MediaCommands.Play, (s, e) => Play()));
+            CommandBindings.Add(new CommandBinding(MediaCommands.Pause, (s, e) => Pause()));
+            CommandBindings.Add(new CommandBinding(MediaCommands.Rewind, (s, e) => Rewind(), CanSeekCommand));
+            CommandBindings.Add(new CommandBinding(MediaCommands.FastForward, (s, e) => FastForward(), CanSeekCommand));
+            CommandBindings.Add(new CommandBinding(MediaCommands.MuteVolume, (s, e) => Mute = !Mute));
+        }
+
+        private void CanSeekCommand(object sender, CanExecuteRoutedEventArgs e)
+        {
+            e.CanExecute = SeekableSource != null;
         }
 
         private void VideoControl_Unloaded(object sender, RoutedEventArgs e)
@@ -251,9 +355,6 @@ namespace SharpMediaFoundationInterop.WPF
             base.OnApplyTemplate();
             this._image = this.Template.FindName("PART_Image", this) as Image;
 
-            if (_playPauseButton != null) _playPauseButton.Click -= PlayPauseButton_Click;
-            if (_rewindButton != null) _rewindButton.Click -= RewindButton_Click;
-            if (_fastForwardButton != null) _fastForwardButton.Click -= FastForwardButton_Click;
             if (_seekSlider != null)
             {
                 _seekSlider.ValueChanged -= SeekSlider_ValueChanged;
@@ -261,15 +362,9 @@ namespace SharpMediaFoundationInterop.WPF
                 _seekSlider.RemoveHandler(Thumb.DragCompletedEvent, (DragCompletedEventHandler)SeekSlider_DragCompleted);
             }
 
-            _playPauseButton = this.Template.FindName("PART_PlayPause", this) as ButtonBase;
-            _rewindButton = this.Template.FindName("PART_Rewind", this) as ButtonBase;
-            _fastForwardButton = this.Template.FindName("PART_FastForward", this) as ButtonBase;
             _seekSlider = this.Template.FindName("PART_Seek", this) as Slider;
-            _timeText = this.Template.FindName("PART_Time", this) as TextBlock;
+            _controlsBar = this.Template.FindName("PART_ControlsBar", this) as FrameworkElement;
 
-            if (_playPauseButton != null) _playPauseButton.Click += PlayPauseButton_Click;
-            if (_rewindButton != null) _rewindButton.Click += RewindButton_Click;
-            if (_fastForwardButton != null) _fastForwardButton.Click += FastForwardButton_Click;
             if (_seekSlider != null)
             {
                 _seekSlider.ValueChanged += SeekSlider_ValueChanged;
@@ -278,6 +373,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
 
             UpdateControls();
+            UpdateControlsVisibility(false);
         }
 
         #region Trick play
@@ -410,6 +506,7 @@ namespace SharpMediaFoundationInterop.WPF
             _paused = paused;
             ApplyRunning();
             UpdateControls();
+            UpdateControlsVisibility(true);
         }
 
         /// <summary>Whether the control is out of sight - not yet shown, on another tab, collapsed - and nothing of it decoded.</summary>
@@ -456,16 +553,17 @@ namespace SharpMediaFoundationInterop.WPF
             });
         }
 
-        private void PlayPauseButton_Click(object sender, RoutedEventArgs e) => TogglePlayPause();
-        private void RewindButton_Click(object sender, RoutedEventArgs e) => Rewind();
-        private void FastForwardButton_Click(object sender, RoutedEventArgs e) => FastForward();
-
-        private void SeekSlider_DragStarted(object sender, DragStartedEventArgs e) => _dragging = true;
+        private void SeekSlider_DragStarted(object sender, DragStartedEventArgs e)
+        {
+            _dragging = true;
+            UpdateControlsVisibility(true);
+        }
 
         private void SeekSlider_DragCompleted(object sender, DragCompletedEventArgs e)
         {
             _dragging = false;
             Seek(TimeSpan.FromTicks((long)_seekSlider.Value));
+            ShowControlsForAWhile();
         }
 
         private void SeekSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -481,6 +579,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             base.OnMouseDown(e);
             Focus();
+            ShowControlsForAWhile();
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
@@ -517,27 +616,83 @@ namespace SharpMediaFoundationInterop.WPF
                     return;
             }
             e.Handled = true;
+            ShowControlsForAWhile();
+        }
+
+        #endregion
+
+        #region Showing and hiding the controls
+
+        private readonly DispatcherTimer _hideTimer;
+
+        /// <summary>Whether the mouse moved over the video, or a key was pressed, less than <see cref="ControlsHideDelay"/> ago.</summary>
+        private bool _recentActivity;
+
+        /// <summary>Where the mouse was last over the control: WPF tells of a move as what is under it changes too, of no move.</summary>
+        private Point _lastMouse = new Point(double.NaN, double.NaN);
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            var position = e.GetPosition(this);
+            if (position == _lastMouse)
+                return;
+            _lastMouse = position;
+            ShowControlsForAWhile();
+        }
+
+        protected override void OnMouseLeave(MouseEventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _lastMouse = new Point(double.NaN, double.NaN);
+            _recentActivity = false;
+            _hideTimer.Stop();
+            UpdateControlsVisibility(true);
+        }
+
+        /// <summary>Shows the bar, and hides it again <see cref="ControlsHideDelay"/> from now, where it hides itself.</summary>
+        private void ShowControlsForAWhile()
+        {
+            _recentActivity = true;
+            _hideTimer.Stop();
+            _hideTimer.Interval = ControlsHideDelay;
+            _hideTimer.Start();
+            UpdateControlsVisibility(true);
+        }
+
+        private void HideTimer_Tick(object sender, EventArgs e)
+        {
+            _hideTimer.Stop();
+            _recentActivity = false;
+            UpdateControlsVisibility(true);
+        }
+
+        /// <summary>
+        /// Shows the bar or hides it: shown where it does not hide itself, and where it does, while paused, the seek bar
+        /// dragged, the mouse on the bar, or moved over the video a moment ago.
+        /// </summary>
+        private void UpdateControlsVisibility(bool useTransitions)
+        {
+            bool visible = ShowControls &&
+                (!AutoHideControls || _paused || _dragging || _recentActivity || (_controlsBar?.IsMouseOver ?? false));
+            AreControlsVisible = visible;
+            VisualStateManager.GoToState(this, visible ? ControlsVisibleState : ControlsHiddenState, useTransitions);
         }
 
         private void UpdateControls()
         {
-            bool canSeek = SeekableSource != null;
-            CanSeek = canSeek;
-
-            if (_playPauseButton != null)
-                _playPauseButton.Content = _paused || _rate != 1 ? "" : ""; // play : pause
             // A live source is played as it comes: there is nothing to seek in, no other rate to play it at and no position
-            // to show - pausing is all there is to do, and the rest is not shown.
-            var seekOnly = canSeek ? Visibility.Visible : Visibility.Collapsed;
-            if (_rewindButton != null)
-                _rewindButton.Visibility = seekOnly;
-            if (_fastForwardButton != null)
-                _fastForwardButton.Visibility = seekOnly;
-            if (_timeText != null)
-                _timeText.Visibility = seekOnly;
+            // to show - pausing is all there is to do, and the template shows no more.
+            bool canSeek = SeekableSource != null;
+            if (CanSeek != canSeek)
+            {
+                CanSeek = canSeek;
+                CommandManager.InvalidateRequerySuggested();
+            }
+            IsPlaying = !_paused && _rate == 1;
+
             if (_seekSlider != null)
             {
-                _seekSlider.Visibility = seekOnly;
                 _updatingSlider = true;
                 _seekSlider.Maximum = Math.Max(1, Duration.Ticks);
                 _updatingSlider = false;
@@ -559,14 +714,24 @@ namespace SharpMediaFoundationInterop.WPF
                 _updatingSlider = false;
             }
 
-            if (_timeText != null)
+            // made again only as the second shown, the duration or the rate changes: not of every frame
+            long seconds = (long)Position.TotalSeconds, durationSeconds = (long)Duration.TotalSeconds;
+            if (seconds != _timeTextSeconds || durationSeconds != _timeTextDuration || _rate != _timeTextRate)
             {
+                _timeTextSeconds = seconds;
+                _timeTextDuration = durationSeconds;
+                _timeTextRate = _rate;
                 string rate = _rate == 1 ? "" : _rate > 0 ? $"  ×{_rate}" : $"  ◀×{-_rate}";
-                _timeText.Text = Duration > TimeSpan.Zero
+                TimeText = Duration > TimeSpan.Zero
                     ? $"{FormatTime(Position)} / {FormatTime(Duration)}{rate}"
                     : $"{FormatTime(Position)}{rate}";
             }
         }
+
+        // what TimeText was made of last
+        private long _timeTextSeconds = -1;
+        private long _timeTextDuration = -1;
+        private int _timeTextRate;
 
         private static string FormatTime(TimeSpan time)
         {

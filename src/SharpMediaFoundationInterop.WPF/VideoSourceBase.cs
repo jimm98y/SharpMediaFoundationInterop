@@ -10,7 +10,10 @@ using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Transforms.AAC;
 using SharpMediaFoundationInterop.Transforms.Colors;
 using SharpMediaFoundationInterop.Transforms.H264;
+using SharpMediaFoundationInterop.Transforms.H262;
+using SharpMediaFoundationInterop.Transforms.H263;
 using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Transforms.MPEG4;
 using SharpMediaFoundationInterop.Utils;
 using System.Threading;
 using System.Collections.Concurrent;
@@ -904,6 +907,22 @@ namespace SharpMediaFoundationInterop.WPF
             else if (info.VideoCodec == "VP9")
             {
                 _videoDecoder = new VP9Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
+                InitializeVideoDecoder(info);
+            }
+            else if (info.VideoCodec == "H262")
+            {
+                // MPEG-1 as well: MPEG-2's decoder decodes both
+                _videoDecoder = new H262Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
+                InitializeVideoDecoder(info);
+            }
+            else if (info.VideoCodec == "H263")
+            {
+                _videoDecoder = new H263Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
+                InitializeVideoDecoder(info);
+            }
+            else if (info.VideoCodec == "MPEG4")
+            {
+                _videoDecoder = new Mpeg4Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
                 InitializeVideoDecoder(info);
             }
             else
