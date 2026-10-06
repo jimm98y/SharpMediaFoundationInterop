@@ -71,7 +71,13 @@ namespace SharpMediaFoundationInterop.Transforms
     }
 
     public interface IMediaAudioTransform : IMediaTransform, IAudioDescriptor
-    { }
+    {
+        /// <summary>Asks for everything the transform holds; read it out with ProcessOutput before <see cref="EndDrain"/>.</summary>
+        void BeginDrain();
+
+        /// <summary>Takes input again after a drain.</summary>
+        void EndDrain();
+    }
 
     /// <summary>An encoder: of <see cref="MediaCodecs.CreateAudioEncoder"/>, made for an <see cref="AudioEncoderOptions"/>.</summary>
     public interface IMediaAudioEncoder : IMediaAudioTransform

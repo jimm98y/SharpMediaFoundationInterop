@@ -92,10 +92,14 @@ namespace SharpMediaFoundationInterop.WPF
 
     public class AudioInfo
     {
+        /// <summary>"AAC", "OPUS", "MP3", "FLAC" or "ALAC".</summary>
         public string AudioCodec { get; set; }
         public uint ChannelCount { get; set; }
         public uint SampleRate { get; set; }
+        /// <summary>The codec's configuration: of AAC the AudioSpecificConfig, of FLAC its metadata blocks, of ALAC its ALACSpecificConfig.</summary>
         public byte[] UserData { get; set; }
+
+        /// <summary>The bits of the PCM played: of a stream of 24 bits, or of Opus, 32 - the decoded sound widened.</summary>
         public uint BitsPerSample { get; set; }
         public int ChannelConfiguration { get; set; }
 
