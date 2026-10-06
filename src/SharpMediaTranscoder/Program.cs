@@ -4,8 +4,7 @@ using System.IO;
 using System.Linq;
 using SharpH264;
 using SharpISOBMFF;
-using SharpMediaFoundationInterop.Transforms.H264;
-using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Utils;
 using SharpMP4.Builders;
 using SharpMP4.Readers;
@@ -36,10 +35,24 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
         var targetAudioTrack = inputAudioTrack.Clone();
         outputBuilder.AddTrack(targetAudioTrack);
 
-        using (var videoDecoder = new H264Decoder(dimensions.Width, dimensions.Height, inputVideoTrack.Timescale, (uint)inputVideoTrack.DefaultSampleDuration))
+        var decoderOptions = new VideoDecoderOptions
+        {
+            Width = dimensions.Width,
+            Height = dimensions.Height,
+            FpsNom = inputVideoTrack.Timescale,
+            FpsDenom = (uint)inputVideoTrack.DefaultSampleDuration,
+        };
+        using (var videoDecoder = MediaCodecs.CreateVideoDecoder(VideoCodec.H264, decoderOptions))
         {
             videoDecoder.Initialize();
-            using (var videoEncoder = new H265Encoder(dimensions.Width, dimensions.Height, inputVideoTrack.Timescale, (uint)inputVideoTrack.DefaultSampleDuration))
+            var encoderOptions = new VideoEncoderOptions
+            {
+                Width = dimensions.Width,
+                Height = dimensions.Height,
+                FpsNom = inputVideoTrack.Timescale,
+                FpsDenom = (uint)inputVideoTrack.DefaultSampleDuration,
+            };
+            using (var videoEncoder = MediaCodecs.CreateVideoEncoder(VideoCodec.H265, encoderOptions))
             {
                 videoEncoder.Initialize();
 

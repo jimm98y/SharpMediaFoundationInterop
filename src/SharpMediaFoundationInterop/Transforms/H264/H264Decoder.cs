@@ -1,10 +1,12 @@
-﻿using System;
+﻿using System.Runtime.Versioning;
+using System;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms.H264
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class H264Decoder : VideoTransformBase
     {
         public const uint H264_RES_MULTIPLE = 16;
@@ -33,6 +35,8 @@ namespace SharpMediaFoundationInterop.Transforms.H264
 
             // on the GPU, where a device was given and the transform can use one
             AttachDeviceManager(transform);
+
+            ApplyCodecProperties(transform);
 
             IMFMediaType mediaInput;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));

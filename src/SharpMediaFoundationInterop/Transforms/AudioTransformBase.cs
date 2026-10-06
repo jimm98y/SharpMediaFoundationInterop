@@ -1,10 +1,12 @@
-﻿using System;
+﻿using System.Runtime.Versioning;
+using System;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public abstract class AudioTransformBase : MediaTransformBase, IMediaAudioTransform
     {
         private bool _disposedValue;
@@ -72,7 +74,13 @@ namespace SharpMediaFoundationInterop.Transforms
             if (!_disposedValue)
             {
                 if (disposing)
-                { }
+                {
+                    if (_transform != null)
+                    {
+                        DestroyTransform(_transform);
+                        _transform = null;
+                    }
+                }
 
                 _disposedValue = true;
             }

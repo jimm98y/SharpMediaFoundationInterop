@@ -1,4 +1,5 @@
-﻿using SharpMediaFoundationInterop.Input;
+﻿using SharpMediaFoundationInterop.Devices;
+using SharpMediaFoundationInterop.Transforms;
 using System.Buffers;
 using System.Windows.Media;
 
@@ -10,7 +11,7 @@ namespace SharpMediaFoundationInterop.WPF
 {
     public class ScreenSource : IVideoSource
     {
-        private ScreenCapture _device;
+        private IMediaVideoSource _device;
         private bool _disposedValue;
 
 
@@ -28,7 +29,7 @@ namespace SharpMediaFoundationInterop.WPF
             // the frame top-down, as the bitmap it is shown in is, straight into the array handed out; and when the screen
             // was captured, in 100 ns units
             var frame = ArrayPool<byte>.Shared.Rent((int)_device.OutputSize);
-            if (_device.ReadSample(frame, bottomUp: false, out timestamp))
+            if (_device.ReadSample(frame, out timestamp))
                 return frame;
 
             ArrayPool<byte>.Shared.Return(frame);
@@ -39,9 +40,8 @@ namespace SharpMediaFoundationInterop.WPF
         {
             if (_device == null)
             {
-                var screens = ScreenCapture.Enumerate();
-                _device = new ScreenCapture();
-                _device.Initialize(screens.First());
+                _device = MediaDevices.CreateScreenCapture(MediaDevices.GetScreens().First(), topDown: true);
+                _device.Initialize();
             }
         
             var videoInfo = new VideoInfo();

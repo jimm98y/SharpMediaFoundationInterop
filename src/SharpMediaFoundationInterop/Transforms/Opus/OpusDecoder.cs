@@ -1,10 +1,12 @@
 ﻿using SharpMediaFoundationInterop.Utils;
+using System.Runtime.Versioning;
 using System;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms.Opus
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class OpusDecoder : AudioTransformBase
     {
         public override Guid InputFormat => PInvoke.MFAudioFormat_Opus;
@@ -12,6 +14,10 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
 
         public OpusDecoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000, uint bitsPerSample = 32) : base(sampleDuration, channels, sampleRate, bitsPerSample) 
         {
+            // of more, the input type is refused whatever it says: the channel mapping as the decoder's user data, as an
+            // OpusHead, or none; the channel mask, or none
+            if (channels > 2)
+                throw new NotSupportedException($"Windows' Opus decoder decodes mono and stereo alone, not {channels} channels");
         }
 
         protected unsafe override IMFTransform Create()
@@ -42,7 +48,7 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
             mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
             mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, SampleRate * (BitsPerSample / 8) * Channels);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_CHANNEL_MASK, 1 + 2); // left + right = stereo, see https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ksmedia/ns-ksmedia-waveformatextensible
+            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_CHANNEL_MASK, ChannelMask(Channels));
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BLOCK_ALIGNMENT, Channels * (BitsPerSample / 8));
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
@@ -56,5 +62,17 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
 
             return transform;
         }
+
+        /// <summary>
+        /// The speakers of a mono or stereo stream, as WAVEFORMATEXTENSIBLE's dwChannelMask has them: mono the front centre,
+        /// stereo front left and right (RFC 7845 5.1.1.1). See
+        /// https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ksmedia/ns-ksmedia-waveformatextensible
+        /// </summary>
+        public static uint ChannelMask(uint channels) => channels switch
+        {
+            1 => 0x4, // FC
+            2 => 0x3, // FL FR
+            _ => 0
+        };
     }
 }

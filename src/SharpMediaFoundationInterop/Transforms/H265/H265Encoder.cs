@@ -1,11 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Runtime.Versioning;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms.H265
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class H265Encoder : VideoTransformBase
     {
         public const uint H265_RES_MULTIPLE = 8;
@@ -14,21 +15,6 @@ namespace SharpMediaFoundationInterop.Transforms.H265
         public override Guid OutputFormat => PInvoke.MFVideoFormat_HEVC;
 
         public uint AvgBitrate { get; private set; }
-
-        /// <summary>
-        /// Encoder properties applied through ICodecAPI once the MFT exists but before the media
-        /// types are set, which is where an encoder will still accept most of them. Anything the
-        /// encoder does not support is reported through <see cref="CodecPropertyResults"/> rather
-        /// than throwing, since support varies by vendor.
-        /// </summary>
-        public IDictionary<Guid, object> CodecProperties { get; } = new Dictionary<Guid, object>();
-
-        /// <summary>What happened to each property in <see cref="CodecProperties"/>.</summary>
-        public IList<(Guid Property, bool Supported, bool Applied)> CodecPropertyResults { get; } =
-            new List<(Guid, bool, bool)>();
-
-        /// <summary>The encoder's own settings interface, or null if it does not expose one.</summary>
-        public ICodecApi CodecApi { get; private set; }
 
         public H265Encoder(uint width, uint height, uint fpsNom, uint fpsDenom, uint avgBitrate = 8000000)
             : base(H265_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
@@ -48,13 +34,7 @@ namespace SharpMediaFoundationInterop.Transforms.H265
             //if (transform == null) transform = CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER, input, output);
             if (transform == null) throw new NotSupportedException($"Unsupported transform! Input: {InputFormat}, Output: {OutputFormat}");
 
-            CodecApi = transform as ICodecApi;
-            foreach (var property in CodecProperties)
-            {
-                bool supported = CodecApi.IsPropertySupported(property.Key);
-                bool applied = supported && CodecApi.TrySetProperty(property.Key, property.Value);
-                CodecPropertyResults.Add((property.Key, supported, applied));
-            }
+            ApplyCodecProperties(transform);
 
             IMFMediaType mediaOutput;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));

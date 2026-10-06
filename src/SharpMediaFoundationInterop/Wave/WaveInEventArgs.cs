@@ -1,14 +1,13 @@
-﻿using System;
+﻿using System.Runtime.Versioning;
+using SharpMediaFoundationInterop.Devices;
 
 namespace SharpMediaFoundationInterop.Wave
 {
-    public class WaveInEventArgs : EventArgs
+    [SupportedOSPlatform("windows10.0.17763.0")]
+    public class WaveInEventArgs : AudioInputEventArgs
     {
-        public byte[] Data { get; private set; }
-
         public WaveInEventArgs(byte[] data)
-        {
-            this.Data = data;
-        }
+            : base(data)
+        { }
     }
 }

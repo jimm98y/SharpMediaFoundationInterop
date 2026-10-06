@@ -1,11 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Runtime.Versioning;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms.H265
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class H265Decoder : VideoTransformBase
     {
         public const uint H265_RES_MULTIPLE = 8;
@@ -14,12 +15,6 @@ namespace SharpMediaFoundationInterop.Transforms.H265
         public override Guid OutputFormat => PInvoke.MFVideoFormat_NV12;
 
         private bool _isLowLatency = false;
-
-        /// <summary>
-        /// Decoder properties applied through ICodecAPI once the MFT exists and before its media
-        /// types are set. Unsupported ones are skipped rather than failing, since support varies.
-        /// </summary>
-        public IDictionary<Guid, object> CodecProperties { get; } = new Dictionary<Guid, object>();
 
         public H265Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false)
             : base(H265_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
@@ -41,10 +36,7 @@ namespace SharpMediaFoundationInterop.Transforms.H265
             // on the GPU, where a device was given and the transform can use one
             AttachDeviceManager(transform);
 
-            var codec = transform as ICodecApi;
-            foreach (var property in CodecProperties)
-                if (codec.IsPropertySupported(property.Key))
-                    codec.TrySetProperty(property.Key, property.Value);
+            ApplyCodecProperties(transform);
 
             IMFMediaType mediaInput;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));

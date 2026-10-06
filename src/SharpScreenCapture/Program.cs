@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
-using SharpMediaFoundationInterop.Input;
-using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Devices;
+using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Transforms.Colors;
 using SharpMediaFoundationInterop.Utils;
 using SharpMP4.Tracks;
@@ -18,11 +18,19 @@ using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMod
     var targetVideoTrack = new H265Track();
     outputBuilder.AddTrack(targetVideoTrack);
 
-    using (var screenCapture = new ScreenCapture())
+    using (var screenCapture = MediaDevices.CreateScreenCapture())
     {
         screenCapture.Initialize();
 
-        using (var videoEncoder = new H265Encoder(screenCapture.Width, screenCapture.Height, fpsNom, fpsDenom, 80000000))
+        var encoderOptions = new VideoEncoderOptions
+        {
+            Width = screenCapture.Width,
+            Height = screenCapture.Height,
+            FpsNom = fpsNom,
+            FpsDenom = fpsDenom,
+            Bitrate = 80000000,
+        };
+        using (var videoEncoder = MediaCodecs.CreateVideoEncoder(VideoCodec.H265, encoderOptions))
         {
             videoEncoder.Initialize();
 

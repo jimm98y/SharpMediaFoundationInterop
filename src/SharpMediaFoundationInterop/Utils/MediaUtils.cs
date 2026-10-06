@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
@@ -26,17 +27,20 @@ namespace SharpMediaFoundationInterop.Utils
             return (long)((Int128)time * TicksPerSecond / clockRate);
         }
 
+        [SupportedOSPlatform("windows10.0.17763.0")]
         public static void Check(HRESULT result)
         {
             if (result.Failed)
                 Marshal.ThrowExceptionForHR(result.Value);
         }
 
+        [SupportedOSPlatform("windows10.0.17763.0")]
         public static IMFSample CreateSample(byte[] data, long sampleDuration, long timestamp)
         {
             return CreateSample(ReadOnlySpan<byte>.Empty, data, sampleDuration, timestamp);
         }
 
+        [SupportedOSPlatform("windows10.0.17763.0")]
         public static IMFSample CreateSample(ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
         {
             return CreateSample(ReadOnlySpan<byte>.Empty, data, sampleDuration, timestamp);
@@ -46,6 +50,7 @@ namespace SharpMediaFoundationInterop.Utils
         /// A sample of <paramref name="prefix"/> and then <paramref name="data"/>, copied straight into the media buffer:
         /// a start code goes in front of a NAL unit without the two being put together in an array first.
         /// </summary>
+        [SupportedOSPlatform("windows10.0.17763.0")]
         public static unsafe IMFSample CreateSample(ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
         {
             uint length = (uint)(prefix.Length + data.Length);
@@ -75,6 +80,7 @@ namespace SharpMediaFoundationInterop.Utils
             return sample;
         }
 
+        [SupportedOSPlatform("windows10.0.17763.0")]
         public static MFT_OUTPUT_DATA_BUFFER[] CreateOutputDataBuffer(uint size = 0)
         {
             MFT_OUTPUT_DATA_BUFFER[] result = new MFT_OUTPUT_DATA_BUFFER[1];
@@ -98,6 +104,7 @@ namespace SharpMediaFoundationInterop.Utils
             return result;
         }
 
+        [SupportedOSPlatform("windows10.0.17763.0")]
         public static unsafe bool CopyBuffer(IMFMediaBuffer buffer, byte[] sampleBytes, out uint sampleSize)
         {
             bool ret = false;
@@ -123,6 +130,7 @@ namespace SharpMediaFoundationInterop.Utils
             return ret;
         }
 
+        [SupportedOSPlatform("windows10.0.17763.0")]
         public static long CalculateSampleDuration(uint fpsNom, uint fpsDenom)
         {
             Check(PInvoke.MFFrameRateToAverageTimePerFrame(fpsNom, fpsDenom, out ulong sampleDuration));

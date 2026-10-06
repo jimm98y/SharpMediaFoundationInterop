@@ -1,4 +1,5 @@
-﻿using Windows.Win32.Media.MediaFoundation;
+﻿using System.Runtime.Versioning;
+using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms
 {
@@ -7,6 +8,7 @@ namespace SharpMediaFoundationInterop.Transforms
     /// GPU's memory, as Media Foundation's samples. What is of Media Foundation alone, kept out of
     /// <see cref="IMediaVideoTransform"/> - of which a transform of another platform's is made.
     /// </summary>
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public interface IMediaFoundationVideoTransform : IMediaVideoTransform
     {
         /// <summary>

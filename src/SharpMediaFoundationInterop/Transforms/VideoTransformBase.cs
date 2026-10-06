@@ -1,11 +1,14 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public abstract class VideoTransformBase : MediaTransformBase, IMediaFoundationVideoTransform
     {
         protected long _sampleDuration = 1;
@@ -45,6 +48,20 @@ namespace SharpMediaFoundationInterop.Transforms
         /// than filling one of the caller's.
         /// </summary>
         public bool ProvidesSamples { get; private set; }
+
+        /// <summary>
+        /// Properties applied through ICodecAPI once the MFT exists but before its media types are set, which is where a
+        /// codec will still accept most of them. Anything the codec does not support is reported through
+        /// <see cref="CodecPropertyResults"/> rather than throwing, since support varies by vendor.
+        /// </summary>
+        public IDictionary<Guid, object> CodecProperties { get; } = new Dictionary<Guid, object>();
+
+        /// <summary>What happened to each property in <see cref="CodecProperties"/>.</summary>
+        public IList<(Guid Property, bool Supported, bool Applied)> CodecPropertyResults { get; } =
+            new List<(Guid, bool, bool)>();
+
+        /// <summary>The codec's own settings interface, or null if it does not expose one.</summary>
+        public ICodecApi CodecApi { get; private set; }
 
         protected VideoTransformBase(uint width, uint height)
           : this(1, width, height, 1, 1)
@@ -107,6 +124,22 @@ namespace SharpMediaFoundationInterop.Transforms
             finally
             {
                 Marshal.Release(manager);
+            }
+        }
+
+        /// <summary>
+        /// Applies the <see cref="CodecProperties"/> to the transform, noting each in <see cref="CodecPropertyResults"/>.
+        /// Called by a codec as it is made, before its media types are set.
+        /// </summary>
+        protected void ApplyCodecProperties(IMFTransform transform)
+        {
+            CodecApi = transform as ICodecApi;
+            CodecPropertyResults.Clear();
+            foreach (var property in CodecProperties)
+            {
+                bool supported = CodecApi.IsPropertySupported(property.Key);
+                bool applied = supported && CodecApi.TrySetProperty(property.Key, property.Value);
+                CodecPropertyResults.Add((property.Key, supported, applied));
             }
         }
 

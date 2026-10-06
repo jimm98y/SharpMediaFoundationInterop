@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Runtime.Versioning;
+using System;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
@@ -8,6 +9,7 @@ namespace SharpMediaFoundationInterop.Transforms.Colors
     /// <summary>
     /// Converts among different color formats.
     /// </summary>
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class ColorConverter : VideoTransformBase
     {
         private Guid _inputFormat;

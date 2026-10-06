@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace SharpMediaFoundationInterop.Transforms
 {
@@ -15,6 +16,7 @@ namespace SharpMediaFoundationInterop.Transforms
     [ComImport]
     [Guid("901db4c7-31ce-41a2-85dc-8fa0bf41b8da")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public interface ICodecApi
     {
         [PreserveSig] int IsSupported(ref Guid api);
@@ -120,6 +122,7 @@ namespace SharpMediaFoundationInterop.Transforms
     }
 
     /// <summary>Asking an encoder what it supports, without an exception per unsupported property.</summary>
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public static class CodecApiExtensions
     {
         /// <summary>True when the encoder implements this property at all.</summary>

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
@@ -10,6 +11,7 @@ using Windows.Win32.System.Com;
 
 namespace SharpMediaFoundationInterop.Input
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class CaptureDevice
     {
         public string ID { get; private set; }
@@ -22,6 +24,7 @@ namespace SharpMediaFoundationInterop.Input
         }
     }
 
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class DeviceCapture : IMediaVideoSource
     {
         public const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
@@ -37,14 +40,26 @@ namespace SharpMediaFoundationInterop.Input
         public Guid OutputFormat { get; private set; }
         public uint OutputSize { get; private set; }
 
+        /// <summary>The camera <see cref="Initialize()"/> opens: the first where it is null.</summary>
+        private readonly string _symbolicLink;
+
         static DeviceCapture()
         {
             MediaUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
         }
 
+        public DeviceCapture()
+        { }
+
+        /// <summary>Of the camera <see cref="Initialize()"/> opens, by its symbolic link: the first where it is null.</summary>
+        public DeviceCapture(string symbolicLink)
+        {
+            _symbolicLink = symbolicLink;
+        }
+
         public void Initialize()
         {
-            Initialize((string)null);
+            Initialize(_symbolicLink);
         }
 
         public void Initialize(CaptureDevice device)

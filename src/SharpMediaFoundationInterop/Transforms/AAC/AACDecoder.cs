@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Linq;
+using System.Runtime.Versioning;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms.AAC
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class AACDecoder : AudioTransformBase
     {
         public override Guid InputFormat => PInvoke.MFAudioFormat_AAC;

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Runtime.Versioning;
+using System;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
@@ -9,6 +10,7 @@ namespace SharpMediaFoundationInterop.Transforms.H263
     /// H.263 decoded by Windows' MPEG-4 Part 2 decoder, which takes H.263 as the short header of its own format: each
     /// sample a picture, its header and all.
     /// </summary>
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class H263Decoder : VideoTransformBase
     {
         /// <summary>Its pictures are coded in macroblocks of 16 by 16.</summary>
@@ -39,6 +41,8 @@ namespace SharpMediaFoundationInterop.Transforms.H263
 
             // on the GPU, where a device was given and the transform can use one
             AttachDeviceManager(transform);
+
+            ApplyCodecProperties(transform);
 
             IMFMediaType mediaInput;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));

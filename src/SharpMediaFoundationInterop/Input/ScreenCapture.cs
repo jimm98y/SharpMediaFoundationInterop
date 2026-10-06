@@ -11,9 +11,11 @@ using System.Runtime.InteropServices;
 using SharpMediaFoundationInterop.Utils;
 using SharpMediaFoundationInterop.Transforms;
 using System.Collections.Generic;
+using System.Runtime.Versioning;
 
 namespace SharpMediaFoundationInterop.Input
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class ScreenDevice
     {
         public uint AdapterID { get; private set; }
@@ -40,6 +42,7 @@ namespace SharpMediaFoundationInterop.Input
         }
     }
 
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class ScreenCapture : IMediaVideoSource
     {
         private const uint BYTES_PER_PIXEL = 4;
@@ -78,9 +81,28 @@ namespace SharpMediaFoundationInterop.Input
 
         public uint ReadTimeoutInMilliseconds { get; set; } = 40;
 
+        /// <summary>
+        /// The order of rows <see cref="ReadSample(byte[], out long)"/> hands frames out in: bottom-up - the first row the
+        /// bottom one - as Media Foundation's RGB formats are, unless set false, for top-down, as a bitmap is.
+        /// </summary>
+        public bool BottomUp { get; set; } = true;
+
+        /// <summary>The screen <see cref="Initialize()"/> opens: the first adapter's first output, the primary, unless given.</summary>
+        private readonly uint _adapterID, _outputID;
+
+        public ScreenCapture()
+        { }
+
+        /// <summary>Of the screen <see cref="Initialize()"/> opens: an output of an adapter, as <see cref="Enumerate"/> gives them.</summary>
+        public ScreenCapture(uint adapterID, uint outputID)
+        {
+            _adapterID = adapterID;
+            _outputID = outputID;
+        }
+
         public void Initialize()
         {
-            Initialize(0, 0);
+            Initialize(_adapterID, _outputID);
         }
 
         public void Initialize(ScreenDevice device)
@@ -162,12 +184,12 @@ namespace SharpMediaFoundationInterop.Input
         private IDXGIResource _screenResource;
 
         /// <summary>
-        /// The next frame of the desktop, bottom-up - the first row the bottom one - as Media Foundation's RGB formats are:
-        /// see <see cref="ReadSample(byte[], bool, out long)"/>.
+        /// The next frame of the desktop, in the order of rows <see cref="BottomUp"/> says: see
+        /// <see cref="ReadSample(byte[], bool, out long)"/>.
         /// </summary>
         public bool ReadSample(byte[] buffer, out long timestamp)
         {
-            return ReadSample(buffer, bottomUp: true, out timestamp);
+            return ReadSample(buffer, BottomUp, out timestamp);
         }
 
         /// <summary>

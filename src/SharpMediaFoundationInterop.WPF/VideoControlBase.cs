@@ -1,4 +1,4 @@
-﻿using SharpMediaFoundationInterop.Wave;
+﻿using SharpMediaFoundationInterop.Devices;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -47,7 +47,7 @@ namespace SharpMediaFoundationInterop.WPF
     public abstract class VideoControlBase : Control, IDisposable
     {
         private object _waveSync = new object();
-        private WaveOut _waveOut;
+        private IAudioOutput _waveOut;
 
         private const string ControlsStates = "ControlsStates";
         private const string ControlsVisibleState = "ControlsVisible";
@@ -1721,8 +1721,8 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 lock (_waveSync)
                 {
-                    this._waveOut = new WaveOut();
-                    this._waveOut.Initialize(audioInfo.SampleRate, audioInfo.ChannelCount, audioInfo.BitsPerSample);
+                    this._waveOut = MediaDevices.CreateAudioOutput(audioInfo.SampleRate, audioInfo.ChannelCount, audioInfo.BitsPerSample);
+                    this._waveOut.Initialize();
                     this._audioClockStart = -1;
                     this._audioBytesQueued = 0;
                     this._audioBytesPerSecond = (long)audioInfo.SampleRate * audioInfo.ChannelCount * audioInfo.BitsPerSample / 8;
