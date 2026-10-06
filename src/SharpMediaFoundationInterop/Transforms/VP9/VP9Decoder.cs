@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Runtime.Versioning;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
@@ -10,6 +10,7 @@ namespace SharpMediaFoundationInterop.Transforms.VP9
     /// VP9 to NV12. Windows has no VP9 decoder of its own: it comes with the VP9 Video Extensions from the Store, or
     /// from a GPU vendor's driver.
     /// </summary>
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class VP9Decoder : VideoTransformBase
     {
         public const uint VP9_RES_MULTIPLE = 2;
@@ -18,12 +19,6 @@ namespace SharpMediaFoundationInterop.Transforms.VP9
         public override Guid OutputFormat => PInvoke.MFVideoFormat_NV12;
 
         private bool _isLowLatency = false;
-
-        /// <summary>
-        /// Decoder properties applied through ICodecAPI once the MFT exists and before its media
-        /// types are set. Unsupported ones are skipped rather than failing, since support varies.
-        /// </summary>
-        public IDictionary<Guid, object> CodecProperties { get; } = new Dictionary<Guid, object>();
 
         public VP9Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false)
             : base(VP9_RES_MULTIPLE, width, height, fpsNom, fpsDenom)
@@ -45,12 +40,7 @@ namespace SharpMediaFoundationInterop.Transforms.VP9
             // on the GPU, where a device was given and the transform can use one
             AttachDeviceManager(transform);
 
-            if (transform is ICodecApi codec)
-            {
-                foreach (var property in CodecProperties)
-                    if (codec.IsPropertySupported(property.Key))
-                        codec.TrySetProperty(property.Key, property.Value);
-            }
+            ApplyCodecProperties(transform);
 
             IMFMediaType mediaInput;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));

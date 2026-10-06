@@ -1,4 +1,5 @@
-﻿using SharpMediaFoundationInterop.Input;
+﻿using SharpMediaFoundationInterop.Devices;
+using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Transforms.Colors;
 using SharpMediaFoundationInterop.Utils;
 using System.Buffers;
@@ -8,7 +9,7 @@ namespace SharpMediaFoundationInterop.WPF
 {
     public class CameraSource : IVideoSource
     {
-        private DeviceCapture _device;
+        private IMediaVideoSource _device;
         private bool _disposedValue;
 
         private byte[] _yuy2Buffer;
@@ -60,9 +61,8 @@ namespace SharpMediaFoundationInterop.WPF
         {
             if (_device == null)
             {
-                var devices = DeviceCapture.Enumerate();
-                _device = new DeviceCapture();
-                _device.Initialize(devices.First());
+                _device = MediaDevices.CreateCameraCapture(MediaDevices.GetCameras().First());
+                _device.Initialize();
                 _yuy2Buffer = new byte[_device.OutputSize];
 
                 _converter = new ColorConverter(_device.OutputFormat, PInvoke.MFVideoFormat_RGB24, _device.Width, _device.Height);

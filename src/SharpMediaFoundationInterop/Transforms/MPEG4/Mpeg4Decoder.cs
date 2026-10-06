@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Runtime.Versioning;
+using System;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
@@ -10,6 +11,7 @@ namespace SharpMediaFoundationInterop.Transforms.MPEG4
     /// Windows' MPEG-4 Part 2 decoder. Its visual object sequence and object layer headers come in band, before the first
     /// picture.
     /// </summary>
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class Mpeg4Decoder : VideoTransformBase
     {
         /// <summary>Its pictures are coded in macroblocks of 16 by 16.</summary>
@@ -47,6 +49,8 @@ namespace SharpMediaFoundationInterop.Transforms.MPEG4
 
             // on the GPU, where a device was given and the transform can use one
             AttachDeviceManager(transform);
+
+            ApplyCodecProperties(transform);
 
             IMFMediaType mediaInput;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));

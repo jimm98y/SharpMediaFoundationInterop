@@ -1,5 +1,5 @@
 ﻿using SharpISOBMFF;
-using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Utils;
 using SharpMP4.Readers;
 using System.IO;
@@ -100,8 +100,8 @@ namespace SharpMediaFoundationInterop.WPF
             videoInfo.FpsDenom = 1;
 
             videoInfo.VideoCodec = "H265";
-            videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
-            videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
+            videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, MediaCodecs.DecoderAlignment(VideoCodec.H265));
+            videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, MediaCodecs.DecoderAlignment(VideoCodec.H265));
 
             VideoInfo = videoInfo;
 

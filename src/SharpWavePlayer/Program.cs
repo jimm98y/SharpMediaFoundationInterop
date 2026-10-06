@@ -1,8 +1,8 @@
 ﻿using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using SharpMediaFoundationInterop.Wave;
-using SharpMediaFoundationInterop.Transforms.AAC;
+using SharpMediaFoundationInterop.Devices;
+using SharpMediaFoundationInterop.Transforms;
 using SharpISOBMFF;
 using SharpMP4.Readers;
 using System.Collections.Generic;
@@ -21,14 +21,20 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
     IEnumerable<ITrack> inputTracks = inputReader.GetTracks();
     AACTrack aacTrack = inputTracks.OfType<AACTrack>().First();
 
-    using (var audioDecoder = new AACDecoder(aacTrack.ChannelCount, aacTrack.SamplingRate, AACDecoder.CreateUserData(aacTrack.AudioSpecificConfig.ToBytes()), aacTrack.ChannelConfiguration))
+    var options = new AudioDecoderOptions
+    {
+        Channels = aacTrack.ChannelCount,
+        SampleRate = aacTrack.SamplingRate,
+        Config = aacTrack.AudioSpecificConfig.ToBytes(),
+    };
+    using (var audioDecoder = MediaCodecs.CreateAudioDecoder(AudioCodec.AAC, options))
     {
         audioDecoder.Initialize();
 
         byte[] pcmBuffer = new byte[audioDecoder.OutputSize];
-        using (var waveOut = new WaveOut())
+        using (var waveOut = MediaDevices.CreateAudioOutput(aacTrack.SamplingRate, aacTrack.ChannelCount, 16))
         {
-            waveOut.Initialize(aacTrack.SamplingRate, aacTrack.ChannelCount, 16);
+            waveOut.Initialize();
 
             MediaSample sample;
             while ((sample = inputReader.ReadSample(aacTrack.TrackID)) != null)

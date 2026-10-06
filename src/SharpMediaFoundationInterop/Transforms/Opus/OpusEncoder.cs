@@ -1,10 +1,12 @@
 ﻿using SharpMediaFoundationInterop.Utils;
+using System.Runtime.Versioning;
 using System;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms.Opus
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class OpusEncoder : AudioTransformBase
     {
         public override Guid InputFormat => PInvoke.MFAudioFormat_Float;
@@ -39,7 +41,7 @@ namespace SharpMediaFoundationInterop.Transforms.Opus
             mediaInput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
             mediaInput.SetGUID(PInvoke.MF_MT_SUBTYPE, InputFormat);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, SampleRate * (BitsPerSample / 8) * Channels);
-            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_CHANNEL_MASK, 1 + 2);
+            mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_CHANNEL_MASK, OpusDecoder.ChannelMask(Channels));
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_BLOCK_ALIGNMENT, Channels * (BitsPerSample / 8));
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
             mediaInput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);

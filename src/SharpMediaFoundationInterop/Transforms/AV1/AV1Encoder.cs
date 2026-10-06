@@ -1,10 +1,12 @@
 ﻿using SharpMediaFoundationInterop.Utils;
+using System.Runtime.Versioning;
 using System;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms.AV1
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class AV1Encoder : VideoTransformBase
     {
         public const uint AV1_RES_MULTIPLE = 1;
@@ -31,6 +33,8 @@ namespace SharpMediaFoundationInterop.Transforms.AV1
             IMFTransform transform = CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER /* | MFT_ENUM_FLAG.MFT_ENUM_FLAG_HARDWARE */, input, output);
             //if (transform == null) transform = CreateTransform(PInvoke.MFT_CATEGORY_VIDEO_ENCODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT | MFT_ENUM_FLAG.MFT_ENUM_FLAG_SORTANDFILTER, input, output);
             if (transform == null) throw new NotSupportedException($"Unsupported transform! Input: {InputFormat}, Output: {OutputFormat}");
+
+            ApplyCodecProperties(transform);
 
             IMFMediaType mediaOutput;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));

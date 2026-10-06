@@ -2,12 +2,15 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
+using SharpMediaFoundationInterop.Devices;
 using Windows.Win32;
 using Windows.Win32.Media.Audio;
 
 namespace SharpMediaFoundationInterop.Wave
 {
-    public class WaveIn : IDisposable
+    [SupportedOSPlatform("windows10.0.17763.0")]
+    public class WaveIn : IAudioInput
     {
         public const int MM_WIM_DATA = 0x3C0;
         public const uint MMSYSERR_NOERROR = 0;
@@ -15,11 +18,27 @@ namespace SharpMediaFoundationInterop.Wave
 
         private HWAVEIN _hDevice;
 
+        /// <summary>The device it records from: <see cref="WAVE_MAPPER"/>, the system's default, unless one is given.</summary>
+        public uint DeviceID { get; private set; } = WAVE_MAPPER;
+
+        public uint SampleRate { get; private set; } = 48000;
+        public uint Channels { get; private set; } = 2;
+        public uint BitsPerSample { get; private set; } = 16;
+
         private const int _audioBufferSize = 1024 * 1024;
         private nint _audioBuffer = nint.Zero;
         private uint _audioBufferIndex = 0;
 
         public event EventHandler<WaveInEventArgs> FrameReceived;
+
+        private EventHandler<AudioInputEventArgs> _frameReceived;
+
+        /// <summary>Of the same buffers as <see cref="FrameReceived"/>: a <see cref="WaveInEventArgs"/> is one.</summary>
+        event EventHandler<AudioInputEventArgs> IAudioInput.FrameReceived
+        {
+            add => _frameReceived += value;
+            remove => _frameReceived -= value;
+        }
 
         const int NUM_BUF = 3;
 
@@ -27,6 +46,24 @@ namespace SharpMediaFoundationInterop.Wave
 
         // https://github.com/microsoft/CsWin32/issues/623
         private Delegate _callback; // hold on to the delegate so that it does not get garbage collected
+
+        public WaveIn()
+        { }
+
+        /// <summary>Of the device and the format <see cref="Initialize()"/> opens it for.</summary>
+        public WaveIn(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample)
+        {
+            DeviceID = deviceID;
+            SampleRate = samplesPerSecond;
+            Channels = channels;
+            BitsPerSample = bitsPerSample;
+        }
+
+        /// <summary>Opens the device and the format it was made for, and starts recording.</summary>
+        public void Initialize()
+        {
+            Initialize(DeviceID, SampleRate, Channels, BitsPerSample);
+        }
 
         public void Initialize(uint samplesPerSecond, uint channels, uint bitsPerSample)
         {
@@ -36,6 +73,11 @@ namespace SharpMediaFoundationInterop.Wave
         public unsafe void Initialize(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample)
         {
             Close();
+
+            DeviceID = deviceID;
+            SampleRate = samplesPerSecond;
+            Channels = channels;
+            BitsPerSample = bitsPerSample;
 
             if(_audioBuffer == nint.Zero)
             {
@@ -85,7 +127,9 @@ namespace SharpMediaFoundationInterop.Wave
                 waveHdr = (WAVEHDR*)(_audioBuffer + _audioBufferIndex);
                 PInvoke.waveInAddBuffer(_hDevice, waveHdr, (uint)sizeof(WAVEHDR));
 
-                FrameReceived?.Invoke(this, new WaveInEventArgs(dest));
+                var args = new WaveInEventArgs(dest);
+                FrameReceived?.Invoke(this, args);
+                _frameReceived?.Invoke(this, args);
             }
         }
 

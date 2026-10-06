@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace SharpMediaFoundationInterop.Transforms
 {
@@ -59,8 +60,28 @@ namespace SharpMediaFoundationInterop.Transforms
         void EndDrain();
     }
 
+    /// <summary>An encoder: of <see cref="MediaCodecs.CreateVideoEncoder"/>, made for a <see cref="VideoEncoderOptions"/>.</summary>
+    public interface IMediaVideoEncoder : IMediaVideoTransform
+    {
+        /// <summary>
+        /// The settings of its options the encoder did not take, each with why, known once it is initialized. What an
+        /// encoder takes varies by codec and by vendor, so a setting is reported here rather than failing the encoder.
+        /// </summary>
+        IReadOnlyList<string> UnappliedSettings { get; }
+    }
+
     public interface IMediaAudioTransform : IMediaTransform, IAudioDescriptor
     { }
+
+    /// <summary>An encoder: of <see cref="MediaCodecs.CreateAudioEncoder"/>, made for an <see cref="AudioEncoderOptions"/>.</summary>
+    public interface IMediaAudioEncoder : IMediaAudioTransform
+    {
+        /// <summary>
+        /// The codec's configuration, for the container to carry, known once the encoder is initialized: of AAC the
+        /// AudioSpecificConfig; of Opus null, as its header is made of the channels and sample rate alone.
+        /// </summary>
+        byte[] Config { get; }
+    }
 
     public interface IMediaSource : IDisposable, IMediaOutput
     {

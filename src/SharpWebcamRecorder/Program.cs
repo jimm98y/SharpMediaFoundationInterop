@@ -3,8 +3,8 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using SharpMediaFoundationInterop.Utils;
-using SharpMediaFoundationInterop.Input;
-using SharpMediaFoundationInterop.Transforms.H265;
+using SharpMediaFoundationInterop.Devices;
+using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Transforms.Colors;
 using SharpMP4.Builders;
 using SharpMP4.Tracks;
@@ -21,10 +21,17 @@ using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMod
     var targetVideoTrack = new H265Track();
     outputBuilder.AddTrack(targetVideoTrack);
                 
-    using (var camera = new DeviceCapture())
+    using (var camera = MediaDevices.CreateCameraCapture())
     {
         camera.Initialize();
-        using (var videoEncoder = new H265Encoder(camera.Width, camera.Height, fpsNom, fpsDenom))
+        var encoderOptions = new VideoEncoderOptions
+        {
+            Width = camera.Width,
+            Height = camera.Height,
+            FpsNom = fpsNom,
+            FpsDenom = fpsDenom,
+        };
+        using (var videoEncoder = MediaCodecs.CreateVideoEncoder(VideoCodec.H265, encoderOptions))
         {
             videoEncoder.Initialize();
 

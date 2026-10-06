@@ -7,19 +7,10 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.Win32;
 using SharpMediaFoundationInterop.Transforms;
-using SharpMediaFoundationInterop.Transforms.AAC;
 using SharpMediaFoundationInterop.Transforms.Colors;
-using SharpMediaFoundationInterop.Transforms.H264;
-using SharpMediaFoundationInterop.Transforms.H262;
-using SharpMediaFoundationInterop.Transforms.H263;
-using SharpMediaFoundationInterop.Transforms.H265;
-using SharpMediaFoundationInterop.Transforms.MPEG4;
 using SharpMediaFoundationInterop.Utils;
 using System.Threading;
 using System.Collections.Concurrent;
-using SharpMediaFoundationInterop.Transforms.AV1;
-using SharpMediaFoundationInterop.Transforms.Opus;
-using SharpMediaFoundationInterop.Transforms.VP9;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -130,7 +121,7 @@ namespace SharpMediaFoundationInterop.WPF
                         if (_audioOutTime >= 0 && bytesPerSecond > 0)
                             _audioOutTime += pcmSize * TimeSpan.TicksPerSecond / bytesPerSecond;
 
-                        if (_audioDecoder is OpusDecoder)
+                        if (_audioIsFloat)
                         {
                             byte[] decoded = RentAudio((int)pcmSize);
                             for (int i = 0; i < pcmSize / 4; i++)
@@ -185,6 +176,12 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>Whether the audio has come to its end, with the video still going on: see <see cref="Seek"/>.</summary>
         private bool _audioEnded;
+
+        /// <summary>
+        /// Whether the audio decoder hands out 32 bit float, as Opus's does, which is turned into 32 bit integer PCM for the
+        /// output; rather than integer PCM, as AAC's does, which is played as it is.
+        /// </summary>
+        private bool _audioIsFloat;
 
         /// <summary>The time a seek done on the video's thread is to, for the sound to follow on its own; -1 where there is none.</summary>
         private long _pendingAudioSeek = -1;
@@ -902,50 +899,17 @@ namespace SharpMediaFoundationInterop.WPF
                 _videoDecoder = custom;
                 InitializeVideoDecoder(info);
             }
-            else if (info.VideoCodec == "H264")
-            {
-                _videoDecoder = new H264Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                InitializeVideoDecoder(info);
-            }
-            else if (info.VideoCodec == "H265")
-            {
-                _videoDecoder = new H265Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                InitializeVideoDecoder(info);
-            }
-            else if (info.VideoCodec == "H266")
-            {
-                // H266 is as of 8/3/2025 not supported by Media Foundation
-                throw new NotSupportedException();
-            }
-            else if (info.VideoCodec == "AV1")
-            {
-                _videoDecoder = new AV1Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                InitializeVideoDecoder(info);
-            }
-            else if (info.VideoCodec == "VP9")
-            {
-                _videoDecoder = new VP9Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                InitializeVideoDecoder(info);
-            }
-            else if (info.VideoCodec == "H262")
-            {
-                // MPEG-1 as well: MPEG-2's decoder decodes both
-                _videoDecoder = new H262Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                InitializeVideoDecoder(info);
-            }
-            else if (info.VideoCodec == "H263")
-            {
-                _videoDecoder = new H263Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                InitializeVideoDecoder(info);
-            }
-            else if (info.VideoCodec == "MPEG4")
-            {
-                _videoDecoder = new Mpeg4Decoder(info.OriginalWidth, info.OriginalHeight, info.FpsNom, info.FpsDenom, _isLowLatency);
-                InitializeVideoDecoder(info);
-            }
             else
             {
-                throw new NotSupportedException();
+                _videoDecoder = MediaCodecs.CreateVideoDecoder(VideoCodecOf(info.VideoCodec), new VideoDecoderOptions
+                {
+                    Width = info.OriginalWidth,
+                    Height = info.OriginalHeight,
+                    FpsNom = info.FpsNom,
+                    FpsDenom = info.FpsDenom,
+                    LowLatency = _isLowLatency,
+                });
+                InitializeVideoDecoder(info);
             }
 
             _nv12Decoder = new ColorConverter(PInvoke.MFVideoFormat_NV12, PInvoke.MFVideoFormat_RGB24, info.Width, info.Height);
@@ -958,23 +922,38 @@ namespace SharpMediaFoundationInterop.WPF
             _imageBufferLen = (int)_nv12Decoder.OutputSize;
         }
 
+        /// <summary>The codec of a <see cref="VideoInfo.VideoCodec"/>.</summary>
+        private static VideoCodec VideoCodecOf(string codec) => codec switch
+        {
+            "H264" => VideoCodec.H264,
+            "H265" => VideoCodec.H265,
+            "AV1" => VideoCodec.AV1,
+            "VP9" => VideoCodec.VP9,
+            "H262" => VideoCodec.H262, // MPEG-1 as well: MPEG-2's decoder decodes both
+            "H263" => VideoCodec.H263,
+            "MPEG4" => VideoCodec.Mpeg4,
+            // H266 is as of 8/3/2025 not supported by Media Foundation
+            _ => throw new NotSupportedException($"Video codec {codec}")
+        };
+
         private void CreateAudioDecoder(AudioInfo info)
         {
             // decoders must be created on the same thread as the samples
-            if (info.AudioCodec == "AAC")
+            var codec = info.AudioCodec switch
             {
-                _audioDecoder = new AACDecoder(info.ChannelCount, info.SampleRate, AACDecoder.CreateUserData(info.UserData), info.ChannelConfiguration);
-                _audioDecoder.Initialize();
-            }
-            else if (info.AudioCodec == "OPUS")
+                "AAC" => AudioCodec.AAC,
+                "OPUS" => AudioCodec.Opus,
+                _ => throw new NotSupportedException($"Audio codec {info.AudioCodec}")
+            };
+            _audioDecoder = MediaCodecs.CreateAudioDecoder(codec, new AudioDecoderOptions
             {
-                _audioDecoder = new OpusDecoder(960, info.ChannelCount, info.SampleRate, info.BitsPerSample);
-                _audioDecoder.Initialize();
-            }
-            else
-            {
-                throw new NotSupportedException();
-            }
+                Channels = info.ChannelCount,
+                SampleRate = info.SampleRate,
+                Config = info.UserData,
+                SkipSamples = info.SkipSamples,
+            });
+            _audioDecoder.Initialize();
+            _audioIsFloat = _audioDecoder.OutputFormat == PInvoke.MFAudioFormat_Float;
 
             _pcmBuffer = new byte[_audioDecoder.OutputSize];
         }

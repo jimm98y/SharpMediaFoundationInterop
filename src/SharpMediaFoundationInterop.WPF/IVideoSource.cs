@@ -98,6 +98,12 @@ namespace SharpMediaFoundationInterop.WPF
         public byte[] UserData { get; set; }
         public uint BitsPerSample { get; set; }
         public int ChannelConfiguration { get; set; }
+
+        /// <summary>
+        /// Samples, of each channel, at the start of the decoded sound that are not of it: Opus's pre-skip. Dropped again
+        /// after a seek, as the decoder settles in anew.
+        /// </summary>
+        public uint SkipSamples { get; set; }
     }
 
     public interface IVideoSource : IDisposable

@@ -6,10 +6,7 @@ using SharpH265;
 using SharpH26X;
 using SharpISOBMFF;
 using SharpISOBMFF.Extensions;
-using SharpMediaFoundationInterop.Transforms.H264;
-using SharpMediaFoundationInterop.Transforms.AV1;
-using SharpMediaFoundationInterop.Transforms.H265;
-using SharpMediaFoundationInterop.Transforms.VP9;
+using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Utils;
 using SharpRTSPClient;
 using System.Buffers;
@@ -175,7 +172,7 @@ namespace SharpMediaFoundationInterop.WPF
                         {
                             videoInfo.OriginalWidth = width;
                             videoInfo.OriginalHeight = height;
-                            uint multiple = videoInfo.VideoCodec == "VP9" ? VP9Decoder.VP9_RES_MULTIPLE : AV1Decoder.AV1_RES_MULTIPLE;
+                            uint multiple = MediaCodecs.DecoderAlignment(videoInfo.VideoCodec == "VP9" ? VideoCodec.VP9 : VideoCodec.AV1);
                             videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, multiple);
                             videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, multiple);
                             tcsSetupCompleted.TrySetResult(true);
@@ -216,8 +213,8 @@ namespace SharpMediaFoundationInterop.WPF
                 var dimensions = decodedSPS.CalculateDimensions();
                 videoInfo.OriginalWidth = dimensions.Width;
                 videoInfo.OriginalHeight = dimensions.Height;
-                videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
-                videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
+                videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, MediaCodecs.DecoderAlignment(VideoCodec.H264));
+                videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, MediaCodecs.DecoderAlignment(VideoCodec.H264));
 
                 var timescale = decodedSPS.CalculateTimescale();
                 videoInfo.FpsNom = (uint)timescale.Timescale;
@@ -233,8 +230,8 @@ namespace SharpMediaFoundationInterop.WPF
                 var dimensions = decodedSPS.CalculateDimensions();
                 videoInfo.OriginalWidth = dimensions.Width;
                 videoInfo.OriginalHeight = dimensions.Height;
-                videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
-                videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
+                videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, MediaCodecs.DecoderAlignment(VideoCodec.H265));
+                videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, MediaCodecs.DecoderAlignment(VideoCodec.H265));
 
                 var timescale = decodedSPS.CalculateTimescale();
                 videoInfo.FpsNom = (uint)timescale.Timescale;

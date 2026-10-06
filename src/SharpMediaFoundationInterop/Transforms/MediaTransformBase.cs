@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
 using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
@@ -17,6 +18,7 @@ namespace SharpMediaFoundationInterop.Transforms
     /// <remarks>
     /// To trace Media Foundation, run: mftrace -v SharpMediaPlayer_x86.exe
     /// </remarks>
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public abstract class MediaTransformBase
     {
         public abstract Guid InputFormat { get; }

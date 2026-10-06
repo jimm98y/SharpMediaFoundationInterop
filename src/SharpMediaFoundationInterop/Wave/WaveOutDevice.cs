@@ -1,5 +1,7 @@
-﻿namespace SharpMediaFoundationInterop.Wave
+﻿using System.Runtime.Versioning;
+namespace SharpMediaFoundationInterop.Wave
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class WaveOutDevice
     {
         public uint DeviceID { get; }

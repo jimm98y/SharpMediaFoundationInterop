@@ -3,13 +3,7 @@ using SharpH264;
 using SharpH265;
 using SharpISOBMFF;
 using SharpISOBMFF.Extensions;
-using SharpMediaFoundationInterop.Transforms.AV1;
-using SharpMediaFoundationInterop.Transforms.H264;
-using SharpMediaFoundationInterop.Transforms.H262;
-using SharpMediaFoundationInterop.Transforms.H263;
-using SharpMediaFoundationInterop.Transforms.H265;
-using SharpMediaFoundationInterop.Transforms.MPEG4;
-using SharpMediaFoundationInterop.Transforms.VP9;
+using SharpMediaFoundationInterop.Transforms;
 using SharpMediaFoundationInterop.Utils;
 using SharpMP4.Readers;
 using SharpMP4.Tracks;
@@ -449,8 +443,8 @@ namespace SharpMediaFoundationInterop.WPF
                         videoInfo.FpsNom = h264Track.Timescale;
                         videoInfo.FpsDenom = (uint)h264Track.DefaultSampleDuration;
 
-                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H264Decoder.H264_RES_MULTIPLE);
-                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H264Decoder.H264_RES_MULTIPLE);
+                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, MediaCodecs.DecoderAlignment(VideoCodec.H264));
+                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, MediaCodecs.DecoderAlignment(VideoCodec.H264));
                     }
                     else if (_videoTrack is H265Track h265Track)
                     {
@@ -463,8 +457,8 @@ namespace SharpMediaFoundationInterop.WPF
                         videoInfo.FpsNom = h265Track.Timescale;
                         videoInfo.FpsDenom = (uint)h265Track.DefaultSampleDuration;
 
-                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, H265Decoder.H265_RES_MULTIPLE);
-                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, H265Decoder.H265_RES_MULTIPLE);
+                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, MediaCodecs.DecoderAlignment(VideoCodec.H265));
+                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, MediaCodecs.DecoderAlignment(VideoCodec.H265));
                     }
                     else if (_videoTrack is AV1Track av1Track)
                     {
@@ -477,8 +471,8 @@ namespace SharpMediaFoundationInterop.WPF
                         videoInfo.FpsNom = av1Track.Timescale;
                         videoInfo.FpsDenom = (uint)av1Track.DefaultSampleDuration;
 
-                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, AV1Decoder.AV1_RES_MULTIPLE);
-                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, AV1Decoder.AV1_RES_MULTIPLE);
+                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, MediaCodecs.DecoderAlignment(VideoCodec.AV1));
+                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, MediaCodecs.DecoderAlignment(VideoCodec.AV1));
                     }
                     else if (_videoTrack is VP9Track vp9Track)
                     {
@@ -494,15 +488,15 @@ namespace SharpMediaFoundationInterop.WPF
                         videoInfo.FpsNom = vp9Track.Timescale;
                         videoInfo.FpsDenom = (uint)vp9Track.DefaultSampleDuration;
 
-                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, VP9Decoder.VP9_RES_MULTIPLE);
-                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, VP9Decoder.VP9_RES_MULTIPLE);
+                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, MediaCodecs.DecoderAlignment(VideoCodec.VP9));
+                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, MediaCodecs.DecoderAlignment(VideoCodec.VP9));
                     }
                     else if (_wholeSamples)
                     {
                         // MPEG-1 as MPEG-2: the one decoder decodes both
                         videoInfo.VideoCodec = _videoTrack is H262Track ? "H262" : _videoTrack is H263Track ? "H263" : "MPEG4";
-                        uint multiple = _videoTrack is H262Track ? H262Decoder.H262_RES_MULTIPLE
-                            : _videoTrack is H263Track ? H263Decoder.H263_RES_MULTIPLE : Mpeg4Decoder.MPEG4_RES_MULTIPLE;
+                        uint multiple = MediaCodecs.DecoderAlignment(
+                            _videoTrack is H262Track ? VideoCodec.H262 : _videoTrack is H263Track ? VideoCodec.H263 : VideoCodec.Mpeg4);
 
                         // the sizes the sample entry gives, as for VP9
                         var entry = _reader.Tracks[_videoTrack.TrackID].Stbl
@@ -541,10 +535,11 @@ namespace SharpMediaFoundationInterop.WPF
                     else if(_audioTrack is OpusTrack opusTrack)
                     {
                         audioInfo.AudioCodec = "OPUS";
-                        audioInfo.BitsPerSample = 32; // Opus is always 32 bit, but we transform it to 16-bit PCM
+                        audioInfo.BitsPerSample = 32; // Opus decodes to 32 bit float, which is turned into 32 bit integer PCM
                         audioInfo.ChannelCount = opusTrack.ChannelCount;
                         audioInfo.ChannelConfiguration = opusTrack.ChannelCount;
                         audioInfo.SampleRate = opusTrack.SamplingRate;
+                        audioInfo.SkipSamples = opusTrack.PreSkip;
                     }
                     else
                     {

@@ -1,10 +1,12 @@
 ﻿using SharpMediaFoundationInterop.Utils;
+using System.Runtime.Versioning;
 using System;
 using Windows.Win32;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms.AV1
 {
+    [SupportedOSPlatform("windows10.0.17763.0")]
     public class AV1Decoder : VideoTransformBase
     {
         public const uint AV1_RES_MULTIPLE = 1;
@@ -33,6 +35,8 @@ namespace SharpMediaFoundationInterop.Transforms.AV1
 
             // on the GPU, where a device was given and the transform can use one
             AttachDeviceManager(transform);
+
+            ApplyCodecProperties(transform);
 
             IMFMediaType mediaInput;
             MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaInput));

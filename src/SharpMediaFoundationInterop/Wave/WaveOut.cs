@@ -2,14 +2,17 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Threading;
+using SharpMediaFoundationInterop.Devices;
 using Windows.Win32;
 using Windows.Win32.Media;
 using Windows.Win32.Media.Audio;
 
 namespace SharpMediaFoundationInterop.Wave
 {   
-    public class WaveOut : IDisposable
+    [SupportedOSPlatform("windows10.0.17763.0")]
+    public class WaveOut : IAudioOutput
     {
         const int TIME_MS = 0x0001;
         const int TIME_SAMPLES = 0x0002;
@@ -23,6 +26,13 @@ namespace SharpMediaFoundationInterop.Wave
         public const uint WAVE_MAPPER = unchecked((uint)-1);
 
         private HWAVEOUT _hDevice;
+
+        /// <summary>The device it plays on: <see cref="WAVE_MAPPER"/>, the system's default, unless one is given.</summary>
+        public uint DeviceID { get; private set; } = WAVE_MAPPER;
+
+        public uint SampleRate { get; private set; } = 48000;
+        public uint Channels { get; private set; } = 2;
+        public uint BitsPerSample { get; private set; } = 16;
 
         private int _queuedFrames = 0;
         public int QueuedFrames {  get { return _queuedFrames; } }
@@ -38,6 +48,24 @@ namespace SharpMediaFoundationInterop.Wave
         // https://github.com/microsoft/CsWin32/issues/623
         private Delegate _callback; // hold on to the delegate so that it does not get garbage collected
 
+        public WaveOut()
+        { }
+
+        /// <summary>Of the device and the format <see cref="Initialize()"/> opens it for.</summary>
+        public WaveOut(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample)
+        {
+            DeviceID = deviceID;
+            SampleRate = samplesPerSecond;
+            Channels = channels;
+            BitsPerSample = bitsPerSample;
+        }
+
+        /// <summary>Opens the device and the format it was made for.</summary>
+        public void Initialize()
+        {
+            Initialize(DeviceID, SampleRate, Channels, BitsPerSample);
+        }
+
         public void Initialize(uint samplesPerSecond, uint channels, uint bitsPerSample)
         {
             Initialize(WAVE_MAPPER, samplesPerSecond, channels, bitsPerSample);
@@ -46,6 +74,11 @@ namespace SharpMediaFoundationInterop.Wave
         public unsafe void Initialize(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample)
         {
             Close();
+
+            DeviceID = deviceID;
+            SampleRate = samplesPerSecond;
+            Channels = channels;
+            BitsPerSample = bitsPerSample;
 
             if (_audioBuffer == nint.Zero)
             { 
