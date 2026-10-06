@@ -6,7 +6,7 @@ using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Transforms
 {
-    public abstract class VideoTransformBase : MediaTransformBase, IMediaVideoTransform
+    public abstract class VideoTransformBase : MediaTransformBase, IMediaFoundationVideoTransform
     {
         protected long _sampleDuration = 1;
         protected IMFTransform _transform;
