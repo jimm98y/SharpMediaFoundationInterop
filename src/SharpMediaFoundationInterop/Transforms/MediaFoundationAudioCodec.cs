@@ -40,6 +40,8 @@ namespace SharpMediaFoundationInterop.Transforms
         public virtual bool ProcessOutput(ref byte[] buffer, out uint length) => Transform.ProcessOutput(ref buffer, out length);
 
         public bool Drain() => Transform.Drain();
+        public void BeginDrain() => Transform.BeginDrain();
+        public void EndDrain() => Transform.EndDrain();
         public virtual void Flush() => Transform.Flush();
 
         protected virtual void Dispose(bool disposing)

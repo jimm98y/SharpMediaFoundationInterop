@@ -1,44 +1,60 @@
 # Sharp Media Foundation Interop
-Simple Windows Media Foundation interop written in C#. No native dependencies, only managed code. Windows only, for H265 and AV1 support it requires you to install extensions from the Microsoft Store.
+Simple Windows Media Foundation interop written in C#. No native dependencies, only managed code.
 
 [![NuGet version](https://img.shields.io/nuget/v/SharpMediaFoundationInterop.svg?style=flat-square)](https://www.nuget.org/packages/SharpMediaFoundationInterop)
 
+## Platforms
+The library is one plain `net8.0`/`net10.0` DLL. Its codecs and devices are reached through interfaces that belong to no platform - `IMediaVideoTransform`, `IMediaAudioTransform`, `IMediaVideoSource`, `IAudioOutput`, `IAudioInput` - made by two factories, `MediaCodecs` and `MediaDevices`, which pick what the system has. Today that is Windows 10 1809 or later, with Media Foundation's codecs, waveOut/waveIn and DXGI; everything Windows-specific is marked `[SupportedOSPlatform("windows10.0.17763.0")]` and only called there. Elsewhere the factories report nothing: `MediaCodecs.CanDecode`/`CanEncode` return false, the device lists are empty, and creating one throws `PlatformNotSupportedException`. Code written against the factories needs no change when another platform's backend is added.
+
+The Windows classes behind the factories (`H265Decoder`, `AACEncoder`, `WaveOut`, `ScreenCapture`, ...) stay public for what only Media Foundation has: decoding on the GPU through `IMediaFoundationVideoTransform`, or ICodecAPI properties through `CodecProperties`.
+
 ## Codecs
-Supported video codecs are:
+Supported video codecs (`VideoCodec`) are:
 - H264 (built-in Windows)
 - H265 (requires paid HEVC Video Extensions from the Microsoft Store)
 - AV1 (requires free AV1 Video Extensions from the Microsoft Store)
+- VP9 (requires free VP9 Video Extensions from the Microsoft Store)
 - MPEG-2 and MPEG-1, decoding only (requires MPEG-2 Video Extension from the Microsoft Store)
 - H263, decoding only (built-in Windows)
 - MPEG-4 Part 2, decoding only (built-in Windows; B-frames are skipped, Windows decodes them blank)
 
-Windows has no usable encoder for MPEG-1/2, H263 or MPEG-4 Part 2, and no H261 decoder.
+Windows has no usable encoder for MPEG-1/2, H263 or MPEG-4 Part 2, and no H261 decoder. Nor has it AC-3 or E-AC-3 decoders: those it once had are gone, and what is left passes the stream on to a receiver over S/PDIF. Whether an extension is installed shows only when the codec is initialized, which then throws `NotSupportedException`.
 
-Supported audio codecs are:
+Supported audio codecs (`AudioCodec`) are:
 - AAC (built-in Windows)
-- Opus (built-in Windows, might require a newer version - works in Windows 11 25H2)
+- MP3 (built-in Windows; the encoder at 32000, 44100 or 48000 Hz, or MPEG-2's lower rates, and its own list of bit rates)
+- FLAC, 16 and 24 bits (built-in Windows)
+- ALAC, 16 and 24 bits (built-in Windows; the encoder pads the last frame to 4096 samples with silence)
+- Opus (built-in Windows, might require a newer version - works in Windows 11 25H2). The decoder takes mono and stereo, not more channels. The encoder is not on every Windows: where the system has none, `Initialize` throws `NotSupportedException`.
 
 ## Video decoding
-Create and initialize the decoder (all decoders have the same API):
+Create and initialize the decoder; every codec has the same API. The size is the coded one, as the stream's parameter sets give it:
 ```cs
-using (var videoDecoder = new AV1Decoder(width, height, timescale, defaultSampleDuration))
+var options = new VideoDecoderOptions
+{
+   Width = width,
+   Height = height,
+   FpsNom = timescale,               // a hint; 0 over 0 where the stream does not say
+   FpsDenom = defaultSampleDuration,
+};
+using (var videoDecoder = MediaCodecs.CreateVideoDecoder(VideoCodec.AV1, options))
 {
    videoDecoder.Initialize();
    ...
 }
 ```
-Create a buffer to hold the decoded frame:
+Frames come out as NV12, padded to the size the decoder works in: `videoDecoder.Width` by `videoDecoder.Height`, or `MediaCodecs.DecoderAlignment(codec)` before there is a decoder. Create a buffer to hold the decoded frame:
 ```cs
 var nv12Buffer = new byte[videoDecoder.OutputSize];
 ```
-Pass the frame to the decoder and get the output:
+Pass the frame to the decoder and get the output. A decoder hands frames out in display order, each with the timestamp of the input it came from:
 ```cs
 IEnumerable<byte[]> units = ...; // get a list of NALU/OBU from your video source
 foreach (var unit in units)
 {
-   if (videoDecoder.ProcessInput(unit, 0))
+   if (videoDecoder.ProcessInput(unit, timestamp))
    {
-      while (videoDecoder.ProcessOutput(ref nv12Buffer, out _))
+      while (videoDecoder.ProcessOutput(ref nv12Buffer, out _, out long frameTime))
       {
          // nv12Buffer holds the decoded nv12 frame
          ...
@@ -46,7 +62,16 @@ foreach (var unit in units)
    }
 }
 ```
-Optionally, decode nv12 to RGB to display it:
+At the end of the stream, drain the frames the decoder still holds, and read them out before taking input again - audio decoders and encoders alike:
+```cs
+videoDecoder.BeginDrain();
+while (videoDecoder.ProcessOutput(ref nv12Buffer, out _, out long frameTime))
+{
+   ...
+}
+videoDecoder.EndDrain();
+```
+On Windows, convert NV12 to RGB for display with Media Foundation's color converter:
 ```cs
 using(var nv12Decoder = new ColorConverter(PInvoke.MFVideoFormat_NV12, PInvoke.MFVideoFormat_RGB24, width, height))
 {
@@ -64,15 +89,30 @@ using(var nv12Decoder = new ColorConverter(PInvoke.MFVideoFormat_NV12, PInvoke.M
 }
 ```
 ## Video encoding
-Create and initialize the encoder (all encoders have the same API):
+Create and initialize the encoder; every codec has the same API:
 ```cs
-using (var videoEncoder = new H265Encoder(width, height, timescale, defaultSampleDuration))
+var options = new VideoEncoderOptions
+{
+   Width = width,
+   Height = height,
+   FpsNom = timescale,
+   FpsDenom = defaultSampleDuration,
+   Bitrate = 8000000,
+   RateControl = RateControlMode.ConstantQp, // or Default, ConstantBitrate, VariableBitrate, Quality
+   Qp = 24,
+   KeyFrameInterval = 60,                    // 0 leaves it to the encoder
+};
+using (var videoEncoder = MediaCodecs.CreateVideoEncoder(VideoCodec.H265, options))
 {
    videoEncoder.Initialize();
+
+   // support for each setting varies by codec and vendor: a setting the encoder did not take is reported, not thrown
+   foreach (var setting in videoEncoder.UnappliedSettings)
+      Console.WriteLine(setting);
    ...
 }
 ```
-Optionally, convert RGB to nv12:
+Optionally, on Windows, convert RGB to nv12:
 ```cs
 using(var nv12Encoder = new ColorConverter(PInvoke.MFVideoFormat_RGB24, PInvoke.MFVideoFormat_NV12, width, height))
 {
@@ -109,15 +149,22 @@ if (videoEncoder.ProcessInput(nv12Buffer, timestamp))
 }
 ```
 ## Audio decoding
-Create and initialize the decoder:
+Create and initialize the decoder. AAC needs its AudioSpecificConfig, which the MP4 file's `esds` box holds; FLAC its metadata blocks, each with its header, as the `dfLa` box holds them; ALAC its ALACSpecificConfig, the 24 byte magic cookie. The channels, rate and bits of FLAC and ALAC are read of those. MP3 needs no config, and Opus none, but give Opus its pre-skip, the samples the decoder needs to warm up, so that they are dropped:
 ```cs
-using (var audioDecoder = new OpusDecoder(960, channelCount, samplingRate, bitsPerSample))
+var options = new AudioDecoderOptions
+{
+   Channels = channelCount,
+   SampleRate = samplingRate,
+   Config = aacTrack.AudioSpecificConfig.ToBytes(), // AAC
+   SkipSamples = opusTrack.PreSkip,                 // Opus
+};
+using (var audioDecoder = MediaCodecs.CreateAudioDecoder(AudioCodec.AAC, options))
 {
    audioDecoder.Initialize();
    ...
 }
 ```
-Create a buffer to hold the decoded frame:
+AAC and MP3 decode to 16 bit PCM, Opus to 32 bit float, FLAC and ALAC to PCM of the stream's own bits. Create a buffer to hold the decoded frame:
 ```cs
 var pcmBuffer = new byte[audioDecoder.OutputSize];
 ```
@@ -128,7 +175,7 @@ foreach (var audioFrame in audioFrames)
 {
    if (audioDecoder.ProcessInput(audioFrame, 0))
    {
-      while (audioDecoder.ProcessOutput(ref pcmBuffer, out _))
+      while (audioDecoder.ProcessOutput(ref pcmBuffer, out var length))
       {
          // pcmBuffer holds the decoded audio
          ...
@@ -137,13 +184,15 @@ foreach (var audioFrame in audioFrames)
 }
 ```
 ## Audio encoding
-Create and initialize the encoder:
+Create and initialize the encoder. Windows' AAC encoder takes 44100 or 48000 Hz, 16 bit PCM, 1024 samples a frame; FLAC and ALAC 16 or 24 bit PCM (`BitsPerSample`), a frame of 4096 samples; MP3 16 bit PCM, at the `Bitrate` nearest its list. The config for the MP4 file is `Config`: AAC's AudioSpecificConfig, FLAC's metadata blocks - complete, with the total samples and MD5, once the encoder is drained - or ALAC's magic cookie:
 ```cs
-using (var audioEncoder = new AACEncoder(channelCount, samplingRate, AACDecoder.CreateUserData(aacTrack.AudioSpecificConfig.ToBytes()), channelConfiguration))
+var options = new AudioEncoderOptions { Channels = channelCount, SampleRate = samplingRate };
+using (var audioEncoder = MediaCodecs.CreateAudioEncoder(AudioCodec.AAC, options))
 {
    audioEncoder.Initialize();
 
-   // audioDecoder.UserData holds the AAC user data
+   // the AudioSpecificConfig, for the MP4 file's esds box
+   byte[] audioSpecificConfig = audioEncoder.Config;
    ...
 }
 ```
@@ -151,14 +200,14 @@ Create a buffer to hold the encoded frame:
 ```cs
 var aacBuffer = new byte[audioEncoder.OutputSize];
 ```
-Pass the frame to the decoder and get the output:
+Pass the frame to the encoder and get the output:
 ```cs
 IEnumerable<byte[]> pcmFrames = ...; // get a list of frames from your audio source
 foreach (var pcmFrame in pcmFrames)
 {
    if (audioEncoder.ProcessInput(pcmFrame, 0))
    {
-      while (audioEncoder.ProcessOutput(ref aacBuffer, out _))
+      while (audioEncoder.ProcessOutput(ref aacBuffer, out var length))
       {
          // aacBuffer holds the encoded AAC audio
          ...
@@ -166,99 +215,84 @@ foreach (var pcmFrame in pcmFrames)
    }
 }
 ```
-## Screen capture
-Captures your screen using the [DuplicateOutput1](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_5/nf-dxgi1_5-idxgioutput5-duplicateoutput1) API. Start by enumerating the screens:
+## Devices
+`MediaDevices` lists the system's devices with `GetScreens()`, `GetCameras()`, `GetAudioOutputs()` and `GetAudioInputs()`, each a `MediaDevice` with an `Id` and a `Name`, and creates them. Leave the device null for the system's default.
+
+### Screen capture
+Captures a screen as 32 bit BGRA (on Windows, with the [DuplicateOutput1](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_5/nf-dxgi1_5-idxgioutput5-duplicateoutput1) API). Rows are bottom-up by default, as Media Foundation's RGB formats are, or top-down, as a bitmap is:
 ```cs
-var screens = ScreenCapture.Enumerate();
-```
-Create the capture object:
-```cs
-using (var screenCapture = new ScreenCapture())
+var screens = MediaDevices.GetScreens(); // the primary first
+using (var screenCapture = MediaDevices.CreateScreenCapture(screens.First(), topDown: false))
 {
+   screenCapture.Initialize();
    ...
 }
-```
-Initialize the selected screen capture:
-```cs
-screenCapture.Initialize(screens.First()); // select the screen (here we take the first one)
 ```
 Create a buffer to hold the sample:
 ```cs
 var buffer = new byte[screenCapture.OutputSize];
 ```
-Read the sample:
+Read the sample. A frame is returned only when the screen has changed:
 ```cs
 if (screenCapture.ReadSample(buffer, out var timestamp))
 {
    // captured screen is in the buffer
 }
 ```
-## Device capture
-Captures any Media Foundation device such as a webcam. Start by enumerating the devices:
+### Camera capture
+Captures a camera (on Windows, any Media Foundation video capture device such as a webcam) in the best format it offers, which `OutputFormat` reports:
 ```cs
-var devices = DeviceCapture.Enumerate();
-```
-Create the capture object:
-```cs
-using(var device = new DeviceCapture())
+var cameras = MediaDevices.GetCameras();
+using (var camera = MediaDevices.CreateCameraCapture(cameras.First()))
 {
+   camera.Initialize();
    ...
 }
 ```
-Initialize the selected device:
-```cs
-device.Initialize(devices.First()); // select the device (here we take the first one) 
-```
 Create a buffer to hold the sample:
 ```cs
-var buffer = new byte[device.OutputSize];
+var buffer = new byte[camera.OutputSize];
 ```
 Read the sample:
 ```cs
-if (device.ReadSample(buffer, out var timestamp))
+if (camera.ReadSample(buffer, out var timestamp))
 {
    // captured image is in the buffer
 }
 ```
-## Audio input
-Audio input is implemented using the [waveIn](https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveinopen) API. 
-Start with creating the `WaveIn`:
+### Audio input
+Records PCM (on Windows, with the [waveIn](https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveinopen) API):
 ```cs
-using(var waveIn = new WaveIn())
+using (var audioInput = MediaDevices.CreateAudioInput(sampleRate, channelCount, bitsPerSample))
 {
     ...
 }
 ```
 Subscribe the `FrameReceived` callback:
 ```cs
-waveIn.FrameReceived += (sender, e) => 
+audioInput.FrameReceived += (sender, e) => 
 {
     byte[] pcmData = e.Data;
     ...
-}
+};
 ```
-Recording starts right after you call `Initialize`. 
+Recording starts right after you call `Initialize`, and stops with `Reset` or `Dispose`:
 ```cs
-waveIn.Initialize(sampleRate, channelCount, bitsPerSample);
+audioInput.Initialize();
 ```
-To stop the recording, call `Close` or `Dispose` the object:
+### Audio output
+Plays PCM (on Windows, with the [waveOut](https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveoutopen) API):
 ```cs
-waveIn.Close();
-```
-## Audio output
-Audio output is implemented using the [waveOut](https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveoutopen) API.
-Start with creating the `WaveOut`:
-```cs
-using(var waveOut = new WaveOut())
+using (var audioOutput = MediaDevices.CreateAudioOutput(sampleRate, channelCount, bitsPerSample))
 {
-    waveOut.Initialize(sampleRate, channelCount, bitsPerSample);
+    audioOutput.Initialize();
     ...
 }
 ```
-To playback audio, just enqueue it:
+To play audio, enqueue it. `QueuedFrames` is the number of buffers still to play, `GetPosition()` the bytes played so far, and `Pause`, `Resume` and `Reset` control playback:
 ```cs
 byte[] pcmSample = ...
-waveOut.Enqueue(pcmSample, (uint)pcmSample.Length);
+audioOutput.Enqueue(pcmSample, (uint)pcmSample.Length);
 ```
 ## Video control
 `VideoControl` (drawn into a bitmap) and `VideoControlD3D` (drawn with Direct3D) play a video source, with a bar of controls over the bottom of the video. The bar shows as the mouse moves over the video and fades out after `ControlsHideDelay`, or as the mouse leaves; it stays while the video is paused. Set `AutoHideControls="False"` to always show it, or `ShowControls="False"` to never show it.

@@ -541,10 +541,32 @@ namespace SharpMediaFoundationInterop.WPF
                         audioInfo.SampleRate = opusTrack.SamplingRate;
                         audioInfo.SkipSamples = opusTrack.PreSkip;
                     }
+                    else if (_audioTrack is Mp3Track mp3Track)
+                    {
+                        audioInfo.AudioCodec = "MP3";
+                        audioInfo.BitsPerSample = 16;
+                        audioInfo.ChannelCount = mp3Track.ChannelCount;
+                        audioInfo.SampleRate = mp3Track.SamplingRate;
+                    }
+                    else if (_audioTrack is FlacTrack flacTrack)
+                    {
+                        audioInfo.AudioCodec = "FLAC";
+                        audioInfo.BitsPerSample = flacTrack.BitsPerSample > 16 ? 32u : 16u; // 24 bit decoded, widened to 32 to play
+                        audioInfo.ChannelCount = flacTrack.ChannelCount;
+                        audioInfo.SampleRate = flacTrack.SamplingRate;
+                        audioInfo.UserData = flacTrack.CreateStreamHeader().AsSpan(4).ToArray(); // the blocks, without 'fLaC'
+                    }
+                    else if (_audioTrack is AlacTrack alacTrack)
+                    {
+                        audioInfo.AudioCodec = "ALAC";
+                        audioInfo.BitsPerSample = alacTrack.BitDepth > 16 ? 32u : 16u; // 24 bit decoded, widened to 32 to play
+                        audioInfo.ChannelCount = alacTrack.ChannelCount;
+                        audioInfo.SampleRate = alacTrack.SamplingRate;
+                        audioInfo.UserData = alacTrack.Config;
+                    }
                     else
                     {
-                        //throw new NotSupportedException();
-                        // no audio
+                        // no audio: AC-3 and E-AC-3 too, whose decoders Windows no longer has
                         audioInfo = null;
                     }
                 }

@@ -60,6 +60,10 @@ namespace SharpMediaFoundationInterop.Transforms
             return ret;
         }
 
+        /// <summary>An output of no data, its sample's attributes alone: overridden by a codec that reads them.</summary>
+        protected virtual void OnOutputWithoutData(IMFSample sample)
+        { }
+
         protected bool ProcessOutput(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length)
         {
             return Output(0, transform, dataBuffer, ref buffer, out length, out _);
@@ -102,13 +106,38 @@ namespace SharpMediaFoundationInterop.Transforms
         private bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length, out long timestamp)
         {
             length = 0;
-            bool ours = dataBuffer[0].pSample != null;
+            IMFSample mine = dataBuffer[0].pSample;
             if (!OutputSample(streamID, transform, dataBuffer, out IMFSample sample, out timestamp))
+            {
+                dataBuffer[0].pSample = mine;
                 return false;
+            }
+
+            // A transform may hand out a sample of its own in place of the one it was given, though it does not say it
+            // provides its own - as FLAC's encoder does: that one is let go of once read, and ours put back.
+            bool ours = mine != null && ReferenceEquals(sample, mine);
+
+            // A sample of no buffer says something in its attributes alone - FLAC's encoder's final stream info, as it
+            // drains: whoever reads it reads it, and the next output is handed out in its place.
+            sample.GetBufferCount(out uint buffers);
+            if (buffers == 0)
+            {
+                OnOutputWithoutData(sample);
+                if (!ours)
+                    Marshal.ReleaseComObject(sample);
+                dataBuffer[0].pSample = mine;
+                return Output(streamID, transform, dataBuffer, ref bytes, out length, out timestamp);
+            }
 
             try
             {
-                sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
+                // a sample of one buffer read from that buffer: FLAC's encoder's own samples refuse to be made contiguous,
+                // E_UNEXPECTED, though they are of one buffer
+                IMFMediaBuffer buffer;
+                if (buffers == 1)
+                    sample.GetBufferByIndex(0, out buffer);
+                else
+                    sample.ConvertToContiguousBuffer(out buffer);
                 try
                 {
                     return MediaUtils.CopyBuffer(buffer, bytes, out length);
@@ -124,7 +153,7 @@ namespace SharpMediaFoundationInterop.Transforms
                 if (!ours)
                 {
                     Marshal.ReleaseComObject(sample);
-                    dataBuffer[0].pSample = null;
+                    dataBuffer[0].pSample = mine;
                 }
             }
         }

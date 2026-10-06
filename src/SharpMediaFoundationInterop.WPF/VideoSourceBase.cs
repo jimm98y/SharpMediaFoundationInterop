@@ -106,7 +106,6 @@ namespace SharpMediaFoundationInterop.WPF
                 return sample.Pcm;
             }
 
-            long bytesPerSecond = (long)audioInfo.SampleRate * audioInfo.ChannelCount * audioInfo.BitsPerSample / 8;
             IList<ArraySegment<byte>> frame;
             while (_audioRenderQueue.Count == 0 && (frame = ReadNextAudio(out long frameTime)) != null)
             {
@@ -114,38 +113,17 @@ namespace SharpMediaFoundationInterop.WPF
                     _audioOutTime = frameTime;
 
                 if (_audioDecoder.ProcessInput(frame[0], 0))
-                {
-                    while (_audioDecoder.ProcessOutput(ref _pcmBuffer, out var pcmSize))
-                    {
-                        long pcmTime = _audioOutTime;
-                        if (_audioOutTime >= 0 && bytesPerSecond > 0)
-                            _audioOutTime += pcmSize * TimeSpan.TicksPerSecond / bytesPerSecond;
+                    TakeDecodedAudio();
+            }
 
-                        if (_audioIsFloat)
-                        {
-                            byte[] decoded = RentAudio((int)pcmSize);
-                            for (int i = 0; i < pcmSize / 4; i++)
-                            {
-                                float ieeeFloat = BitConverter.ToSingle(_pcmBuffer, i * 4);
-                                ieeeFloat = Math.Clamp(ieeeFloat, -1.0f, 1.0f);                                
-                                int pcm = (int)(ieeeFloat * int.MaxValue);
-                                decoded[i * 4 + 0] = (byte)((pcm & 0x000000FF) >> 0);
-                                decoded[i * 4 + 1] = (byte)((pcm & 0x0000FF00) >> 8);
-                                decoded[i * 4 + 2] = (byte)((pcm & 0x00FF0000) >> 16);
-                                decoded[i * 4 + 3] = (byte)((pcm & 0xFF000000) >> 24);
-                            }
-                            _audioRenderQueue.Enqueue((decoded, pcmTime));
-                            Interlocked.Increment(ref _audioFrames);
-                        }
-                        else
-                        {
-                            byte[] decoded = RentAudio((int)pcmSize);
-                            Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
-                            _audioRenderQueue.Enqueue((decoded, pcmTime));
-                            Interlocked.Increment(ref _audioFrames);
-                        }
-                    }
-                }
+            // the end of the file's sound: what the decoder still holds - FLAC's last frame, which it hands out only as
+            // the next goes in - drained into the queue once, before the end is said
+            if (_audioRenderQueue.IsEmpty && !IsStreaming && !_audioDrained)
+            {
+                _audioDrained = true;
+                _audioDecoder.BeginDrain();
+                TakeDecodedAudio();
+                _audioDecoder.EndDrain();
             }
 
             if (_audioRenderQueue.TryDequeue(out sample))
@@ -177,11 +155,75 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>Whether the audio has come to its end, with the video still going on: see <see cref="Seek"/>.</summary>
         private bool _audioEnded;
 
-        /// <summary>
-        /// Whether the audio decoder hands out 32 bit float, as Opus's does, which is turned into 32 bit integer PCM for the
-        /// output; rather than integer PCM, as AAC's does, which is played as it is.
-        /// </summary>
-        private bool _audioIsFloat;
+        /// <summary>Whether the decoder has been drained at the end of the sound: once, until a seek.</summary>
+        private bool _audioDrained;
+
+        /// <summary>Each frame the audio decoder hands out, as it is to be played, into the queue, timed as it goes.</summary>
+        private void TakeDecodedAudio()
+        {
+            while (_audioDecoder.ProcessOutput(ref _pcmBuffer, out var pcmSize))
+            {
+                // timed by the bytes the decoder handed out, of its own format: of 24 bit PCM, played as 32
+                long pcmTime = _audioOutTime;
+                if (_audioOutTime >= 0 && _decodedBytesPerSecond > 0)
+                    _audioOutTime += pcmSize * TimeSpan.TicksPerSecond / _decodedBytesPerSecond;
+
+                if (_audioConversion == AudioConversion.Int24ToInt32)
+                {
+                    byte[] widened = RentAudio((int)(pcmSize / 3 * 4));
+                    for (int i = 0, j = 0; i + 2 < pcmSize; i += 3, j += 4)
+                    {
+                        widened[j] = 0;
+                        widened[j + 1] = _pcmBuffer[i];
+                        widened[j + 2] = _pcmBuffer[i + 1];
+                        widened[j + 3] = _pcmBuffer[i + 2];
+                    }
+                    _audioRenderQueue.Enqueue((widened, pcmTime));
+                    Interlocked.Increment(ref _audioFrames);
+                }
+                else if (_audioConversion == AudioConversion.FloatToInt32)
+                {
+                    byte[] decoded = RentAudio((int)pcmSize);
+                    for (int i = 0; i < pcmSize / 4; i++)
+                    {
+                        float ieeeFloat = BitConverter.ToSingle(_pcmBuffer, i * 4);
+                        ieeeFloat = Math.Clamp(ieeeFloat, -1.0f, 1.0f);                                
+                        int pcm = (int)(ieeeFloat * int.MaxValue);
+                        decoded[i * 4 + 0] = (byte)((pcm & 0x000000FF) >> 0);
+                        decoded[i * 4 + 1] = (byte)((pcm & 0x0000FF00) >> 8);
+                        decoded[i * 4 + 2] = (byte)((pcm & 0x00FF0000) >> 16);
+                        decoded[i * 4 + 3] = (byte)((pcm & 0xFF000000) >> 24);
+                    }
+                    _audioRenderQueue.Enqueue((decoded, pcmTime));
+                    Interlocked.Increment(ref _audioFrames);
+                }
+                else
+                {
+                    byte[] decoded = RentAudio((int)pcmSize);
+                    Buffer.BlockCopy(_pcmBuffer, 0, decoded, 0, (int)pcmSize);
+                    _audioRenderQueue.Enqueue((decoded, pcmTime));
+                    Interlocked.Increment(ref _audioFrames);
+                }
+            }
+        }
+
+        /// <summary>What the decoded sound is made into to be played, of the PCM the decoder hands out.</summary>
+        private enum AudioConversion
+        {
+            /// <summary>16 bit integer PCM, as AAC's, MP3's and of 16 bits FLAC's and ALAC's decoders hand out: played as it is.</summary>
+            None,
+
+            /// <summary>32 bit float, as Opus's decoder hands out: played as 32 bit integer PCM.</summary>
+            FloatToInt32,
+
+            /// <summary>24 bit integer PCM, as FLAC's and ALAC's decoders hand out of a stream of 24 bits: played as 32 bit.</summary>
+            Int24ToInt32,
+        }
+
+        private AudioConversion _audioConversion;
+
+        /// <summary>The bytes a second of the PCM the decoder hands out, which the sound is timed by.</summary>
+        private long _decodedBytesPerSecond;
 
         /// <summary>The time a seek done on the video's thread is to, for the sound to follow on its own; -1 where there is none.</summary>
         private long _pendingAudioSeek = -1;
@@ -201,6 +243,7 @@ namespace SharpMediaFoundationInterop.WPF
                 ReturnAudioSample(audio.Pcm);
             _audioOutTime = -1;
             _audioEnded = false;
+            _audioDrained = false;
             if (Rate == 1)
                 SeekAudio(seek);
         }
@@ -943,6 +986,9 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 "AAC" => AudioCodec.AAC,
                 "OPUS" => AudioCodec.Opus,
+                "MP3" => AudioCodec.Mp3,
+                "FLAC" => AudioCodec.Flac,
+                "ALAC" => AudioCodec.Alac,
                 _ => throw new NotSupportedException($"Audio codec {info.AudioCodec}")
             };
             _audioDecoder = MediaCodecs.CreateAudioDecoder(codec, new AudioDecoderOptions
@@ -953,7 +999,9 @@ namespace SharpMediaFoundationInterop.WPF
                 SkipSamples = info.SkipSamples,
             });
             _audioDecoder.Initialize();
-            _audioIsFloat = _audioDecoder.OutputFormat == PInvoke.MFAudioFormat_Float;
+            _audioConversion = _audioDecoder.OutputFormat == PInvoke.MFAudioFormat_Float ? AudioConversion.FloatToInt32
+                : _audioDecoder.BitsPerSample == 24 ? AudioConversion.Int24ToInt32 : AudioConversion.None;
+            _decodedBytesPerSecond = (long)_audioDecoder.SampleRate * _audioDecoder.Channels * _audioDecoder.BitsPerSample / 8;
 
             _pcmBuffer = new byte[_audioDecoder.OutputSize];
         }
