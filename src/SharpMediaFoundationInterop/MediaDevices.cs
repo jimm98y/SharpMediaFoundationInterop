@@ -30,10 +30,11 @@ namespace SharpMediaFoundationInterop
     /// The sound and picture devices of the system it runs on: what plays and records sound, behind <see cref="IAudioOutput"/>
     /// and <see cref="IAudioInput"/>, and what captures a camera or the screen, behind <see cref="IMediaVideoSource"/>. On
     /// Windows 10 1809 or later, waveOut's, waveIn's, Media Foundation's and DXGI's; on macOS 11 or later AudioQueue's,
-    /// AVFoundation's and - of macOS 12.3 - ScreenCaptureKit's. Elsewhere there are none yet: the lists are empty, and
-    /// creating one throws <see cref="PlatformNotSupportedException"/>. Each is to be initialized; a device left null is the
-    /// system's default. On macOS the user is asked, the first time, whether the app may use the microphone, the camera or
-    /// the screen.
+    /// AVFoundation's and - of macOS 12.3 - ScreenCaptureKit's; on Linux GStreamer's, the screen of the desktop portal's,
+    /// under Wayland. Elsewhere there are none: the lists are empty, and creating one throws
+    /// <see cref="PlatformNotSupportedException"/>. Each is to be initialized; a device left null is the system's default.
+    /// On macOS the user is asked, the first time, whether the app may use the microphone, the camera or the screen; on
+    /// Linux, each time a screen is captured, which screen to share.
     /// </summary>
     public static class MediaDevices
     {
@@ -46,11 +47,22 @@ namespace SharpMediaFoundationInterop
         [SupportedOSPlatformGuard("macos12.3")]
         private static bool IsMacOSScreenCapture => OperatingSystem.IsMacOSVersionAtLeast(12, 3);
 
+        [SupportedOSPlatformGuard("linux")]
+        private static bool IsLinux => OperatingSystem.IsLinux();
+
+        /// <summary>
+        /// The one screen of Linux's: under Wayland a client cannot list the screens, so the user picks one in the desktop
+        /// portal's dialog as the capture starts.
+        /// </summary>
+        private const string PortalScreenId = "portal";
+
         /// <summary>What can play sound.</summary>
         public static MediaDevice[] GetAudioOutputs()
         {
             if (IsMacOS)
                 return ToDevices(CoreAudio.Enumerate(CoreAudio.kAudioObjectPropertyScopeOutput));
+            if (IsLinux)
+                return ToDevices(GstDevices.List("Audio/Sink"));
             if (!IsSupported)
                 return Array.Empty<MediaDevice>();
             var devices = WaveOut.Enumerate();
@@ -65,6 +77,8 @@ namespace SharpMediaFoundationInterop
         {
             if (IsMacOS)
                 return ToDevices(CoreAudio.Enumerate(CoreAudio.kAudioObjectPropertyScopeInput));
+            if (IsLinux)
+                return ToDevices(GstDevices.List("Audio/Source"));
             if (!IsSupported)
                 return Array.Empty<MediaDevice>();
             var devices = WaveIn.Enumerate();
@@ -82,6 +96,8 @@ namespace SharpMediaFoundationInterop
                 var cameras = AVFoundationCapture.Enumerate();
                 return Array.ConvertAll(cameras, c => new MediaDevice(c.UniqueID, c.Name));
             }
+            if (IsLinux)
+                return ToDevices(GstDevices.List("Video/Source"));
             if (!IsSupported)
                 return Array.Empty<MediaDevice>();
             var devices = DeviceCapture.Enumerate();
@@ -99,6 +115,8 @@ namespace SharpMediaFoundationInterop
                 var screens = ScreenCaptureKitCapture.Enumerate();
                 return Array.ConvertAll(screens, s => new MediaDevice(s.DisplayID.ToString(CultureInfo.InvariantCulture), s.Name));
             }
+            if (IsLinux)
+                return Gst.IsAvailable ? [new MediaDevice(PortalScreenId, "Screen chosen in the desktop portal")] : Array.Empty<MediaDevice>();
             if (!IsSupported)
                 return Array.Empty<MediaDevice>();
             var devices = ScreenCapture.Enumerate();
@@ -115,6 +133,8 @@ namespace SharpMediaFoundationInterop
                 return new WaveOut(device == null ? WaveOut.WAVE_MAPPER : uint.Parse(device.Id), sampleRate, channels, bitsPerSample);
             if (IsMacOS)
                 return new AudioQueueOutput(device?.Id, sampleRate, channels, bitsPerSample);
+            if (IsLinux)
+                return new GStreamerAudioOutput(device?.Id, sampleRate, channels, bitsPerSample);
 
             throw new PlatformNotSupportedException(NoDevice("sound output"));
         }
@@ -126,6 +146,8 @@ namespace SharpMediaFoundationInterop
                 return new WaveIn(device == null ? WaveIn.WAVE_MAPPER : uint.Parse(device.Id), sampleRate, channels, bitsPerSample);
             if (IsMacOS)
                 return new AudioQueueInput(device?.Id, sampleRate, channels, bitsPerSample);
+            if (IsLinux)
+                return new GStreamerAudioInput(device?.Id, sampleRate, channels, bitsPerSample);
 
             throw new PlatformNotSupportedException(NoDevice("sound input"));
         }
@@ -140,6 +162,8 @@ namespace SharpMediaFoundationInterop
                 return new DeviceCapture(device?.Id);
             if (IsMacOS)
                 return new AVFoundationCapture(device?.Id);
+            if (IsLinux)
+                return new GStreamerCameraCapture(device?.Id);
 
             throw new PlatformNotSupportedException(NoDevice("camera capture"));
         }
@@ -164,6 +188,8 @@ namespace SharpMediaFoundationInterop
             }
             if (IsMacOSScreenCapture)
                 return new ScreenCaptureKitCapture(device == null ? 0 : uint.Parse(device.Id, CultureInfo.InvariantCulture)) { BottomUp = !topDown };
+            if (IsLinux)
+                return new PortalScreenCapture { BottomUp = !topDown };
 
             throw new PlatformNotSupportedException(NoDevice("screen capture"));
         }
@@ -171,7 +197,9 @@ namespace SharpMediaFoundationInterop
         [SupportedOSPlatform("macos11.0")]
         private static MediaDevice[] ToDevices(CoreAudioDevice[] devices) => Array.ConvertAll(devices, d => new MediaDevice(d.Uid, d.Name));
 
+        private static MediaDevice[] ToDevices((string Id, string Name)[] devices) => Array.ConvertAll(devices, d => new MediaDevice(d.Id, d.Name));
+
         private static string NoDevice(string what) =>
-            $"No {what} on this system: there are devices on Windows 10 1809 or later, and on macOS 11 or later - of screen capture, 12.3";
+            $"No {what} on this system: there are devices on Windows 10 1809 or later, on macOS 11 or later - of screen capture, 12.3 - and on Linux of GStreamer";
     }
 }

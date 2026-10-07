@@ -7,14 +7,17 @@ Simple Windows Media Foundation interop written in C#. No native dependencies, o
 The library is one plain `net8.0`/`net10.0` DLL. Its codecs and devices are reached through interfaces that belong to no platform - `IMediaVideoTransform`, `IMediaAudioTransform`, `IMediaVideoSource`, `IAudioOutput`, `IAudioInput` - made by two factories, `MediaCodecs` and `MediaDevices`, which pick what the system has:
 - Windows 10 1809 or later: Media Foundation's codecs, waveOut/waveIn, Media Foundation's camera capture and DXGI's desktop duplication. Everything Windows-specific is marked `[SupportedOSPlatform("windows10.0.17763.0")]` and only called there.
 - macOS 11 or later: VideoToolbox's and AudioToolbox's codecs, AudioQueue for sound out and in, AVFoundation for the camera, and ScreenCaptureKit (macOS 12.3 or later) for the screen. These are reached through P/Invoke as well - the system's C frameworks directly, AVFoundation and ScreenCaptureKit through the Objective-C runtime - so there is still no native dependency. Everything macOS-specific is marked `[SupportedOSPlatform("macos11.0")]` (`"macos12.3"` for screen capture).
+- Linux: GStreamer for the codecs, sound out and in, and the camera - the codecs and devices of whatever plugins are installed, a GPU's VA-API or V4L2 ones before the software ones - and, under Wayland, xdg-desktop-portal's ScreenCast for the screen, over libdbus-1, read through PipeWire. These are the libraries the WPF fork's Linux head uses, reached the same way: P/Invoke, no variadic calls. Everything Linux-specific is marked `[SupportedOSPlatform("linux")]`.
 
 The source follows the same split: `Codecs`, `Input`, `Output` and `Utils` each hold the interfaces and shared code, with the implementations of each platform in their `Windows` and `MacOS` folders. The namespaces are those four - `SharpMediaFoundationInterop.Codecs`, `.Input`, `.Output`, `.Utils` - whatever the platform, and `MediaDevices` is in `SharpMediaFoundationInterop` itself.
 
 Elsewhere the factories report nothing: `MediaCodecs.CanDecode`/`CanEncode` return false, the device lists are empty, and creating one throws `PlatformNotSupportedException`. Code written against the factories needs no change from one platform to another.
 
-The Windows classes behind the factories (`H265Decoder`, `AACEncoder`, `WaveOut`, `ScreenCapture`, ...) stay public for what only Media Foundation has: decoding on the GPU through `IMediaFoundationVideoTransform`, or ICodecAPI properties through `CodecProperties`. So do the macOS ones: `VideoToolboxDecoder`, `VideoToolboxEncoder`, `AudioToolboxDecoder`, `AudioToolboxEncoder`, `AudioQueueOutput`, `AudioQueueInput`, `AVFoundationCapture` and `ScreenCaptureKitCapture`.
+The Windows classes behind the factories (`H265Decoder`, `AACEncoder`, `WaveOut`, `ScreenCapture`, ...) stay public for what only Media Foundation has: decoding on the GPU through `IMediaFoundationVideoTransform`, or ICodecAPI properties through `CodecProperties`. So do the macOS ones: `VideoToolboxDecoder`, `VideoToolboxEncoder`, `AudioToolboxDecoder`, `AudioToolboxEncoder`, `AudioQueueOutput`, `AudioQueueInput`, `AVFoundationCapture` and `ScreenCaptureKitCapture`; and the Linux ones: `GStreamerVideoDecoder`, `GStreamerVideoEncoder` (whose `Element` names the encoder it chose), `GStreamerAudioDecoder`, `GStreamerAudioEncoder`, `GStreamerAudioOutput`, `GStreamerAudioInput`, `GStreamerCameraCapture` and `PortalScreenCapture`.
 
 On macOS the user is asked, the first time, whether the app may use the microphone, the camera or the screen; the permission belongs to the app the process runs in (for a console app, the terminal). Until it is given, the camera capture throws `UnauthorizedAccessException`, as the screen capture does - which asks macOS to show the request - and the microphone records silence. macOS applies a new screen recording permission only once the app is started again.
+
+On Linux, install GStreamer and its plugins - on Ubuntu or Debian `libgstreamer1.0-0`, `gstreamer1.0-plugins-base` and `-good` for the devices, and `-bad`, `-ugly` and `gstreamer1.0-libav` for the codecs - and, for the screen, `gstreamer1.0-pipewire` and an `xdg-desktop-portal` backend (`-gnome`, `-kde` or `-wlr`). What is not installed shows in `CanDecode`/`CanEncode` and the device lists. Under Wayland no app may list or read the screens itself: `GetScreens()` returns one device, and the user picks a screen in the desktop's dialog each time a capture is initialized, which throws `UnauthorizedAccessException` where they cancel. A codec of GStreamer's works on threads of its own, so a frame or packet comes out a little after its input went in: `ProcessOutput` returns what is ready, and draining returns the rest.
 
 ## Codecs
 Supported video codecs (`VideoCodec`) are:
@@ -34,6 +37,8 @@ macOS decodes every one of these video codecs with VideoToolbox, needing no exte
 
 macOS encodes H264 and H265 (H265 on Apple silicon, and Intel Macs whose GPU encodes it); it has no VP9 or AV1 encoder, which `MediaCodecs.CanEncode` reports.
 
+Linux decodes all of them, MPEG-4 Part 2's advanced simple profile included, with GStreamer's decoders, and encodes H264, H265, VP9 and AV1 with the first installed of VA-API's, V4L2's, x264, x265, libvpx, SVT-AV1 and libaom - each of its own properties for the rate control, what it has none of reported in `UnappliedSettings`.
+
 VideoToolbox is told a stream's configuration before it decodes, so the decoder is made as that configuration comes in band: the parameter sets of H264 and H265, the headers before the first MPEG-4 picture, the first VP9 key frame, the AV1 sequence header. Whatever comes before it is dropped.
 
 Supported audio codecs (`AudioCodec`) are:
@@ -43,7 +48,7 @@ Supported audio codecs (`AudioCodec`) are:
 - ALAC, 16 and 24 bits (built-in Windows; the encoder pads the last frame to 4096 samples with silence)
 - Opus (built-in Windows, might require a newer version - works in Windows 11 25H2). The decoder takes mono and stereo, not more channels. The encoder is not on every Windows: where the system has none, `Initialize` throws `NotSupportedException`.
 
-On macOS, AudioToolbox decodes all five, to the same PCM formats as on Windows; more than two channels come out in WAVE's order, as Windows' decoders give them. It encodes all but MP3, of which macOS has no encoder, taking the same PCM as Windows' encoders.
+On macOS, AudioToolbox decodes all five, to the same PCM formats as on Windows; more than two channels come out in WAVE's order, as Windows' decoders give them. It encodes all but MP3, of which macOS has no encoder, taking the same PCM as Windows' encoders. Linux decodes and encodes all five with GStreamer, of the same formats.
 
 ## Video decoding
 Create and initialize the decoder; every codec has the same API. The size is the coded one, as the stream's parameter sets give it:
@@ -357,7 +362,7 @@ var source = new StereoVideoSource(new VideoFileSource("left.mp4"), new VideoFil
 A 180 or 360 degree video (equirectangular, as a VR180 camera writes it, read from the file's `sv3d` box, or forced with `Projection`) is shown by `VideoControlD3D` as a view into the sphere, drawn on the GPU: drag to look around, use the wheel to zoom, and double-click to look straight ahead again. `Yaw`, `Pitch` and `FieldOfView` hold the view and can be bound to. Of a stereo VR video, `EyeView` shows one eye's view, or both side by side. `VideoControl` shows such a video flat.
 
 ## Samples
-The console samples run on Windows and macOS alike; the WPF player is Windows' alone. The recorders take how long to record, in seconds, as their first argument - `dotnet run -- 10` - or record until a key is pressed.
+The console samples run on Windows, macOS and Linux alike; the WPF player is Windows' alone. The recorders take how long to record, in seconds, as their first argument - `dotnet run -- 10` - or record until a key is pressed.
 
 ### SharpMediaPlayer
 Sample WPF video player that supports RTSP real-time video, MP4 files, AVIF/HEIC/HEIF images, screen capture and Media Foundation devices such as a webcam.
