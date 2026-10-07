@@ -1,6 +1,5 @@
-﻿using SharpMediaFoundationInterop.Devices;
-using SharpMediaFoundationInterop.Transforms;
-using SharpMediaFoundationInterop.Transforms.Colors;
+﻿using SharpMediaFoundationInterop.Codecs;
+using SharpMediaFoundationInterop.Input;
 using SharpMediaFoundationInterop.Utils;
 using System.Buffers;
 using Windows.Win32;

@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using SharpH264;
 using SharpISOBMFF;
-using SharpMediaFoundationInterop.Transforms;
+using SharpMediaFoundationInterop.Codecs;
 using SharpMediaFoundationInterop.Utils;
 using SharpMP4.Builders;
 using SharpMP4.Readers;
@@ -61,6 +61,27 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
 
                 byte[] croppedNV12 = new byte[dimensions.Width * dimensions.Height * 3 / 2];
 
+                void Write()
+                {
+                    while (videoEncoder.ProcessOutput(ref naluBuffer, out var length))
+                    {
+                        // the encoder's access unit as it hands it out, start codes and all, without a copy
+                        outputBuilder.ProcessAnnexBTrackSample(targetVideoTrack.TrackID, new ArraySegment<byte>(naluBuffer, 0, (int)length));
+                    }
+                }
+
+                void Encode()
+                {
+                    // each frame with the time of the sample it came of: the decoder puts its frames in the order they are shown by it
+                    while (videoDecoder.ProcessOutput(ref nv12Buffer, out _, out long frameTime))
+                    {
+                        // crop the green border from decoded H264
+                        BitmapUtils.CopyNV12Bitmap(nv12Buffer, (int)videoDecoder.Width, (int)videoDecoder.Height, croppedNV12, (int)dimensions.Width, (int)dimensions.Height, false);
+                        if (videoEncoder.ProcessInput(croppedNV12, frameTime))
+                            Write();
+                    }
+                }
+
                 var videoUnits = inputVideoTrack.GetContainerSamples();
                 foreach (var unit in videoUnits)
                 {
@@ -70,26 +91,21 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
                 MediaSample sample = null;
                 while ((sample = inputReader.ReadSample(inputVideoTrack.TrackID)) != null)
                 {
+                    long time = MediaUtils.ToTicks(sample.PTS, inputVideoTrack.Timescale);
                     foreach (var sourceNALU in inputReader.ParseSample(inputVideoTrack.TrackID, sample.Data))
                     {
-                        if (videoDecoder.ProcessInput(sourceNALU, 0))
-                        {
-                            while (videoDecoder.ProcessOutput(ref nv12Buffer, out _))
-                            {
-                                // crop the green border from decoded H264
-                                BitmapUtils.CopyNV12Bitmap(nv12Buffer, (int)videoDecoder.Width, (int)videoDecoder.Height, croppedNV12, (int)dimensions.Width, (int)dimensions.Height, false);
-                                if (videoEncoder.ProcessInput(croppedNV12, 0))
-                                {
-                                    while (videoEncoder.ProcessOutput(ref naluBuffer, out var length))
-                                    {
-                                        // the encoder's access unit as it hands it out, start codes and all, without a copy
-                                        outputBuilder.ProcessAnnexBTrackSample(targetVideoTrack.TrackID, new ArraySegment<byte>(naluBuffer, 0, (int)length));
-                                    }
-                                }
-                            }
-                        }
+                        if (videoDecoder.ProcessInput(sourceNALU, time))
+                            Encode();
                     }
                 }
+
+                // the frames the decoder, then the encoder, still hold
+                videoDecoder.BeginDrain();
+                Encode();
+                videoDecoder.EndDrain();
+                videoEncoder.BeginDrain();
+                Write();
+                videoEncoder.EndDrain();
 
                 while ((sample = inputReader.ReadSample(inputAudioTrack.TrackID)) != null)
                 {

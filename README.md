@@ -4,9 +4,17 @@ Simple Windows Media Foundation interop written in C#. No native dependencies, o
 [![NuGet version](https://img.shields.io/nuget/v/SharpMediaFoundationInterop.svg?style=flat-square)](https://www.nuget.org/packages/SharpMediaFoundationInterop)
 
 ## Platforms
-The library is one plain `net8.0`/`net10.0` DLL. Its codecs and devices are reached through interfaces that belong to no platform - `IMediaVideoTransform`, `IMediaAudioTransform`, `IMediaVideoSource`, `IAudioOutput`, `IAudioInput` - made by two factories, `MediaCodecs` and `MediaDevices`, which pick what the system has. Today that is Windows 10 1809 or later, with Media Foundation's codecs, waveOut/waveIn and DXGI; everything Windows-specific is marked `[SupportedOSPlatform("windows10.0.17763.0")]` and only called there. Elsewhere the factories report nothing: `MediaCodecs.CanDecode`/`CanEncode` return false, the device lists are empty, and creating one throws `PlatformNotSupportedException`. Code written against the factories needs no change when another platform's backend is added.
+The library is one plain `net8.0`/`net10.0` DLL. Its codecs and devices are reached through interfaces that belong to no platform - `IMediaVideoTransform`, `IMediaAudioTransform`, `IMediaVideoSource`, `IAudioOutput`, `IAudioInput` - made by two factories, `MediaCodecs` and `MediaDevices`, which pick what the system has:
+- Windows 10 1809 or later: Media Foundation's codecs, waveOut/waveIn, Media Foundation's camera capture and DXGI's desktop duplication. Everything Windows-specific is marked `[SupportedOSPlatform("windows10.0.17763.0")]` and only called there.
+- macOS 11 or later: VideoToolbox's and AudioToolbox's codecs, AudioQueue for sound out and in, AVFoundation for the camera, and ScreenCaptureKit (macOS 12.3 or later) for the screen. These are reached through P/Invoke as well - the system's C frameworks directly, AVFoundation and ScreenCaptureKit through the Objective-C runtime - so there is still no native dependency. Everything macOS-specific is marked `[SupportedOSPlatform("macos11.0")]` (`"macos12.3"` for screen capture).
 
-The Windows classes behind the factories (`H265Decoder`, `AACEncoder`, `WaveOut`, `ScreenCapture`, ...) stay public for what only Media Foundation has: decoding on the GPU through `IMediaFoundationVideoTransform`, or ICodecAPI properties through `CodecProperties`.
+The source follows the same split: `Codecs`, `Input`, `Output` and `Utils` each hold the interfaces and shared code, with the implementations of each platform in their `Windows` and `MacOS` folders. The namespaces are those four - `SharpMediaFoundationInterop.Codecs`, `.Input`, `.Output`, `.Utils` - whatever the platform, and `MediaDevices` is in `SharpMediaFoundationInterop` itself.
+
+Elsewhere the factories report nothing: `MediaCodecs.CanDecode`/`CanEncode` return false, the device lists are empty, and creating one throws `PlatformNotSupportedException`. Code written against the factories needs no change from one platform to another.
+
+The Windows classes behind the factories (`H265Decoder`, `AACEncoder`, `WaveOut`, `ScreenCapture`, ...) stay public for what only Media Foundation has: decoding on the GPU through `IMediaFoundationVideoTransform`, or ICodecAPI properties through `CodecProperties`. So do the macOS ones: `VideoToolboxDecoder`, `VideoToolboxEncoder`, `AudioToolboxDecoder`, `AudioToolboxEncoder`, `AudioQueueOutput`, `AudioQueueInput`, `AVFoundationCapture` and `ScreenCaptureKitCapture`.
+
+On macOS the user is asked, the first time, whether the app may use the microphone, the camera or the screen; the permission belongs to the app the process runs in (for a console app, the terminal). Until it is given, the camera capture throws `UnauthorizedAccessException`, as the screen capture does - which asks macOS to show the request - and the microphone records silence. macOS applies a new screen recording permission only once the app is started again.
 
 ## Codecs
 Supported video codecs (`VideoCodec`) are:
@@ -20,12 +28,22 @@ Supported video codecs (`VideoCodec`) are:
 
 Windows has no usable encoder for MPEG-1/2, H263 or MPEG-4 Part 2, and no H261 decoder. Nor has it AC-3 or E-AC-3 decoders: those it once had are gone, and what is left passes the stream on to a receiver over S/PDIF. Whether an extension is installed shows only when the codec is initialized, which then throws `NotSupportedException`.
 
+macOS decodes every one of these video codecs with VideoToolbox, needing no extensions, with these limits:
+- VP9 and AV1 are decoded on the GPU alone: VP9 on Apple silicon and some Intel Macs, AV1 on the M3 and later. `MediaCodecs.CanDecode` says which.
+- MPEG-4 Part 2 of the simple profile alone. A stream of the advanced simple profile - B-VOPs, as XviD and DivX often have - throws `NotSupportedException` as its headers come in.
+
+macOS encodes H264 and H265 (H265 on Apple silicon, and Intel Macs whose GPU encodes it); it has no VP9 or AV1 encoder, which `MediaCodecs.CanEncode` reports.
+
+VideoToolbox is told a stream's configuration before it decodes, so the decoder is made as that configuration comes in band: the parameter sets of H264 and H265, the headers before the first MPEG-4 picture, the first VP9 key frame, the AV1 sequence header. Whatever comes before it is dropped.
+
 Supported audio codecs (`AudioCodec`) are:
 - AAC (built-in Windows)
 - MP3 (built-in Windows; the encoder at 32000, 44100 or 48000 Hz, or MPEG-2's lower rates, and its own list of bit rates)
 - FLAC, 16 and 24 bits (built-in Windows)
 - ALAC, 16 and 24 bits (built-in Windows; the encoder pads the last frame to 4096 samples with silence)
 - Opus (built-in Windows, might require a newer version - works in Windows 11 25H2). The decoder takes mono and stereo, not more channels. The encoder is not on every Windows: where the system has none, `Initialize` throws `NotSupportedException`.
+
+On macOS, AudioToolbox decodes all five, to the same PCM formats as on Windows; more than two channels come out in WAVE's order, as Windows' decoders give them. It encodes all but MP3, of which macOS has no encoder, taking the same PCM as Windows' encoders.
 
 ## Video decoding
 Create and initialize the decoder; every codec has the same API. The size is the coded one, as the stream's parameter sets give it:
@@ -43,11 +61,11 @@ using (var videoDecoder = MediaCodecs.CreateVideoDecoder(VideoCodec.AV1, options
    ...
 }
 ```
-Frames come out as NV12, padded to the size the decoder works in: `videoDecoder.Width` by `videoDecoder.Height`, or `MediaCodecs.DecoderAlignment(codec)` before there is a decoder. Create a buffer to hold the decoded frame:
+Frames come out as NV12, padded to the size the decoder works in: `videoDecoder.Width` by `videoDecoder.Height`, or `MediaCodecs.DecoderAlignment(codec)` before there is a decoder. On macOS that alignment is 2 for every codec; the picture is in the top left of each frame. Create a buffer to hold the decoded frame:
 ```cs
 var nv12Buffer = new byte[videoDecoder.OutputSize];
 ```
-Pass the frame to the decoder and get the output. A decoder hands frames out in display order, each with the timestamp of the input it came from:
+Pass the frame to the decoder and get the output. A decoder hands frames out in display order, each with the timestamp of the input it came from. On macOS, where VideoToolbox hands them out in decode order, they are put in order by those timestamps, so give each frame its own:
 ```cs
 IEnumerable<byte[]> units = ...; // get a list of NALU/OBU from your video source
 foreach (var unit in units)
@@ -129,6 +147,8 @@ using(var nv12Encoder = new ColorConverter(PInvoke.MFVideoFormat_RGB24, PInvoke.
     }
 }
 ```
+Each access unit comes out in Annex B, with its start codes; a key frame has the parameter sets in front of it. On macOS the encoder takes NV12 of exactly `Width` by `Height`, encodes no B-frames, and reports a setting it has no equivalent of - `Threads` - in `UnappliedSettings`.
+
 Create a buffer to hold the encoded NALU/OBU:
 ```cs
 var au = new byte[videoEncoder.OutputSize];
@@ -219,7 +239,7 @@ foreach (var pcmFrame in pcmFrames)
 `MediaDevices` lists the system's devices with `GetScreens()`, `GetCameras()`, `GetAudioOutputs()` and `GetAudioInputs()`, each a `MediaDevice` with an `Id` and a `Name`, and creates them. Leave the device null for the system's default.
 
 ### Screen capture
-Captures a screen as 32 bit BGRA (on Windows, with the [DuplicateOutput1](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_5/nf-dxgi1_5-idxgioutput5-duplicateoutput1) API). Rows are bottom-up by default, as Media Foundation's RGB formats are, or top-down, as a bitmap is:
+Captures a screen as 32 bit BGRA (on Windows, with the [DuplicateOutput1](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_5/nf-dxgi1_5-idxgioutput5-duplicateoutput1) API; on macOS, with [ScreenCaptureKit](https://developer.apple.com/documentation/screencapturekit), at the display's size in pixels). Rows are bottom-up by default, as Media Foundation's RGB formats are, or top-down, as a bitmap is:
 ```cs
 var screens = MediaDevices.GetScreens(); // the primary first
 using (var screenCapture = MediaDevices.CreateScreenCapture(screens.First(), topDown: false))
@@ -240,7 +260,7 @@ if (screenCapture.ReadSample(buffer, out var timestamp))
 }
 ```
 ### Camera capture
-Captures a camera (on Windows, any Media Foundation video capture device such as a webcam) in the best format it offers, which `OutputFormat` reports:
+Captures a camera (on Windows, any Media Foundation video capture device such as a webcam; on macOS, with AVFoundation, as NV12) in the best format it offers, which `OutputFormat` reports:
 ```cs
 var cameras = MediaDevices.GetCameras();
 using (var camera = MediaDevices.CreateCameraCapture(cameras.First()))
@@ -261,7 +281,7 @@ if (camera.ReadSample(buffer, out var timestamp))
 }
 ```
 ### Audio input
-Records PCM (on Windows, with the [waveIn](https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveinopen) API):
+Records PCM (on Windows, with the [waveIn](https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveinopen) API; on macOS, with [AudioQueue](https://developer.apple.com/documentation/audiotoolbox/audio-queue-services)):
 ```cs
 using (var audioInput = MediaDevices.CreateAudioInput(sampleRate, channelCount, bitsPerSample))
 {
@@ -281,7 +301,7 @@ Recording starts right after you call `Initialize`, and stops with `Reset` or `D
 audioInput.Initialize();
 ```
 ### Audio output
-Plays PCM (on Windows, with the [waveOut](https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveoutopen) API):
+Plays PCM (on Windows, with the [waveOut](https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveoutopen) API; on macOS, with AudioQueue):
 ```cs
 using (var audioOutput = MediaDevices.CreateAudioOutput(sampleRate, channelCount, bitsPerSample))
 {
@@ -337,6 +357,7 @@ var source = new StereoVideoSource(new VideoFileSource("left.mp4"), new VideoFil
 A 180 or 360 degree video (equirectangular, as a VR180 camera writes it, read from the file's `sv3d` box, or forced with `Projection`) is shown by `VideoControlD3D` as a view into the sphere, drawn on the GPU: drag to look around, use the wheel to zoom, and double-click to look straight ahead again. `Yaw`, `Pitch` and `FieldOfView` hold the view and can be bound to. Of a stereo VR video, `EyeView` shows one eye's view, or both side by side. `VideoControl` shows such a video flat.
 
 ## Samples
+The console samples run on Windows and macOS alike; the WPF player is Windows' alone. The recorders take how long to record, in seconds, as their first argument - `dotnet run -- 10` - or record until a key is pressed.
 
 ### SharpMediaPlayer
 Sample WPF video player that supports RTSP real-time video, MP4 files, AVIF/HEIC/HEIF images, screen capture and Media Foundation devices such as a webcam.
