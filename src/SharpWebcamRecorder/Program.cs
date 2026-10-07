@@ -1,17 +1,19 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
-using System.Diagnostics;
+using SharpMediaFoundationInterop;
+using SharpMediaFoundationInterop.Codecs;
 using SharpMediaFoundationInterop.Utils;
-using SharpMediaFoundationInterop.Devices;
-using SharpMediaFoundationInterop.Transforms;
-using SharpMediaFoundationInterop.Transforms.Colors;
 using SharpMP4.Builders;
 using SharpMP4.Tracks;
 
 const string targetFileName = "webcam.mp4";
 const uint fpsNom = 24000;
 const uint fpsDenom = 1001;
+// how long to record, in seconds, as the first argument; or, of none, until a key is pressed
+double seconds = args.Length > 0 ? double.Parse(args[0], CultureInfo.InvariantCulture) : double.PositiveInfinity;
 Stopwatch stopwatch = new Stopwatch();
 
 using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMode.Create, FileAccess.Write, FileShare.Read)))
@@ -20,10 +22,11 @@ using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMod
 
     var targetVideoTrack = new H265Track();
     outputBuilder.AddTrack(targetVideoTrack);
-                
+
     using (var camera = MediaDevices.CreateCameraCapture())
     {
         camera.Initialize();
+
         var encoderOptions = new VideoEncoderOptions
         {
             Width = camera.Width,
@@ -35,47 +38,75 @@ using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMod
         {
             videoEncoder.Initialize();
 
-            using (var colorConverter = new ColorConverter(camera.OutputFormat, videoEncoder.InputFormat, camera.Width, camera.Height))
-            { 
-                colorConverter.Initialize();
+            // to NV12, of what the camera hands out: as it is where it is NV12 already, as a Mac's camera's frames are; of
+            // Media Foundation's color converter on Windows; and of BitmapUtils elsewhere, which converts BGRA
+            bool converts = camera.OutputFormat != videoEncoder.InputFormat;
+            IMediaVideoTransform colorConverter = converts && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)
+                ? new ColorConverter(camera.OutputFormat, videoEncoder.InputFormat, camera.Width, camera.Height)
+                : null;
+            if (converts && colorConverter == null && camera.OutputFormat != MediaFormats.ARGB32)
+                throw new NotSupportedException($"No conversion of {camera.OutputFormat} to NV12 here");
 
-                var yuy2Buffer = new byte[camera.OutputSize];
-                var nv12Buffer = new byte[colorConverter.OutputSize];
+            using (colorConverter)
+            {
+                colorConverter?.Initialize();
+
+                var frameBuffer = new byte[camera.OutputSize];
+                var nv12Buffer = new byte[colorConverter?.OutputSize ?? videoEncoder.Width * videoEncoder.Height * 3 / 2];
                 var naluBuffer = new byte[videoEncoder.OutputSize];
 
-                Console.WriteLine("Press any key to exit");
-                stopwatch.Start();
-                long lastframe = 0;
-                long frameDuration = 1000 * fpsDenom / fpsNom;
-
-                while (!Console.KeyAvailable)
+                void Write()
                 {
-                    if (stopwatch.ElapsedTicks - lastframe < frameDuration)
+                    while (videoEncoder.ProcessOutput(ref naluBuffer, out var length))
                     {
-                        await Task.Delay(10);
+                        // the encoder's access unit as it hands it out, start codes and all, without a copy
+                        outputBuilder.ProcessAnnexBTrackSample(targetVideoTrack.TrackID, new ArraySegment<byte>(naluBuffer, 0, (int)length));
+                    }
+                }
+
+                Console.WriteLine(double.IsInfinity(seconds) ? "Press any key to exit" : $"Recording for {seconds} s");
+                stopwatch.Start();
+                long lastFrame = -1000;
+                long frameDuration = 1000 * fpsDenom / fpsNom; // in milliseconds
+
+                while (stopwatch.Elapsed.TotalSeconds < seconds && (Console.IsInputRedirected || !Console.KeyAvailable))
+                {
+                    if (stopwatch.ElapsedMilliseconds - lastFrame < frameDuration)
+                    {
+                        await Task.Delay(5);
                         continue;
                     }
 
-                    lastframe = stopwatch.ElapsedTicks;
+                    lastFrame = stopwatch.ElapsedMilliseconds;
 
-                    if (camera.ReadSample(yuy2Buffer, out var timestamp))
+                    if (!camera.ReadSample(frameBuffer, out var timestamp))
+                        continue;
+
+                    byte[] nv12 = nv12Buffer;
+                    if (!converts)
                     {
-                        if (colorConverter.ProcessInput(yuy2Buffer, timestamp))
-                        {
-                            if (colorConverter.ProcessOutput(ref nv12Buffer, out _))
-                            {
-                                if (videoEncoder.ProcessInput(nv12Buffer, timestamp))
-                                {
-                                    while (videoEncoder.ProcessOutput(ref naluBuffer, out var length))
-                                    {
-                                        // the encoder's access unit as it hands it out, start codes and all, without a copy
-                                        outputBuilder.ProcessAnnexBTrackSample(targetVideoTrack.TrackID, new ArraySegment<byte>(naluBuffer, 0, (int)length));
-                                    }
-                                }
-                            }
-                        }
+                        nv12 = frameBuffer;
                     }
+                    else if (colorConverter != null)
+                    {
+                        if (!colorConverter.ProcessInput(frameBuffer, timestamp) || !colorConverter.ProcessOutput(ref nv12Buffer, out _))
+                            continue;
+                        nv12 = nv12Buffer;
+                    }
+                    else
+                    {
+                        // BGRA, bottom-up, as a screen capture hands it out by default
+                        BitmapUtils.ConvertBgraToNV12(frameBuffer, (int)camera.Width, (int)camera.Height, bottomUp: true, nv12Buffer);
+                    }
+
+                    if (videoEncoder.ProcessInput(nv12, timestamp))
+                        Write();
                 }
+
+                // what the encoder still holds, before the file is finished
+                videoEncoder.BeginDrain();
+                Write();
+                videoEncoder.EndDrain();
             }
         }
 

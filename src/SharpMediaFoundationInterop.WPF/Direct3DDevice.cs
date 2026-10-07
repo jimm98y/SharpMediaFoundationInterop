@@ -38,7 +38,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>
         /// What a decoder is given, wrapped for the calling thread: see
-        /// <see cref="SharpMediaFoundationInterop.Transforms.VideoTransformBase.DeviceManager"/>.
+        /// <see cref="SharpMediaFoundationInterop.Codecs.VideoTransformBase.DeviceManager"/>.
         /// </summary>
         public IMFDXGIDeviceManager Manager => _threadManager.Value;
 

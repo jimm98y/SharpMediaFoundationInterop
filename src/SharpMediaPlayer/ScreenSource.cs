@@ -1,5 +1,4 @@
-﻿using SharpMediaFoundationInterop.Devices;
-using SharpMediaFoundationInterop.Transforms;
+﻿using SharpMediaFoundationInterop.Input;
 using System.Buffers;
 using System.Windows.Media;
 

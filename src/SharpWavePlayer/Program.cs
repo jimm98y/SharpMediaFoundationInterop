@@ -1,8 +1,8 @@
 ﻿using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using SharpMediaFoundationInterop.Devices;
-using SharpMediaFoundationInterop.Transforms;
+using SharpMediaFoundationInterop;
+using SharpMediaFoundationInterop.Codecs;
 using SharpISOBMFF;
 using SharpMP4.Readers;
 using System.Collections.Generic;
@@ -55,6 +55,14 @@ using (Stream inputFileStream = new BufferedStream(new FileStream(sourceFileName
                     }
                 }
             }
+
+            // what the decoder still holds, then what is queued played out before the device is closed
+            audioDecoder.BeginDrain();
+            while (audioDecoder.ProcessOutput(ref pcmBuffer, out var pcmSize))
+                waveOut.Enqueue(pcmBuffer, pcmSize);
+            audioDecoder.EndDrain();
+            while (waveOut.QueuedFrames > 0)
+                await Task.Delay(50);
         }
     }
 }
