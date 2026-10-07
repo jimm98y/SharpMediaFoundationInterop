@@ -1,17 +1,20 @@
-using System;
+﻿using System;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using SharpMediaFoundationInterop.Utils;
-using static SharpMediaFoundationInterop.Utils.CoreAudio;
+using static SharpMediaFoundationInterop.Utils.AudioQueue;
 
 namespace SharpMediaFoundationInterop.Input
 {
     /// <summary>
-    /// Records PCM on macOS, of an AudioQueue: from the device of the id given - a Core Audio device's UID - or the system's
-    /// default, in buffers of a second each, as waveIn's are. The first time, macOS asks the user whether the app may use
-    /// the microphone: until they say so, what is recorded is silence.
+    /// Records PCM on macOS and iOS, of an AudioQueue: from the device of the id given - on macOS a Core Audio device's UID,
+    /// on iOS an audio session input's - or the system's default, in buffers of a second each, as waveIn's are. The first
+    /// time, the user is asked whether the app may use the microphone: on macOS, until they say so, what is recorded is
+    /// silence; on iOS <see cref="Initialize"/> waits for their answer, and throws <see cref="UnauthorizedAccessException"/>
+    /// where they say no.
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
+    [SupportedOSPlatform("ios14.0")]
     public sealed unsafe class AudioQueueInput : IAudioInput
     {
         private const int BufferCount = 3;
@@ -43,6 +46,15 @@ namespace SharpMediaFoundationInterop.Input
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (_queue == IntPtr.Zero)
             {
+                if (OperatingSystem.IsIOSVersionAtLeast(14))
+                {
+                    // iOS records only of PlayAndRecord, and only of the user's leave
+                    AudioSession.Activate(record: true);
+                    AudioSession.RequestRecordPermission();
+                    if (_deviceUid != null && !AudioSession.SetPreferredInput(_deviceUid))
+                        throw new InvalidOperationException($"No sound input of the device {_deviceUid}");
+                }
+
                 var format = PcmFormat(SampleRate, Channels, BitsPerSample);
                 _self = GCHandle.Alloc(this);
                 int status = AudioQueueNewInput(&format, &OnBufferRecorded, GCHandle.ToIntPtr(_self), IntPtr.Zero, IntPtr.Zero, 0, out _queue);
@@ -52,7 +64,7 @@ namespace SharpMediaFoundationInterop.Input
                     _queue = IntPtr.Zero;
                     throw new InvalidOperationException($"No sound input of {SampleRate} Hz, {Channels} channels, {BitsPerSample} bits: {AppleNative.FourCCString(status)}");
                 }
-                if (_deviceUid != null)
+                if (_deviceUid != null && OperatingSystem.IsMacOS())
                 {
                     status = SetDevice(_queue, _deviceUid);
                     if (status != 0)

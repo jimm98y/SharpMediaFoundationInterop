@@ -61,6 +61,7 @@ namespace SharpMediaFoundationInterop.Codecs
             VideoCodec.H262 => "video/mpeg,mpegversion=2,systemstream=false",
             VideoCodec.H263 => "video/x-h263,variant=itu",
             VideoCodec.Mpeg4 => "video/mpeg,mpegversion=4,systemstream=false",
+            VideoCodec.ProRes => "video/x-prores",
             _ => throw new NotSupportedException($"No GStreamer caps of {codec}")
         };
 

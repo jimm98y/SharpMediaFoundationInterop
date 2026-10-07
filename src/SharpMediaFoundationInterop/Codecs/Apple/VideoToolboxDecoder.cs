@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -23,11 +23,12 @@ namespace SharpMediaFoundationInterop.Codecs
     /// one time, all of 0 say, come out as they were decoded.
     /// </para>
     /// <para>
-    /// Of MPEG-4 Part 2, macOS decodes the simple profile alone: a stream of the advanced simple profile - of B-VOPs, as
+    /// Of MPEG-4 Part 2, VideoToolbox decodes the simple profile alone: a stream of the advanced simple profile - of B-VOPs, as
     /// XviD and DivX often are - throws <see cref="NotSupportedException"/> as its headers come in.
     /// </para>
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
+    [SupportedOSPlatform("ios14.0")]
     public sealed unsafe class VideoToolboxDecoder : IMediaVideoTransform
     {
         /// <summary>
@@ -54,21 +55,11 @@ namespace SharpMediaFoundationInterop.Codecs
         private bool _warnedOfSize;
         private bool _warnedOfFormat;
 
-        // the access unit being gathered
-        private readonly List<byte> _accessUnit = new List<byte>();
-        private readonly List<byte> _accessUnitBuffer = new List<byte>();
-        private bool _accessUnitHasPicture;
+        /// <summary>Of H.264, H.265 and AV1, what gathers their NAL units or OBUs into access units, AVCC's of the NAL units.</summary>
+        private readonly AccessUnitAssembler _units;
+        /// <summary>The time of the sample being decoded.</summary>
         private long _accessUnitTime;
-        private readonly List<Range> _nalUnits = new List<Range>();
-        private readonly List<Obus.Obu> _obus = new List<Obus.Obu>();
-
-        // the configuration of the stream, as it comes in band
-        private readonly SortedDictionary<uint, byte[]> _vps = new SortedDictionary<uint, byte[]>();
-        private readonly SortedDictionary<uint, byte[]> _sps = new SortedDictionary<uint, byte[]>();
-        private readonly SortedDictionary<uint, byte[]> _pps = new SortedDictionary<uint, byte[]>();
-        private readonly Dictionary<uint, int> _spsReorderDepth = new Dictionary<uint, int>();
-        private bool _parameterSetsChanged;
-        private bool _av1ReducedStillPictureHeader;
+        /// <summary>Of VP9, AV1 and MPEG-2, the configuration the decoder was made of: made anew where it changes.</summary>
         private byte[] _configAtom;
 
         public VideoToolboxDecoder(VideoCodec codec, VideoDecoderOptions options)
@@ -85,6 +76,13 @@ namespace SharpMediaFoundationInterop.Codecs
             Width = MediaUtils.RoundToMultipleOf(Math.Max(options.Width, 2), ResMultiple);
             Height = MediaUtils.RoundToMultipleOf(Math.Max(options.Height, 2), ResMultiple);
             OutputSize = Width * Height * 3 / 2;
+
+            if (codec is VideoCodec.H264 or VideoCodec.H265 or VideoCodec.AV1)
+            {
+                _units = new AccessUnitAssembler(codec, lengthPrefixed: true);
+                _units.AccessUnit += OnAccessUnit;
+                _units.SequenceHeader += (av1C, width, height) => UpdateConfig(av1C, width, height);
+            }
         }
 
         /// <summary>The codec asked for.</summary>
@@ -108,19 +106,50 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             switch (codec)
             {
-                case VideoCodec.H262:
-                case VideoCodec.H263:
                 case VideoCodec.Mpeg4:
                 case VideoCodec.H264:
                 case VideoCodec.H265:
                     return true;
+                case VideoCodec.H262:
+                case VideoCodec.H263:
+                case VideoCodec.ProRes:
+                    // a decoder of them is made of a format of the size alone, where there is one: of MPEG-2 and H.263 of
+                    // every Mac and no iPhone; of ProRes of every Mac, and the iPhones and iPads of ProRes
+                    return CanCreateSession(CodecType(codec, false));
                 case VideoCodec.VP9:
                 case VideoCodec.AV1:
                     uint type = CodecType(codec, false);
-                    VTRegisterSupplementalVideoDecoderIfAvailable(type);
+                    // macOS registers its VP9 and AV1 decoders on request; iOS has its own, where it has them, of itself
+                    if (OperatingSystem.IsMacOSVersionAtLeast(11))
+                        VTRegisterSupplementalVideoDecoderIfAvailable(type);
                     return VTIsHardwareDecodeSupported(type) != 0;
                 default:
                     return false;
+            }
+        }
+
+        private static readonly Dictionary<uint, bool> Sessions = new Dictionary<uint, bool>();
+
+        /// <summary>Whether VideoToolbox makes a decompression session of the codec, of a format of the size alone.</summary>
+        private static bool CanCreateSession(uint codecType)
+        {
+            lock (Sessions)
+            {
+                if (!Sessions.TryGetValue(codecType, out bool can))
+                {
+                    IntPtr session = IntPtr.Zero;
+                    can = CMVideoFormatDescriptionCreate(IntPtr.Zero, codecType, 640, 480, IntPtr.Zero, out IntPtr format) == 0 &&
+                        VTDecompressionSessionCreate(IntPtr.Zero, format, IntPtr.Zero, IntPtr.Zero, null, out session) == 0;
+                    if (can)
+                    {
+                        VTDecompressionSessionInvalidate(session);
+                        CFRelease(session);
+                    }
+                    if (format != IntPtr.Zero)
+                        CFRelease(format);
+                    Sessions[codecType] = can;
+                }
+                return can;
             }
         }
 
@@ -133,6 +162,7 @@ namespace SharpMediaFoundationInterop.Codecs
             VideoCodec.H265 => FourCC("hvc1"),
             VideoCodec.VP9 => FourCC("vp09"),
             VideoCodec.AV1 => FourCC("av01"),
+            VideoCodec.ProRes => FourCC("apch"),
             _ => throw new NotSupportedException($"No VideoToolbox decoder of {codec}")
         };
 
@@ -162,19 +192,10 @@ namespace SharpMediaFoundationInterop.Codecs
         public bool ProcessInput(ReadOnlySpan<byte> data, long timestamp)
         {
             ThrowIfNotInitialized();
-            switch (_codec)
-            {
-                case VideoCodec.H264:
-                case VideoCodec.H265:
-                    ProcessNalUnits(data, timestamp);
-                    break;
-                case VideoCodec.AV1:
-                    ProcessObus(data, timestamp);
-                    break;
-                default:
-                    ProcessPicture(data, timestamp);
-                    break;
-            }
+            if (_units != null)
+                _units.Push(data, timestamp);
+            else
+                ProcessPicture(data, timestamp);
             return true;
         }
 
@@ -224,7 +245,7 @@ namespace SharpMediaFoundationInterop.Codecs
         public void BeginDrain()
         {
             ThrowIfNotInitialized();
-            SubmitAccessUnit();
+            _units?.Flush();
             if (_session != IntPtr.Zero)
             {
                 VTDecompressionSessionFinishDelayedFrames(_session);
@@ -244,7 +265,7 @@ namespace SharpMediaFoundationInterop.Codecs
         public void Flush()
         {
             ThrowIfNotInitialized();
-            ClearAccessUnit();
+            _units?.Clear();
             if (_session != IntPtr.Zero)
             {
                 VTDecompressionSessionFinishDelayedFrames(_session);
@@ -254,157 +275,6 @@ namespace SharpMediaFoundationInterop.Codecs
         }
 
         #region Input
-
-        private void ProcessNalUnits(ReadOnlySpan<byte> data, long timestamp)
-        {
-            NalUnits.Split(data, _nalUnits);
-            foreach (var range in _nalUnits)
-            {
-                var nal = data[range];
-                if (nal.Length < 2)
-                    continue;
-
-                bool hevc = _codec == VideoCodec.H265;
-                int type = hevc ? (nal[0] >> 1) & 0x3F : nal[0] & 0x1F;
-                bool isPicture = hevc ? type <= 31 : type >= 1 && type <= 5;
-                bool startsAccessUnit = hevc
-                    ? type is >= 32 and <= 35 or 39 or >= 41 and <= 44 or >= 48 and <= 55 || (isPicture && NalUnits.IsFirstHevcSlice(nal))
-                    : type is 6 or 7 or 8 or 9 or >= 14 and <= 18 || (isPicture && NalUnits.IsFirstH264Slice(nal));
-
-                // a picture's units are all of one time: one of another time is of another picture
-                if (_accessUnitHasPicture && (startsAccessUnit || (isPicture && timestamp != _accessUnitTime)))
-                    SubmitAccessUnit();
-
-                if (hevc ? type is >= 32 and <= 34 : type is 7 or 8)
-                {
-                    StoreParameterSet(type, nal);
-                    continue; // of the format description, not of the sample
-                }
-                if (hevc ? type == 35 : type == 9)
-                    continue; // an access unit delimiter: VideoToolbox's access units are delimited by its samples
-
-                if (_accessUnit.Count == 0)
-                    _accessUnitTime = timestamp;
-                if (isPicture && !_accessUnitHasPicture)
-                {
-                    _accessUnitHasPicture = true;
-                    _accessUnitTime = timestamp;
-                }
-
-                // of the length before it, AVCC's, which VideoToolbox takes
-                int length = nal.Length;
-                _accessUnit.Add((byte)(length >> 24));
-                _accessUnit.Add((byte)(length >> 16));
-                _accessUnit.Add((byte)(length >> 8));
-                _accessUnit.Add((byte)length);
-                foreach (byte b in nal)
-                    _accessUnit.Add(b);
-            }
-        }
-
-        private void StoreParameterSet(int type, ReadOnlySpan<byte> nal)
-        {
-            try
-            {
-                SortedDictionary<uint, byte[]> sets;
-                uint id;
-                if (_codec == VideoCodec.H264)
-                {
-                    if (type == 7)
-                    {
-                        (id, int depth) = NalUnits.ParseH264Sps(nal);
-                        _spsReorderDepth[id] = depth;
-                        sets = _sps;
-                    }
-                    else
-                    {
-                        id = NalUnits.ParseH264PpsId(nal);
-                        sets = _pps;
-                    }
-                }
-                else
-                {
-                    if (type == 32)
-                    {
-                        id = NalUnits.ParseHevcVpsId(nal);
-                        sets = _vps;
-                    }
-                    else if (type == 33)
-                    {
-                        (id, int depth) = NalUnits.ParseHevcSps(nal);
-                        _spsReorderDepth[id] = depth;
-                        sets = _sps;
-                    }
-                    else
-                    {
-                        id = NalUnits.ParseHevcPpsId(nal);
-                        sets = _pps;
-                    }
-                }
-
-                if (sets.TryGetValue(id, out var existing) && nal.SequenceEqual(existing))
-                    return;
-                sets[id] = nal.ToArray();
-                _parameterSetsChanged = true;
-            }
-            catch (Exception ex) when (ex is System.IO.EndOfStreamException or System.IO.InvalidDataException)
-            {
-                if (Log.WarnEnabled)
-                    Log.Warn($"A parameter set that could not be read was left out: {ex.Message}");
-            }
-        }
-
-        private void ProcessObus(ReadOnlySpan<byte> data, long timestamp)
-        {
-            Obus.Split(data, _obus);
-            foreach (var obu in _obus)
-            {
-                var payload = data[obu.PayloadStart..obu.End];
-                bool isFrame = obu.Type is Obus.FrameHeader or Obus.Frame;
-
-                // a temporal unit starts with its delimiter, or its sequence header; of the low overhead format it is of one time
-                if (_accessUnitHasPicture && (obu.Type is Obus.TemporalDelimiter or Obus.SequenceHeader || (isFrame && timestamp != _accessUnitTime)))
-                    SubmitAccessUnit();
-
-                if (obu.Type is Obus.TemporalDelimiter or Obus.Padding)
-                    continue;
-
-                if (obu.Type == Obus.SequenceHeader)
-                {
-                    var withSize = new List<byte>();
-                    Obus.WriteWithSize(withSize, data, obu);
-                    try
-                    {
-                        var av1C = Obus.CreateAv1C(withSize.ToArray(), payload, out _av1ReducedStillPictureHeader, out int width, out int height);
-                        UpdateConfig(av1C, width, height);
-                    }
-                    catch (System.IO.EndOfStreamException)
-                    {
-                        if (Log.WarnEnabled)
-                            Log.Warn("A sequence header that could not be read was left out.");
-                    }
-                }
-
-                if (_accessUnit.Count == 0)
-                    _accessUnitTime = timestamp;
-                if (isFrame && !_accessUnitHasPicture)
-                {
-                    _accessUnitHasPicture = true;
-                    _accessUnitTime = timestamp;
-                }
-                Obus.WriteWithSize(_accessUnitBuffer, data, obu);
-                _accessUnit.AddRange(_accessUnitBuffer);
-                _accessUnitBuffer.Clear();
-
-                // a temporal unit has one frame shown: once it is in whole, as an OBU_FRAME is, the unit is complete
-                if (obu.Type == Obus.Frame || obu.Type == Obus.FrameHeader)
-                {
-                    bool shown = Obus.IsShown(payload, _av1ReducedStillPictureHeader, out bool showExisting);
-                    if (shown && (obu.Type == Obus.Frame || showExisting))
-                        SubmitAccessUnit();
-                }
-            }
-        }
 
         private void ProcessPicture(ReadOnlySpan<byte> data, long timestamp)
         {
@@ -441,6 +311,19 @@ namespace SharpMediaFoundationInterop.Codecs
                     if (vpcC != null)
                         UpdateConfig(vpcC, vp9Width, vp9Height);
                     break;
+
+                case VideoCodec.ProRes:
+                    // each picture's 'icpf' header says its size and chroma: of 4:2:2, ProRes 422's family, of 4:4:4, 4444's
+                    if (SampleDescriptions.ReadProResHeader(data, out int proResWidth, out int proResHeight, out bool chroma444))
+                    {
+                        byte[] key = [(byte)(proResWidth >> 8), (byte)proResWidth, (byte)(proResHeight >> 8), (byte)proResHeight, chroma444 ? (byte)1 : (byte)0];
+                        if (_format == IntPtr.Zero || _configAtom == null || !key.AsSpan().SequenceEqual(_configAtom))
+                        {
+                            _configAtom = key;
+                            ReplaceSession(CreateFormat(FourCC(chroma444 ? "ap4h" : "apch"), proResWidth, proResHeight, null));
+                        }
+                    }
+                    break;
             }
 
             if (_session == IntPtr.Zero)
@@ -463,45 +346,24 @@ namespace SharpMediaFoundationInterop.Codecs
             ReplaceSession(CreateFormat(CodecType(_codec, false), width, height, (name, atom)));
         }
 
-        private void SubmitAccessUnit()
+        /// <summary>An access unit complete: decoded, of the format of the parameter sets, made anew where they changed.</summary>
+        private void OnAccessUnit(ReadOnlySpan<byte> unit, long time)
         {
-            if (_accessUnit.Count == 0)
-                return;
-
-            if (!_accessUnitHasPicture)
-            {
-                // SEI or metadata, and no picture: kept for the picture it comes before
-                return;
-            }
-
-            if (_parameterSetsChanged)
+            if (_codec != VideoCodec.AV1 && _units.ParameterSetsChanged)
                 UpdateParameterSets();
-
-            if (_session != IntPtr.Zero)
-                DecodeFrame(CollectionsMarshal.AsSpan(_accessUnit));
-
-            ClearAccessUnit();
-        }
-
-        private void ClearAccessUnit()
-        {
-            _accessUnit.Clear();
-            _accessUnitHasPicture = false;
+            if (_session == IntPtr.Zero)
+                return; // nothing to decode it with: its configuration is yet to come
+            _accessUnitTime = time;
+            DecodeFrame(unit);
         }
 
         /// <summary>The format description of the parameter sets, all of them: the decoder made anew of it where it cannot take it.</summary>
         private void UpdateParameterSets()
         {
             bool hevc = _codec == VideoCodec.H265;
-            if (_sps.Count == 0 || _pps.Count == 0 || (hevc && _vps.Count == 0))
+            if (!_units.HasParameterSets)
                 return;
-            _parameterSetsChanged = false;
-
-            var sets = new List<byte[]>();
-            if (hevc)
-                sets.AddRange(_vps.Values);
-            sets.AddRange(_sps.Values);
-            sets.AddRange(_pps.Values);
+            var sets = _units.TakeParameterSets();
 
             var handles = new GCHandle[sets.Count];
             var pointers = stackalloc byte*[sets.Count];
@@ -536,11 +398,8 @@ namespace SharpMediaFoundationInterop.Codecs
                 return;
             }
 
-            int depth = 0;
-            foreach (var d in _spsReorderDepth.Values)
-                depth = Math.Max(depth, d);
             lock (_outputLock)
-                _reorderDepth = depth;
+                _reorderDepth = _units.ReorderDepth;
 
             ReplaceSession(format);
         }
@@ -625,7 +484,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 if (status is kVTCouldNotFindVideoDecoderErr or kVTVideoDecoderUnsupportedDataFormatErr or kVTVideoDecoderNotAvailableNowErr)
                     throw new NotSupportedException($"No VideoToolbox decoder of this {_codec} stream: {FourCCString(status)}");
                 if (_codec == VideoCodec.Mpeg4 && status == codecBadDataErr)
-                    throw new NotSupportedException("macOS decodes MPEG-4 Part 2 of the simple profile alone, not of the advanced simple profile - of B-VOPs, quarter pixels or global motion - this stream is of");
+                    throw new NotSupportedException("VideoToolbox decodes MPEG-4 Part 2 of the simple profile alone, not of the advanced simple profile - of B-VOPs, quarter pixels or global motion - this stream is of");
                 throw new InvalidOperationException($"VideoToolbox made no {_codec} decoder: {FourCCString(status)}");
             }
         }

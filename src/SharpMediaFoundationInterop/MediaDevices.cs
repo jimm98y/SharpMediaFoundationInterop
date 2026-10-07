@@ -30,7 +30,9 @@ namespace SharpMediaFoundationInterop
     /// The sound and picture devices of the system it runs on: what plays and records sound, behind <see cref="IAudioOutput"/>
     /// and <see cref="IAudioInput"/>, and what captures a camera or the screen, behind <see cref="IMediaVideoSource"/>. On
     /// Windows 10 1809 or later, waveOut's, waveIn's, Media Foundation's and DXGI's; on macOS 11 or later AudioQueue's,
-    /// AVFoundation's and - of macOS 12.3 - ScreenCaptureKit's; on Linux GStreamer's, the screen of the desktop portal's,
+    /// AVFoundation's and - of macOS 12.3 - ScreenCaptureKit's; on iOS 14 or later AudioQueue's of the app's audio session,
+    /// AVFoundation's and - of iOS 16 - ReplayKit's, of the app's own screen; on Android 8 or later AAudio's, of the default
+    /// devices, and Camera2's, through the NDK, and no screen; on Linux GStreamer's, the screen of the desktop portal's,
     /// under Wayland. Elsewhere there are none: the lists are empty, and creating one throws
     /// <see cref="PlatformNotSupportedException"/>. Each is to be initialized; a device left null is the system's default.
     /// On macOS the user is asked, the first time, whether the app may use the microphone, the camera or the screen; on
@@ -50,6 +52,22 @@ namespace SharpMediaFoundationInterop
         [SupportedOSPlatformGuard("linux")]
         private static bool IsLinux => OperatingSystem.IsLinux();
 
+        [SupportedOSPlatformGuard("ios14.0")]
+        private static bool IsIOS => OperatingSystem.IsIOSVersionAtLeast(14);
+
+        /// <summary>Android 8 or later: of AAudio and Camera2, through the NDK. Asked before Linux, which an Android process counts as.</summary>
+        [SupportedOSPlatformGuard("android26.0")]
+        private static bool IsAndroid => OperatingSystem.IsAndroidVersionAtLeast(26);
+
+        /// <summary>Android's sound devices: its default ones alone, as Android lists its devices to Java alone.</summary>
+        private const string DefaultId = "default";
+
+        [SupportedOSPlatformGuard("ios16.0")]
+        private static bool IsIOSScreenCapture => OperatingSystem.IsIOSVersionAtLeast(16);
+
+        /// <summary>The one screen of iOS's: the app's own, which is all ReplayKit lets an app record.</summary>
+        private const string AppScreenId = "app";
+
         /// <summary>
         /// The one screen of Linux's: under Wayland a client cannot list the screens, so the user picks one in the desktop
         /// portal's dialog as the capture starts.
@@ -61,6 +79,10 @@ namespace SharpMediaFoundationInterop
         {
             if (IsMacOS)
                 return ToDevices(CoreAudio.Enumerate(CoreAudio.kAudioObjectPropertyScopeOutput));
+            if (IsIOS)
+                return ToDevices(AudioSession.Outputs());
+            if (IsAndroid)
+                return AAudio.IsAvailable ? [new MediaDevice(DefaultId, "Default output")] : Array.Empty<MediaDevice>();
             if (IsLinux)
                 return ToDevices(GstDevices.List("Audio/Sink"));
             if (!IsSupported)
@@ -77,6 +99,10 @@ namespace SharpMediaFoundationInterop
         {
             if (IsMacOS)
                 return ToDevices(CoreAudio.Enumerate(CoreAudio.kAudioObjectPropertyScopeInput));
+            if (IsIOS)
+                return ToDevices(AudioSession.Inputs());
+            if (IsAndroid)
+                return AAudio.IsAvailable ? [new MediaDevice(DefaultId, "Default input")] : Array.Empty<MediaDevice>();
             if (IsLinux)
                 return ToDevices(GstDevices.List("Audio/Source"));
             if (!IsSupported)
@@ -91,11 +117,13 @@ namespace SharpMediaFoundationInterop
         /// <summary>The cameras.</summary>
         public static MediaDevice[] GetCameras()
         {
-            if (IsMacOS)
+            if (IsMacOS || IsIOS)
             {
                 var cameras = AVFoundationCapture.Enumerate();
                 return Array.ConvertAll(cameras, c => new MediaDevice(c.UniqueID, c.Name));
             }
+            if (IsAndroid)
+                return ToDevices(CameraNdk.List());
             if (IsLinux)
                 return ToDevices(GstDevices.List("Video/Source"));
             if (!IsSupported)
@@ -115,6 +143,10 @@ namespace SharpMediaFoundationInterop
                 var screens = ScreenCaptureKitCapture.Enumerate();
                 return Array.ConvertAll(screens, s => new MediaDevice(s.DisplayID.ToString(CultureInfo.InvariantCulture), s.Name));
             }
+            if (IsIOSScreenCapture)
+                return [new MediaDevice(AppScreenId, "This app's screen")];
+            if (IsAndroid)
+                return Array.Empty<MediaDevice>();
             if (IsLinux)
                 return Gst.IsAvailable ? [new MediaDevice(PortalScreenId, "Screen chosen in the desktop portal")] : Array.Empty<MediaDevice>();
             if (!IsSupported)
@@ -131,8 +163,10 @@ namespace SharpMediaFoundationInterop
         {
             if (IsSupported)
                 return new WaveOut(device == null ? WaveOut.WAVE_MAPPER : uint.Parse(device.Id), sampleRate, channels, bitsPerSample);
-            if (IsMacOS)
+            if (IsMacOS || IsIOS)
                 return new AudioQueueOutput(device?.Id, sampleRate, channels, bitsPerSample);
+            if (IsAndroid)
+                return new AAudioOutput(sampleRate, channels, bitsPerSample);
             if (IsLinux)
                 return new GStreamerAudioOutput(device?.Id, sampleRate, channels, bitsPerSample);
 
@@ -144,8 +178,10 @@ namespace SharpMediaFoundationInterop
         {
             if (IsSupported)
                 return new WaveIn(device == null ? WaveIn.WAVE_MAPPER : uint.Parse(device.Id), sampleRate, channels, bitsPerSample);
-            if (IsMacOS)
+            if (IsMacOS || IsIOS)
                 return new AudioQueueInput(device?.Id, sampleRate, channels, bitsPerSample);
+            if (IsAndroid)
+                return new AAudioInput(sampleRate, channels, bitsPerSample);
             if (IsLinux)
                 return new GStreamerAudioInput(device?.Id, sampleRate, channels, bitsPerSample);
 
@@ -160,8 +196,10 @@ namespace SharpMediaFoundationInterop
         {
             if (IsSupported)
                 return new DeviceCapture(device?.Id);
-            if (IsMacOS)
+            if (IsMacOS || IsIOS)
                 return new AVFoundationCapture(device?.Id);
+            if (IsAndroid)
+                return new AndroidCameraCapture(device?.Id);
             if (IsLinux)
                 return new GStreamerCameraCapture(device?.Id);
 
@@ -188,6 +226,10 @@ namespace SharpMediaFoundationInterop
             }
             if (IsMacOSScreenCapture)
                 return new ScreenCaptureKitCapture(device == null ? 0 : uint.Parse(device.Id, CultureInfo.InvariantCulture)) { BottomUp = !topDown };
+            if (IsIOSScreenCapture)
+                return new ReplayKitScreenCapture { BottomUp = !topDown };
+            if (IsAndroid)
+                throw new PlatformNotSupportedException("No screen capture on Android: it is of Java's MediaProjection alone, whose consent only the app's activity can ask for");
             if (IsLinux)
                 return new PortalScreenCapture { BottomUp = !topDown };
 
@@ -200,6 +242,6 @@ namespace SharpMediaFoundationInterop
         private static MediaDevice[] ToDevices((string Id, string Name)[] devices) => Array.ConvertAll(devices, d => new MediaDevice(d.Id, d.Name));
 
         private static string NoDevice(string what) =>
-            $"No {what} on this system: there are devices on Windows 10 1809 or later, on macOS 11 or later - of screen capture, 12.3 - and on Linux of GStreamer";
+            $"No {what} on this system: there are devices on Windows 10 1809 or later, on macOS 11 or later - of screen capture, 12.3 - on iOS 14 or later - of screen capture, 16 - on Android 8 or later, and on Linux of GStreamer";
     }
 }

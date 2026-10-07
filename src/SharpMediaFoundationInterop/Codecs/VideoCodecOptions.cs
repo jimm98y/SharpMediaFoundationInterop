@@ -11,7 +11,36 @@
         H264,
         H265,
         VP9,
-        AV1
+        AV1,
+
+        /// <summary>
+        /// Apple ProRes - 422, 422 HQ, LT, Proxy, 4444 and 4444 XQ - each sample a picture, of its 'icpf' header; of
+        /// VideoToolbox on macOS and iOS, and of GStreamer's libav on Linux. Encoded of the
+        /// <see cref="VideoEncoderOptions.ProResProfile"/>.
+        /// </summary>
+        ProRes
+    }
+
+    /// <summary>The ProRes an encoder makes: each of its own fixed quality, and of its own data rate, lowest first.</summary>
+    public enum ProResProfile
+    {
+        /// <summary>ProRes 422 Proxy, 'apco': for offline editing.</summary>
+        Proxy,
+
+        /// <summary>ProRes 422 LT, 'apcs'.</summary>
+        LT,
+
+        /// <summary>ProRes 422, 'apcn'.</summary>
+        Standard,
+
+        /// <summary>ProRes 422 HQ, 'apch': what an iPhone records.</summary>
+        HQ,
+
+        /// <summary>ProRes 4444, 'ap4h': of 4:4:4 chroma - of NV12 in, its chroma made full.</summary>
+        ProRes4444,
+
+        /// <summary>ProRes 4444 XQ, 'ap4x': 4444 of a higher data rate still. Not every encoder has it.</summary>
+        ProRes4444XQ
     }
 
     /// <summary>How an encoder spends its bits.</summary>
@@ -82,6 +111,12 @@
 
         /// <summary>Pictures from one key frame to the next; 0 leaves it to the encoder.</summary>
         public uint KeyFrameInterval { get; set; }
+
+        /// <summary>
+        /// Of <see cref="VideoCodec.ProRes"/>, the profile: what sets its quality and data rate, as ProRes has no rate control
+        /// of its own. ProRes 422 HQ unless set.
+        /// </summary>
+        public ProResProfile ProResProfile { get; set; } = ProResProfile.HQ;
 
         /// <summary>
         /// How many threads the encoder may use; 0 leaves it to the encoder. Each keeps working buffers of its own, so

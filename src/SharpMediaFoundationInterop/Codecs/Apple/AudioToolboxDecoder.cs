@@ -14,6 +14,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// order of WAVE's. Each packet in - an AAC access unit, a FLAC frame - is decoded as it comes.
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
+    [SupportedOSPlatform("ios14.0")]
     public sealed unsafe class AudioToolboxDecoder : IMediaAudioTransform
     {
         /// <summary>What the input callback answers once its packet is taken: nothing more yet, rather than the stream's end.</summary>

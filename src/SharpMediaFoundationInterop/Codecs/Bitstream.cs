@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -518,6 +518,23 @@ namespace SharpMediaFoundationInterop.Codecs
                 }
             }
             return found;
+        }
+
+        /// <summary>
+        /// Of a ProRes picture: its size and whether it is of 4:4:4 - of 4444 and 4444 XQ - rather than 4:2:2, of its frame
+        /// header (SMPTE RDD 36 5.1): the frame's size, 'icpf', the header's size, its version, the encoder's id, then the
+        /// width and height, of 16 bits each, and the chroma format in the top 2 bits of the byte after.
+        /// </summary>
+        public static bool ReadProResHeader(ReadOnlySpan<byte> picture, out int width, out int height, out bool chroma444)
+        {
+            width = height = 0;
+            chroma444 = false;
+            if (picture.Length < 21 || !picture.Slice(4, 4).SequenceEqual("icpf"u8))
+                return false;
+            width = (picture[16] << 8) | picture[17];
+            height = (picture[18] << 8) | picture[19];
+            chroma444 = (picture[20] >> 6) == 3;
+            return width > 0 && height > 0;
         }
 
         /// <summary>

@@ -13,10 +13,12 @@ namespace SharpMediaFoundationInterop.Utils
     /// size - and a BOOL comes back as a byte.
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
+    [SupportedOSPlatform("ios14.0")]
     internal static unsafe class ObjC
     {
-        private const string ObjCLib = "/usr/lib/libobjc.A.dylib";
-        private const string SystemLib = "/usr/lib/libSystem.B.dylib";
+        // the names iOS has them by, which macOS has as well
+        private const string ObjCLib = "/usr/lib/libobjc.dylib";
+        private const string SystemLib = "/usr/lib/libSystem.dylib";
 
         private static readonly IntPtr ObjCHandle = NativeLibrary.Load(ObjCLib);
         private static readonly IntPtr SystemHandle = NativeLibrary.Load(SystemLib);
@@ -116,6 +118,12 @@ namespace SharpMediaFoundationInterop.Utils
 
         public static bool SendBool(IntPtr receiver, string selector, IntPtr a) =>
             ((delegate* unmanaged<IntPtr, IntPtr, IntPtr, byte>)MsgSend)(receiver, Sel(selector), a) != 0;
+
+        public static bool SendBool(IntPtr receiver, string selector, IntPtr a, IntPtr* b) =>
+            ((delegate* unmanaged<IntPtr, IntPtr, IntPtr, IntPtr*, byte>)MsgSend)(receiver, Sel(selector), a, b) != 0;
+
+        public static bool SendBool(IntPtr receiver, string selector, IntPtr a, IntPtr b, IntPtr* c) =>
+            ((delegate* unmanaged<IntPtr, IntPtr, IntPtr, IntPtr, IntPtr*, byte>)MsgSend)(receiver, Sel(selector), a, b, c) != 0;
 
         public static bool SendBool(IntPtr receiver, string selector, IntPtr* a) =>
             ((delegate* unmanaged<IntPtr, IntPtr, IntPtr*, byte>)MsgSend)(receiver, Sel(selector), a) != 0;

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -11,10 +11,11 @@ namespace SharpMediaFoundationInterop.Codecs
     /// An encoder of AudioToolbox's, macOS's, of AAC, FLAC, ALAC or Opus, made for the <see cref="AudioEncoderOptions"/>: an
     /// AudioConverter of PCM to the codec. It takes what Media Foundation's encoder of the codec takes - 16 bit PCM of AAC,
     /// 16 or 24 bit of FLAC and ALAC, 32 bit float of Opus, interleaved, of more than two channels in WAVE's order - of any
-    /// length, and hands out a packet at a time: of AAC 1024 samples, of FLAC and ALAC 4096, of Opus 20 ms. macOS has no MP3
+    /// length, and hands out a packet at a time: of AAC 1024 samples, of FLAC and ALAC 4096, of Opus 20 ms. AudioToolbox has no MP3
     /// encoder.
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
+    [SupportedOSPlatform("ios14.0")]
     public sealed unsafe class AudioToolboxEncoder : IMediaAudioEncoder
     {
         private static readonly int NoMoreDataNow = (int)FourCC("nmdn");
@@ -77,7 +78,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 AudioCodec.Flac => new AudioStreamBasicDescription { FormatID = FourCC("flac"), FramesPerPacket = 4096, FormatFlags = bits == 24 ? 3u : 1u },
                 AudioCodec.Alac => new AudioStreamBasicDescription { FormatID = FourCC("alac"), FramesPerPacket = 4096, FormatFlags = bits == 24 ? 3u : 1u },
                 AudioCodec.Opus => new AudioStreamBasicDescription { FormatID = FourCC("opus"), FramesPerPacket = rate / 50 },
-                AudioCodec.Mp3 => throw new NotSupportedException("macOS has no MP3 encoder"),
+                AudioCodec.Mp3 => throw new NotSupportedException("AudioToolbox has no MP3 encoder"),
                 _ => throw new NotSupportedException($"No AudioToolbox encoder of {codec}")
             };
             _output.SampleRate = rate;

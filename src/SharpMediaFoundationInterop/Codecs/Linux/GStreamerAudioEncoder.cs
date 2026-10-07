@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.Versioning;
-using System.Security.Cryptography;
 using SharpMediaFoundationInterop.Utils;
 
 namespace SharpMediaFoundationInterop.Codecs
@@ -25,11 +24,8 @@ namespace SharpMediaFoundationInterop.Codecs
         private bool _disposed;
 
         private byte[] _config;
-        // of FLAC: its metadata blocks as the encoder hands them out, and what completes STREAMINFO once drained
-        private readonly List<byte[]> _flacBlocks = new List<byte[]>();
-        private IncrementalHash _md5;
-        private long _samples;
-        private int _minFrame = int.MaxValue, _maxFrame;
+        /// <summary>Of FLAC: its metadata blocks as the encoder hands them out, and what completes STREAMINFO once drained.</summary>
+        private FlacMetadata _flac;
 
         public GStreamerAudioEncoder(AudioCodec codec, AudioEncoderOptions options)
         {
@@ -75,7 +71,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// </summary>
         public byte[] Config => _codec switch
         {
-            AudioCodec.Flac => FlacConfig(),
+            AudioCodec.Flac => _flac?.ToConfig(),
             AudioCodec.AAC or AudioCodec.Alac => _config,
             _ => null
         };
@@ -110,7 +106,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 _ => null
             };
             if (_codec == AudioCodec.Flac)
-                _md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+                _flac = new FlacMetadata((int)(Channels * BitsPerSample / 8));
         }
 
         /// <summary>
@@ -166,12 +162,7 @@ namespace SharpMediaFoundationInterop.Codecs
             ThrowIfNotInitialized();
             if (data.IsEmpty)
                 return false;
-            if (_md5 != null)
-            {
-                // FLAC's MD5 is of the samples as they are: signed, little-endian, interleaved - the PCM in
-                _md5.AppendData(data);
-                _samples += data.Length / (Channels * BitsPerSample / 8);
-            }
+            _flac?.AddInput(data);
             return _pipeline.Push(ReadOnlySpan<byte>.Empty, data, null);
         }
 
@@ -200,11 +191,7 @@ namespace SharpMediaFoundationInterop.Codecs
 
                 if (IsHeader(packet))
                     continue;
-                if (_codec == AudioCodec.Flac)
-                {
-                    _minFrame = Math.Min(_minFrame, packet.Length);
-                    _maxFrame = Math.Max(_maxFrame, packet.Length);
-                }
+                _flac?.AddFrame(packet.Length);
                 if (buffer == null || buffer.Length < packet.Length)
                     buffer = new byte[Math.Max(packet.Length, OutputSize)];
                 Buffer.BlockCopy(packet, 0, buffer, 0, packet.Length);
@@ -238,10 +225,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 if (packet[0] != 0xFF)
                 {
                     // a metadata block: one of its type before it is replaced
-                    int type = packet[0] & 0x7F;
-                    _flacBlocks.RemoveAll(b => (b[0] & 0x7F) == type);
-                    _flacBlocks.Add(packet);
-                    _flacBlocks.Sort((a, b) => (a[0] & 0x7F) == 0 ? -1 : (b[0] & 0x7F) == 0 ? 1 : 0);
+                    _flac.AddBlock(packet);
                     return true;
                 }
             }
@@ -253,38 +237,6 @@ namespace SharpMediaFoundationInterop.Codecs
             }
             return false;
         }
-
-        /// <summary>
-        /// The metadata blocks, STREAMINFO first, each with its header, the last marked so: of STREAMINFO, once drained, the
-        /// frame sizes, the total samples and the MD5 of what went in.
-        /// </summary>
-        private byte[] FlacConfig()
-        {
-            if (_flacBlocks.Count == 0)
-                return null;
-            var blocks = new List<byte>();
-            for (int i = 0; i < _flacBlocks.Count; i++)
-            {
-                var block = (byte[])_flacBlocks[i].Clone();
-                block[0] = (byte)((block[0] & 0x7F) | (i == _flacBlocks.Count - 1 ? 0x80 : 0));
-                if ((block[0] & 0x7F) == 0 && block.Length >= 4 + 34 && _md5 != null && _samples > 0 && _maxFrame > 0)
-                {
-                    var info = block.AsSpan(4);
-                    info[4] = (byte)(_minFrame >> 16); info[5] = (byte)(_minFrame >> 8); info[6] = (byte)_minFrame;
-                    info[7] = (byte)(_maxFrame >> 16); info[8] = (byte)(_maxFrame >> 8); info[9] = (byte)_maxFrame;
-                    // the total samples, 36 bits after the rate, channels and bits, then the MD5
-                    info[13] = (byte)((info[13] & 0xF0) | (int)((_samples >> 32) & 0x0F));
-                    info[14] = (byte)(_samples >> 24); info[15] = (byte)(_samples >> 16); info[16] = (byte)(_samples >> 8); info[17] = (byte)_samples;
-                    if (_md5Final != null)
-                        _md5Final.CopyTo(info.Slice(18));
-                }
-                blocks.AddRange(block);
-            }
-            return blocks.ToArray();
-        }
-
-        /// <summary>The MD5 of all that went in: of FLAC, known once the stream is ended, as no more goes in.</summary>
-        private byte[] _md5Final;
 
         public bool Drain()
         {
@@ -299,8 +251,7 @@ namespace SharpMediaFoundationInterop.Codecs
             ThrowIfNotInitialized();
             _pipeline.EndOfStream();
             _draining = true;
-            if (_md5 != null)
-                _md5Final = _md5.GetHashAndReset();
+            _flac?.End();
         }
 
         public void EndDrain()
@@ -330,7 +281,7 @@ namespace SharpMediaFoundationInterop.Codecs
             _disposed = true;
             _pipeline?.Dispose();
             _pipeline = null;
-            _md5?.Dispose();
+            _flac?.Dispose();
         }
     }
 }

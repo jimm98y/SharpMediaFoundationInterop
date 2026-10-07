@@ -1,19 +1,20 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
 using SharpMediaFoundationInterop.Utils;
-using static SharpMediaFoundationInterop.Utils.CoreAudio;
+using static SharpMediaFoundationInterop.Utils.AudioQueue;
 
 namespace SharpMediaFoundationInterop.Output
 {
     /// <summary>
-    /// Plays PCM on macOS, of an AudioQueue: on the device of the id given - a Core Audio device's UID - or the system's
-    /// default. As waveOut does, it plays the buffers queued in turn, and stops where they run out - its position stands still
+    /// Plays PCM on macOS and iOS, of an AudioQueue: on macOS on the device of the id given - a Core Audio device's UID - or
+    /// the system's default; on iOS on the route the system chooses, the app's audio session moved to Playback first. As waveOut does, it plays the buffers queued in turn, and stops where they run out - its position stands still
     /// until there is more - rather than playing silence on.
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
+    [SupportedOSPlatform("ios14.0")]
     public sealed unsafe class AudioQueueOutput : IAudioOutput
     {
         private readonly string _deviceUid;
@@ -59,6 +60,10 @@ namespace SharpMediaFoundationInterop.Output
             if (_queue != IntPtr.Zero)
                 return;
 
+            // iOS plays nothing of an app whose audio session is not of a category that plays
+            if (OperatingSystem.IsIOSVersionAtLeast(14))
+                AudioSession.Activate(record: false);
+
             var format = PcmFormat(SampleRate, Channels, BitsPerSample);
             _self = GCHandle.Alloc(this);
             // of no run loop: the callback comes on a thread of the queue's own
@@ -69,7 +74,8 @@ namespace SharpMediaFoundationInterop.Output
                 _queue = IntPtr.Zero;
                 throw new InvalidOperationException($"No sound output of {SampleRate} Hz, {Channels} channels, {BitsPerSample} bits: {AppleNative.FourCCString(status)}");
             }
-            if (_deviceUid != null)
+            // of iOS, the system routes the sound: an output is not chosen by an app, so its id is not used
+            if (_deviceUid != null && OperatingSystem.IsMacOS())
             {
                 status = SetDevice(_queue, _deviceUid);
                 if (status != 0)

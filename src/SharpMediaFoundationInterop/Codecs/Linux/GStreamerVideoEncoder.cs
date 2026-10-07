@@ -49,7 +49,8 @@ namespace SharpMediaFoundationInterop.Codecs
         public uint Height => _options.Height;
         public uint OutputSize => Width * Height * 3 / 2;
         public Guid InputFormat => MediaFormats.NV12;
-        public Guid OutputFormat => MediaFormats.Of(_codec);
+        /// <summary>The codec's subtype; of ProRes, its profile's FOURCC.</summary>
+        public Guid OutputFormat => _codec == VideoCodec.ProRes ? MediaFormats.Of(_options.ProResProfile) : MediaFormats.Of(_codec);
         public IReadOnlyList<string> UnappliedSettings => _unapplied;
 
         /// <summary>The encoders of the codec, of the GPU's first.</summary>
@@ -59,6 +60,7 @@ namespace SharpMediaFoundationInterop.Codecs
             VideoCodec.H265 => ["vah265enc", "vah265lpenc", "v4l2h265enc", "x265enc"],
             VideoCodec.VP9 => ["vavp9enc", "vp9enc"],
             VideoCodec.AV1 => ["vaav1enc", "svtav1enc", "av1enc", "rav1enc"],
+            VideoCodec.ProRes => ["avenc_prores_ks", "avenc_prores"],
             _ => null
         };
 
@@ -204,6 +206,23 @@ namespace SharpMediaFoundationInterop.Codecs
                     }
                     if (o.KeyFrameInterval > 0) Set("intra-period-length", Str(o.KeyFrameInterval), nameof(o.KeyFrameInterval));
                     if (o.Threads > 0) Set("logical-processors", Str(o.Threads), nameof(o.Threads));
+                    break;
+
+                case "avenc_prores_ks":
+                case "avenc_prores":
+                    // the profile, of its fixed quality: there is no bit rate or quantiser to set
+                    Set("profile", o.ProResProfile switch
+                    {
+                        ProResProfile.Proxy => "proxy",
+                        ProResProfile.LT => "lt",
+                        ProResProfile.Standard => "standard",
+                        ProResProfile.ProRes4444 => "4444",
+                        ProResProfile.ProRes4444XQ => "4444xq",
+                        _ => "hq"
+                    }, nameof(o.ProResProfile));
+                    if (o.RateControl != RateControlMode.Default)
+                        Unsupported(nameof(o.RateControl));
+                    if (o.Threads > 0) Set("threads", Str(o.Threads), nameof(o.Threads));
                     break;
 
                 default:

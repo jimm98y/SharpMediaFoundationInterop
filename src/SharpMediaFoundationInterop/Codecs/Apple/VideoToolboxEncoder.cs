@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -8,13 +8,15 @@ using static SharpMediaFoundationInterop.Utils.AppleNative;
 namespace SharpMediaFoundationInterop.Codecs
 {
     /// <summary>
-    /// An encoder of VideoToolbox's, macOS's, of H.264 or H.265, made for the <see cref="VideoEncoderOptions"/>: NV12 in, of
-    /// <see cref="Width"/> by <see cref="Height"/>, and Annex B out, an access unit at a time, start codes and all, as Media
-    /// Foundation's encoders hand it out. Each key frame comes with the parameter sets before it - of H.265 the VPS, SPS and
-    /// PPS, of H.264 the SPS and PPS - so that what is written of the stream needs nothing besides. It encodes no B-frames:
-    /// the access units come out in the order the frames went in, each with the time of its frame.
+    /// An encoder of VideoToolbox's, of H.264, H.265 or ProRes, made for the <see cref="VideoEncoderOptions"/>: NV12 in, of
+    /// <see cref="Width"/> by <see cref="Height"/>. Of H.264 and H.265, Annex B out, an access unit at a time, start codes and
+    /// all, as Media Foundation's encoders hand it out, each key frame with the parameter sets before it - of H.265 the VPS,
+    /// SPS and PPS, of H.264 the SPS and PPS - so that what is written of the stream needs nothing besides. Of ProRes, of
+    /// its <see cref="VideoEncoderOptions.ProResProfile"/>, a picture at a time. It encodes no B-frames: the units come out in the order the frames went in, each
+    /// with the time of its frame.
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
+    [SupportedOSPlatform("ios14.0")]
     public sealed unsafe class VideoToolboxEncoder : IMediaVideoEncoder
     {
         private static readonly byte[] StartCode = [0, 0, 0, 1];
@@ -33,8 +35,8 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
-            if (codec != VideoCodec.H264 && codec != VideoCodec.H265)
-                throw new NotSupportedException($"No VideoToolbox encoder of {codec}: macOS encodes H.264 and H.265");
+            if (codec is not (VideoCodec.H264 or VideoCodec.H265 or VideoCodec.ProRes))
+                throw new NotSupportedException($"No VideoToolbox encoder of {codec}: VideoToolbox encodes H.264, H.265 and ProRes");
             if (options.Width == 0 || options.Height == 0)
                 throw new ArgumentException("The picture's size is to be given", nameof(options));
 
@@ -55,40 +57,50 @@ namespace SharpMediaFoundationInterop.Codecs
         public uint OutputSize => Width * Height * 3 / 2;
 
         public Guid InputFormat => MediaFormats.NV12;
-        public Guid OutputFormat => MediaFormats.Of(_codec);
+        /// <summary>The codec's subtype; of ProRes, its profile's FOURCC.</summary>
+        public Guid OutputFormat => _codec == VideoCodec.ProRes ? MediaFormats.Of(_options.ProResProfile) : MediaFormats.Of(_codec);
 
         public IReadOnlyList<string> UnappliedSettings => _unapplied;
 
         /// <summary>
-        /// Whether there is an encoder of the codec here: of H.264 on every Mac; of H.265 where VideoToolbox makes a session
-        /// of it - on Apple silicon, and Intel Macs of a GPU that encodes it.
+        /// Whether there is an encoder of the codec here: of H.264 on every Mac and iPhone; of H.265 and ProRes where
+        /// VideoToolbox makes a session of it - H.265 of Apple silicon and Intel Macs of a GPU that encodes it, ProRes of
+        /// every Mac and the iPhones and iPads of ProRes.
         /// </summary>
         public static bool Supports(VideoCodec codec)
         {
             if (codec == VideoCodec.H264)
                 return true;
-            if (codec != VideoCodec.H265)
+            if (codec is not (VideoCodec.H265 or VideoCodec.ProRes))
                 return false;
-            lock (HevcSupport)
+            lock (Supported)
             {
-                if (HevcSupport[0] == null)
+                if (!Supported.TryGetValue(codec, out bool supported))
                 {
-                    int status = VTCompressionSessionCreate(IntPtr.Zero, 64, 64, CodecType(VideoCodec.H265), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero,
+                    int status = VTCompressionSessionCreate(IntPtr.Zero, 64, 64, CodecType(codec), IntPtr.Zero, IntPtr.Zero, IntPtr.Zero,
                         &OnEncoded, IntPtr.Zero, out IntPtr session);
-                    HevcSupport[0] = status == 0;
-                    if (status == 0)
+                    supported = status == 0;
+                    if (supported)
                     {
                         VTCompressionSessionInvalidate(session);
                         CFRelease(session);
                     }
+                    Supported[codec] = supported;
                 }
-                return HevcSupport[0].Value;
+                return supported;
             }
         }
 
-        private static readonly bool?[] HevcSupport = new bool?[1];
+        private static readonly Dictionary<VideoCodec, bool> Supported = new Dictionary<VideoCodec, bool>();
 
-        private static uint CodecType(VideoCodec codec) => FourCC(codec == VideoCodec.H264 ? "avc1" : "hvc1");
+        private static uint CodecType(VideoCodec codec, ProResProfile profile = ProResProfile.HQ) => FourCC(codec switch
+        {
+            VideoCodec.H264 => "avc1",
+            VideoCodec.H265 => "hvc1",
+            _ => MediaFormats.ProResFourCC(profile)
+        });
+
+        private uint CodecType() => CodecType(_codec, _options.ProResProfile);
 
         public void Initialize()
         {
@@ -103,14 +115,16 @@ namespace SharpMediaFoundationInterop.Codecs
 
             // weak: VideoToolbox's callback must not keep alive an encoder no one disposed
             _self = GCHandle.Alloc(this, GCHandleType.Weak);
-            int status = VTCompressionSessionCreate(IntPtr.Zero, (int)Width, (int)Height, CodecType(_codec), IntPtr.Zero, attributes, IntPtr.Zero,
+            int status = VTCompressionSessionCreate(IntPtr.Zero, (int)Width, (int)Height, CodecType(), IntPtr.Zero, attributes, IntPtr.Zero,
                 &OnEncoded, GCHandle.ToIntPtr(_self), out _session);
             CFRelease(attributes);
             if (status != 0)
             {
                 _session = IntPtr.Zero;
                 _self.Free();
-                throw new NotSupportedException($"No VideoToolbox encoder of {_codec} of {Width}x{Height}: {FourCCString(status)}");
+                throw new NotSupportedException(_codec == VideoCodec.ProRes
+                    ? $"No VideoToolbox encoder of ProRes {_options.ProResProfile} of {Width}x{Height} here: {FourCCString(status)}"
+                    : $"No VideoToolbox encoder of {_codec} of {Width}x{Height}: {FourCCString(status)}");
             }
 
             ApplySettings();
@@ -125,6 +139,18 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             _unapplied.Clear();
             var o = _options;
+
+            if (_codec == VideoCodec.ProRes)
+            {
+                // ProRes is of the quality of its profile, every picture a key frame: there is no bit rate or quantiser to set
+                if (o.FpsNom > 0 && o.FpsDenom > 0)
+                    SetNumber("kVTCompressionPropertyKey_ExpectedFrameRate", (double)o.FpsNom / o.FpsDenom, nameof(o.FpsNom));
+                if (o.RateControl != RateControlMode.Default)
+                    _unapplied.Add($"{nameof(o.RateControl)}: not supported by the encoder, of ProRes {o.ProResProfile}'s fixed quality - choose the {nameof(o.ProResProfile)}");
+                if (o.Threads > 0)
+                    _unapplied.Add($"{nameof(o.Threads)}: not supported by the encoder");
+                return;
+            }
 
             // what Media Foundation's encoders do of themselves: the stream in order, a profile any decoder takes
             Set("kVTCompressionPropertyKey_AllowFrameReordering", Boolean(false), "B-frames off");
@@ -297,6 +323,14 @@ namespace SharpMediaFoundationInterop.Codecs
                 var avcc = new byte[size];
                 fixed (byte* p = avcc)
                     CMBlockBufferCopyDataBytes(data, 0, (nuint)size, p);
+
+                if (encoder._codec == VideoCodec.ProRes)
+                {
+                    // a ProRes picture is a sample whole, as it is
+                    lock (encoder._encodedLock)
+                        encoder._encoded.Enqueue((avcc, CMSampleBufferGetPresentationTimeStamp(sampleBuffer).ToTicks()));
+                    return;
+                }
 
                 var unit = new List<byte>(size + 256);
                 if (IsKeyFrame(sampleBuffer))

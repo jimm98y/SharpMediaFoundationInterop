@@ -102,6 +102,7 @@ namespace SharpMediaFoundationInterop.Utils
     /// system's frameworks, called straight, as Media Foundation is on Windows.
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
+    [SupportedOSPlatform("ios14.0")]
     internal static unsafe class AppleNative
     {
         private const string CoreFoundationLib = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
@@ -277,6 +278,9 @@ namespace SharpMediaFoundationInterop.Utils
         public static readonly uint kCVPixelFormatType_32BGRA = FourCC("BGRA");
 
         [DllImport(CoreVideoLib)]
+        public static extern int CVPixelBufferCreate(IntPtr allocator, nuint width, nuint height, uint pixelFormatType, IntPtr pixelBufferAttributes, out IntPtr pixelBuffer);
+
+        [DllImport(CoreVideoLib)]
         public static extern int CVPixelBufferPoolCreatePixelBuffer(IntPtr allocator, IntPtr pixelBufferPool, out IntPtr pixelBuffer);
 
         [DllImport(CoreVideoLib)]
@@ -354,6 +358,21 @@ namespace SharpMediaFoundationInterop.Utils
         public static IntPtr VideoToolboxConstant(string name) => Constant(VideoToolbox, name);
 
         [DllImport(VideoToolboxLib)]
+        [SupportedOSPlatform("ios16.0")]
+        [SupportedOSPlatform("macos11.0")]
+        public static extern int VTPixelTransferSessionCreate(IntPtr allocator, out IntPtr pixelTransferSession);
+
+        [DllImport(VideoToolboxLib)]
+        [SupportedOSPlatform("ios16.0")]
+        [SupportedOSPlatform("macos11.0")]
+        public static extern int VTPixelTransferSessionTransferImage(IntPtr session, IntPtr sourceBuffer, IntPtr destinationBuffer);
+
+        [DllImport(VideoToolboxLib)]
+        [SupportedOSPlatform("ios16.0")]
+        [SupportedOSPlatform("macos11.0")]
+        public static extern void VTPixelTransferSessionInvalidate(IntPtr session);
+
+        [DllImport(VideoToolboxLib)]
         public static extern int VTCompressionSessionCreate(IntPtr allocator, int width, int height, uint codecType, IntPtr encoderSpecification,
             IntPtr sourceImageBufferAttributes, IntPtr compressedDataAllocator,
             delegate* unmanaged<IntPtr, IntPtr, int, uint, IntPtr, void> outputCallback, IntPtr outputCallbackRefCon, out IntPtr compressionSession);
@@ -378,6 +397,7 @@ namespace SharpMediaFoundationInterop.Utils
         public static extern void VTCompressionSessionInvalidate(IntPtr session);
 
         [DllImport(VideoToolboxLib)]
+        [SupportedOSPlatform("macos11.0")]
         public static extern void VTRegisterSupplementalVideoDecoderIfAvailable(uint codecType);
 
         #endregion

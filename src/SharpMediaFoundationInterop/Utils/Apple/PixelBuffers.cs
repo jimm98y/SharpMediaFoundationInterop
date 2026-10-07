@@ -6,6 +6,7 @@ namespace SharpMediaFoundationInterop.Utils
 {
     /// <summary>Copies the pictures of Core Video's pixel buffers into the library's: rows of no padding, of the size it says.</summary>
     [SupportedOSPlatform("macos11.0")]
+    [SupportedOSPlatform("ios14.0")]
     internal static unsafe class PixelBuffers
     {
         /// <summary>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -12,11 +12,13 @@ using static SharpMediaFoundationInterop.Utils.ObjC;
 namespace SharpMediaFoundationInterop.Input
 {
     /// <summary>
-    /// Captures a camera on macOS, of AVFoundation: an AVCaptureSession of the camera's largest format, at its highest frame
-    /// rate, its frames handed out as NV12. The first time, macOS asks the user whether the app may use the camera;
-    /// <see cref="Initialize"/> waits for them, and throws <see cref="UnauthorizedAccessException"/> where they say no.
+    /// Captures a camera on macOS and iOS, of AVFoundation: an AVCaptureSession of the camera's widest format, at its
+    /// highest frame rate, its frames handed out as NV12. The first time, the system asks the user whether the app may use
+    /// the camera - on iOS of the app's NSCameraUsageDescription, which its Info.plist must have; <see cref="Initialize"/>
+    /// waits for them, and throws <see cref="UnauthorizedAccessException"/> where they say no.
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
+    [SupportedOSPlatform("ios14.0")]
     public sealed unsafe class AVFoundationCapture : IMediaVideoSource
     {
         /// <summary>How long <see cref="ReadSample"/> waits for a frame before it gives up and returns false.</summary>
@@ -71,14 +73,16 @@ namespace SharpMediaFoundationInterop.Input
         private static IntPtr Devices()
         {
             var types = new List<IntPtr>();
-            foreach (var name in new[] { "AVCaptureDeviceTypeBuiltInWideAngleCamera", "AVCaptureDeviceTypeExternal", "AVCaptureDeviceTypeContinuityCamera", "AVCaptureDeviceTypeDeskViewCamera" })
+            // the physical cameras, of macOS and iOS both: a type of neither platform's is not exported there, and is skipped
+            foreach (var name in new[] { "AVCaptureDeviceTypeBuiltInWideAngleCamera", "AVCaptureDeviceTypeBuiltInUltraWideCamera", "AVCaptureDeviceTypeBuiltInTelephotoCamera",
+                "AVCaptureDeviceTypeBuiltInTrueDepthCamera", "AVCaptureDeviceTypeExternal", "AVCaptureDeviceTypeContinuityCamera", "AVCaptureDeviceTypeDeskViewCamera" })
             {
                 IntPtr type = Constant(AVFoundation, name);
                 if (type != IntPtr.Zero)
                     types.Add(type);
             }
             // before macOS 14, a camera connected is of a type since renamed
-            if (!OperatingSystem.IsMacOSVersionAtLeast(14))
+            if (OperatingSystem.IsMacOS() && !OperatingSystem.IsMacOSVersionAtLeast(14))
             {
                 IntPtr external = Constant(AVFoundation, "AVCaptureDeviceTypeExternalUnknown");
                 if (external != IntPtr.Zero)

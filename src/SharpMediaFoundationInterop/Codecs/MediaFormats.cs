@@ -23,6 +23,8 @@ namespace SharpMediaFoundationInterop.Codecs
         public static readonly Guid MP4V = FourCC("MP4V");
         public static readonly Guid VP90 = FourCC("VP90");
         public static readonly Guid AV1 = FourCC("AV01");
+        /// <summary>Of no Media Foundation subtype's: ProRes 422 HQ's FOURCC, of the same form.</summary>
+        public static readonly Guid ProRes = FourCC("apch");
 
         public static readonly Guid PCM = WaveFormat(0x0001);
         public static readonly Guid Float = WaveFormat(0x0003);
@@ -41,6 +43,7 @@ namespace SharpMediaFoundationInterop.Codecs
             VideoCodec.H265 => HEVC,
             VideoCodec.VP9 => VP90,
             VideoCodec.AV1 => AV1,
+            VideoCodec.ProRes => ProRes,
             _ => Guid.Empty
         };
 
@@ -52,6 +55,21 @@ namespace SharpMediaFoundationInterop.Codecs
             AudioCodec.Flac => FLAC,
             AudioCodec.Alac => ALAC,
             _ => Guid.Empty
+        };
+
+        /// <summary>The FOURCC of the ProRes profile, as a subtype of the same form.</summary>
+        public static Guid Of(ProResProfile profile) => FourCC(ProResFourCC(profile));
+
+        /// <summary>The FOURCC a ProRes profile is told by: of its sample entries, and of VideoToolbox's codec types.</summary>
+        public static string ProResFourCC(ProResProfile profile) => profile switch
+        {
+            ProResProfile.Proxy => "apco",
+            ProResProfile.LT => "apcs",
+            ProResProfile.Standard => "apcn",
+            ProResProfile.HQ => "apch",
+            ProResProfile.ProRes4444 => "ap4h",
+            ProResProfile.ProRes4444XQ => "ap4x",
+            _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, "unknown ProRes profile")
         };
 
         private static Guid FourCC(string code) =>
