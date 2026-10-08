@@ -67,8 +67,8 @@ namespace SharpMediaFoundationInterop.Codecs
             ProResProfile.LT => "apcs",
             ProResProfile.Standard => "apcn",
             ProResProfile.HQ => "apch",
-            ProResProfile.ProRes4444 => "ap4h",
-            ProResProfile.ProRes4444XQ => "ap4x",
+            ProResProfile.P4444 => "ap4h",
+            ProResProfile.P4444XQ => "ap4x",
             _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, "unknown ProRes profile")
         };
 

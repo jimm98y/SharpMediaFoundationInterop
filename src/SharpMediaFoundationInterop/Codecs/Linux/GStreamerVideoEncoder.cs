@@ -216,8 +216,8 @@ namespace SharpMediaFoundationInterop.Codecs
                         ProResProfile.Proxy => "proxy",
                         ProResProfile.LT => "lt",
                         ProResProfile.Standard => "standard",
-                        ProResProfile.ProRes4444 => "4444",
-                        ProResProfile.ProRes4444XQ => "4444xq",
+                        ProResProfile.P4444 => "4444",
+                        ProResProfile.P4444XQ => "4444xq",
                         _ => "hq"
                     }, nameof(o.ProResProfile));
                     if (o.RateControl != RateControlMode.Default)

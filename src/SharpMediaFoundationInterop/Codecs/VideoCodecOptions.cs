@@ -37,10 +37,10 @@
         HQ,
 
         /// <summary>ProRes 4444, 'ap4h': of 4:4:4 chroma - of NV12 in, its chroma made full.</summary>
-        ProRes4444,
+        P4444,
 
         /// <summary>ProRes 4444 XQ, 'ap4x': 4444 of a higher data rate still. Not every encoder has it.</summary>
-        ProRes4444XQ
+        P4444XQ
     }
 
     /// <summary>How an encoder spends its bits.</summary>
