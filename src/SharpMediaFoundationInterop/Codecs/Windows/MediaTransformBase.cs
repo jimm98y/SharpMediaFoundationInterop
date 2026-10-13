@@ -100,6 +100,48 @@ namespace SharpMediaFoundationInterop.Codecs
         }
 
         /// <summary>
+        /// The buffer of our sample made as large as a frame of the transform's output type is, where it is larger - of a
+        /// type turned to at a stream change, a format other than the one it was made of: the sample the same, which
+        /// <see cref="Output"/> knows its own by. Of monochrome, L8 and L16, a buffer of two dimensions, whatever its size:
+        /// HEVC's decoder fails one of one, too small, of any size.
+        /// </summary>
+        private void FitOutputBuffer(IMFTransform transform, uint streamID, MFT_OUTPUT_DATA_BUFFER[] dataBuffer)
+        {
+            var sample = dataBuffer[0].pSample;
+            if (sample == null)
+                return;
+            transform.GetOutputStreamInfo(streamID, out var info);
+            transform.GetOutputCurrentType(streamID, out IMFMediaType type);
+            type.GetGUID(PInvoke.MF_MT_SUBTYPE, out var subtype);
+            sample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
+            buffer.GetMaxLength(out uint length);
+
+            bool monochrome = subtype == PInvoke.MFVideoFormat_L8 || subtype == PInvoke.MFVideoFormat_L16;
+            if (!monochrome && info.cbSize <= length)
+                return;
+
+            sample.RemoveAllBuffers();
+            IMFMediaBuffer fitted;
+            if (monochrome)
+            {
+                // of the D3DFORMATs L8 and L16, the subtypes' own codes
+                type.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out ulong frameSize);
+                MediaUtils.Check(PInvoke.MFCreate2DMediaBuffer((uint)(frameSize >> 32), (uint)frameSize,
+                    subtype == PInvoke.MFVideoFormat_L8 ? 0x32u : 0x51u, false, out fitted));
+            }
+            else
+            {
+                MediaUtils.Check(PInvoke.MFCreateMemoryBuffer(info.cbSize, out fitted));
+            }
+            sample.AddBuffer(fitted);
+            if (info.cbSize > length)
+                OnOutputSizeChanged(info.cbSize);
+        }
+
+        /// <summary>The bytes of a frame of output grown, at a stream change: what a caller's buffer is to hold.</summary>
+        protected virtual void OnOutputSizeChanged(uint size) { }
+
+        /// <summary>
         /// The next output read into <paramref name="bytes"/>: from the sample of ours the output buffer holds, used again
         /// call after call, or from one the transform hands out - of the GPU's memory, decoding there - let go of after.
         /// </summary>
@@ -140,6 +182,10 @@ namespace SharpMediaFoundationInterop.Codecs
                     sample.ConvertToContiguousBuffer(out buffer);
                 try
                 {
+                    // a frame longer than the caller's buffer - of a type the transform turned to - into one of its size
+                    buffer.GetCurrentLength(out uint current);
+                    if (bytes != null && bytes.Length < current)
+                        bytes = new byte[current];
                     return MediaUtils.CopyBuffer(buffer, bytes, out length);
                 }
                 finally
@@ -177,6 +223,25 @@ namespace SharpMediaFoundationInterop.Codecs
         /// The next output: whether a sample is ready, and it - the one in the output buffer - with its time. A change of
         /// format is taken, and the output asked for again.
         /// </summary>
+        /// <summary>
+        /// A subtype by its FourCC, which a video subtype's first field is - NV12, P010, Y210 - or the D3DFORMAT it is of -
+        /// L8, L16 - else by its GUID.
+        /// </summary>
+        internal static string SubtypeName(Guid subtype)
+        {
+            if (subtype == PInvoke.MFVideoFormat_L8)
+                return "L8";
+            if (subtype == PInvoke.MFVideoFormat_L16)
+                return "L16";
+            var bytes = subtype.ToByteArray();
+            bool fourCC = true;
+            for (int i = 0; i < 4; i++)
+                fourCC &= bytes[i] >= 0x20 && bytes[i] < 0x7F;
+            return fourCC && subtype.ToString().EndsWith("-0000-0010-8000-00aa00389b71")
+                ? Encoding.ASCII.GetString(bytes, 0, 4)
+                : subtype.ToString();
+        }
+
         private unsafe bool OutputSample(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, out IMFSample sample, out long timestamp, bool changed = false)
         {
             timestamp = 0;
@@ -194,6 +259,8 @@ namespace SharpMediaFoundationInterop.Codecs
 
                 IMFMediaType mediaType = null;
                 uint i = 0;
+                // what it offers instead, where it is not ours: the FourCC of each - a video subtype's first field
+                var offered = new List<string>();
                 try
                 {
                     while (true)
@@ -205,12 +272,13 @@ namespace SharpMediaFoundationInterop.Codecs
                             mediaType = mType;
                             break;
                         }
+                        offered.Add(SubtypeName(mSubtype));
                     }
                 }
                 catch(Exception ex)
                 {
                     if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
-                    throw new Exception("Unsupported subtype!");
+                    throw new NotSupportedException($"The transform hands out no {SubtypeName(OutputFormat)} of this stream, only: {string.Join(", ", offered)}");
                 }
 
                 // Enumerate the new type and list all the changes
@@ -298,6 +366,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 if (Log.WarnEnabled) Log.Warn(log.ToString());
 
                 transform.SetOutputType(streamID, mediaType, 0);
+                FitOutputBuffer(transform, streamID, dataBuffer);
 
                 // because the subtype has not changed, do not flush, otherwise we'd lose frames:
                 //transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);

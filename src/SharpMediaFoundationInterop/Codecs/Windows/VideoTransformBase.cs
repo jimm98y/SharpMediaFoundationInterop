@@ -85,8 +85,20 @@ namespace SharpMediaFoundationInterop.Codecs
             _transform.GetOutputStreamInfo(0, out var streamInfo);
             ProvidesSamples = (streamInfo.dwFlags & (uint)_MFT_OUTPUT_STREAM_INFO_FLAGS.MFT_OUTPUT_STREAM_PROVIDES_SAMPLES) != 0;
             // no sample of ours where the transform hands out its own
-            _dataBuffer = MediaUtils.CreateOutputDataBuffer(ProvidesSamples ? 0 : streamInfo.cbSize);
-            OutputSize = streamInfo.cbSize;
+            uint size = Math.Max(streamInfo.cbSize, MinimumOutputSize);
+            _dataBuffer = MediaUtils.CreateOutputDataBuffer(ProvidesSamples ? 0 : size);
+            OutputSize = size;
+        }
+
+        /// <summary>
+        /// The least the output buffer holds, whatever the type it is made of says: of a decoder made of NV12 that turns to
+        /// a larger format at the stream change - see <see cref="VideoFrameFormat"/> - that format's frame.
+        /// </summary>
+        protected virtual uint MinimumOutputSize => 0;
+
+        protected override void OnOutputSizeChanged(uint size)
+        {
+            OutputSize = Math.Max(size, MinimumOutputSize);
         }
 
         /// <summary>

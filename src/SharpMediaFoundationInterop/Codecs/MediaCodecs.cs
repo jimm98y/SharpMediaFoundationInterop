@@ -56,6 +56,8 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
                 return new MediaFoundationDecoder(codec, options);
+            if (options != null && options.OutputFormat != VideoFrameFormat.NV12)
+                throw new NotSupportedException($"No {codec} decoder of {options.OutputFormat} on this system: {Systems}");
             if (IsApple)
                 return new VideoToolboxDecoder(codec, options);
             if (IsAndroid)

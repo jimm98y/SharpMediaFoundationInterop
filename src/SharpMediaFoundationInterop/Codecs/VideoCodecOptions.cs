@@ -65,6 +65,69 @@
         ConstantQp
     }
 
+    /// <summary>
+    /// The frames a decoder hands out, of the chroma and the bits of the stream: Windows' decoders of HEVC and AV1 hand out
+    /// only the one of each stream - P010 of 10 bits of 4:2:0, Y210 of 4:2:2, Y410 of 4:4:4 - and no NV12 of it. Of more
+    /// than 8 bits, each sample's bits are its high ones, of 16 - but Y410's. Rows of <see cref="VideoFrameFormats.Stride"/>
+    /// bytes, of the decoder's width.
+    /// </summary>
+    public enum VideoFrameFormat
+    {
+        /// <summary>4:2:0 of 8 bits: a plane of luma, then one of Cb and Cr interleaved at half the size each way.</summary>
+        NV12,
+
+        /// <summary>4:2:0 of 10 bits: as NV12, of 16 bit samples, little-endian.</summary>
+        P010,
+
+        /// <summary>4:2:0 of 12 or 16 bits: as P010.</summary>
+        P016,
+
+        /// <summary>4:2:2 of 8 bits, packed: of each two pixels Y0, Cb, Y1 and Cr, a byte each.</summary>
+        YUY2,
+
+        /// <summary>4:2:2 of 10 bits: as YUY2, of 16 bit samples.</summary>
+        Y210,
+
+        /// <summary>4:2:2 of 12 or 16 bits: as Y210.</summary>
+        Y216,
+
+        /// <summary>4:4:4 of 8 bits, packed: of each pixel Cr, Cb, Y and alpha, a byte each.</summary>
+        AYUV,
+
+        /// <summary>4:4:4 of 10 bits, packed in 32: Cb in bits 0 to 9, Y in 10 to 19, Cr in 20 to 29, alpha in 30 and 31.</summary>
+        Y410,
+
+        /// <summary>4:4:4 of 12 or 16 bits, packed: of each pixel Cb, Y, Cr and alpha, of 16 bits each.</summary>
+        Y416,
+
+        /// <summary>Monochrome of 8 bits: a plane of luma alone.</summary>
+        L8,
+
+        /// <summary>Monochrome of more than 8 bits: a plane of luma alone, of 16 bit samples.</summary>
+        L16,
+    }
+
+    /// <summary>The sizes of each <see cref="VideoFrameFormat"/>.</summary>
+    public static class VideoFrameFormats
+    {
+        /// <summary>The bytes of a row: of the luma plane, of a planar format.</summary>
+        public static uint Stride(VideoFrameFormat format, uint width) => format switch
+        {
+            VideoFrameFormat.NV12 or VideoFrameFormat.L8 => width,
+            VideoFrameFormat.P010 or VideoFrameFormat.P016 or VideoFrameFormat.YUY2 or VideoFrameFormat.L16 => width * 2,
+            VideoFrameFormat.Y210 or VideoFrameFormat.Y216 or VideoFrameFormat.AYUV or VideoFrameFormat.Y410 => width * 4,
+            VideoFrameFormat.Y416 => width * 8,
+            _ => throw new System.ArgumentOutOfRangeException(nameof(format)),
+        };
+
+        /// <summary>The bytes of a frame: of 4:2:0, its chroma plane after its luma.</summary>
+        public static uint FrameSize(VideoFrameFormat format, uint width, uint height) => format switch
+        {
+            VideoFrameFormat.NV12 or VideoFrameFormat.P010 or VideoFrameFormat.P016 => Stride(format, width) * height * 3 / 2,
+            _ => Stride(format, width) * height,
+        };
+    }
+
     /// <summary>What a decoder of <see cref="MediaCodecs.CreateVideoDecoder"/> is made for.</summary>
     public sealed class VideoDecoderOptions
     {
@@ -83,6 +146,12 @@
 
         /// <summary>How many threads the decoder may use; 0 leaves it to the decoder.</summary>
         public uint Threads { get; set; }
+
+        /// <summary>
+        /// The frames handed out: NV12, as every decoder hands out, or what the stream's chroma and bits need - on Windows of
+        /// HEVC's and AV1's decoders alone; another decoder throws <see cref="NotSupportedException"/>.
+        /// </summary>
+        public VideoFrameFormat OutputFormat { get; set; }
     }
 
     /// <summary>What an encoder of <see cref="MediaCodecs.CreateVideoEncoder"/> is made for, and how it encodes.</summary>
