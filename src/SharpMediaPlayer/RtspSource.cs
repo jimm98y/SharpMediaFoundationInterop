@@ -230,8 +230,8 @@ namespace SharpMediaFoundationInterop.WPF
                 var dimensions = decodedSPS.CalculateDimensions();
                 videoInfo.OriginalWidth = dimensions.Width;
                 videoInfo.OriginalHeight = dimensions.Height;
-                videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, MediaCodecs.DecoderAlignment(VideoCodec.H265));
-                videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, MediaCodecs.DecoderAlignment(VideoCodec.H265));
+                // the frames of the coded size, the picture cropped of them: 1088 lines of a 1080 line picture
+                (videoInfo.Width, videoInfo.Height) = TrackColour.HevcFrameSize(decodedSPS, videoInfo.OriginalWidth, videoInfo.OriginalHeight);
 
                 var timescale = decodedSPS.CalculateTimescale();
                 videoInfo.FpsNom = (uint)timescale.Timescale;

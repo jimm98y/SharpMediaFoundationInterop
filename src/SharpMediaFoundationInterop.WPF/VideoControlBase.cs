@@ -19,8 +19,8 @@ namespace SharpMediaFoundationInterop.WPF
 {
     /// <summary>
     /// What a video control does whatever it draws with: its properties, its threads, its clock, trick play and its bar of
-    /// controls. Drawing a frame is left to the control made of it - <see cref="VideoControl"/> into a bitmap,
-    /// <see cref="VideoControlD3D"/> with Direct3D - which makes the surface the frames are drawn on, draws each, and says
+    /// controls. Drawing a frame is left to the control made of it - <see cref="MediaControl"/> into a bitmap,
+    /// <see cref="GpuMediaControl"/> with Direct3D - which makes the surface the frames are drawn on, draws each, and says
     /// what frames it takes.
     /// </summary>
     /// <remarks>
@@ -33,6 +33,11 @@ namespace SharpMediaFoundationInterop.WPF
     /// <para>The bar is shown as the mouse moves over the video, and hidden again a while after it stops, as it leaves the
     /// video, or never - see <see cref="AutoHideControls"/>: <see cref="AreControlsVisible"/> says which, and the template
     /// is put in the visual state <c>ControlsVisible</c> or <c>ControlsHidden</c> of the group <c>ControlsStates</c>.</para>
+    /// <para>Without the overlay - <see cref="IsOverlayEnabled"/> false - there is no bar, nor keys to play by: what it does is
+    /// the host's to do, of the control's methods - <see cref="Play"/>, <see cref="Pause"/>, <see cref="TogglePlayPause"/>,
+    /// <see cref="Rewind"/>, <see cref="FastForward"/>, <see cref="SetRate"/>, <see cref="Seek"/>, <see cref="SeekBy"/>,
+    /// <see cref="ToggleRepeat"/>, <see cref="NextEyeView"/>, <see cref="NextSubtitleTrack"/>, <see cref="ResetView"/> - and
+    /// properties.</para>
     /// <para>Parts of the template, each optional: <c>PART_Image</c>, the image frames are drawn on; <c>PART_Seek</c>, a
     /// slider of the position, which seeks; <c>PART_ControlsBar</c>, the bar, kept shown while the mouse is over it.</para>
     /// <para>Subtitles are the template's too: the text shown now is <see cref="SubtitleText"/>, shown twice - over each
@@ -116,6 +121,10 @@ namespace SharpMediaFoundationInterop.WPF
         private bool _isLooping = false;
         private bool _isMute = false;
 
+        /// <summary>
+        /// Whether a video plays again from the start as it ends - the overlay's Repeat button, R; off, it stops there,
+        /// paused. Of a live source, whether it is started again as it ends.
+        /// </summary>
         public bool Looping
         {
             get { return (bool)GetValue(LoopingProperty); }
@@ -172,6 +181,21 @@ namespace SharpMediaFoundationInterop.WPF
 
         public static readonly DependencyProperty ShowControlsProperty =
             DependencyProperty.Register("ShowControls", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(true, OnControlsShownChanged));
+
+        /// <summary>
+        /// Whether the overlay is there at all: the bar of controls, and the keys that do what it does - played, sought,
+        /// the eye or the subtitles chosen. Without it, the video alone is shown, and the host plays it, of the control's
+        /// methods. The subtitles, of the picture, stay - see <see cref="SubtitleTrack"/> - and a spherical view is
+        /// still looked around with the mouse.
+        /// </summary>
+        public bool IsOverlayEnabled
+        {
+            get { return (bool)GetValue(IsOverlayEnabledProperty); }
+            set { SetValue(IsOverlayEnabledProperty, value); }
+        }
+
+        public static readonly DependencyProperty IsOverlayEnabledProperty =
+            DependencyProperty.Register("IsOverlayEnabled", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(true, OnControlsShownChanged));
 
         /// <summary>
         /// Whether the bar is shown only while the mouse moves over the video, or a key is pressed, and hidden
@@ -288,6 +312,17 @@ namespace SharpMediaFoundationInterop.WPF
             DependencyProperty.RegisterReadOnly("CanSeek", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty CanSeekProperty = CanSeekPropertyKey.DependencyProperty;
 
+        /// <summary>Whether the source is a picture, not a video - see <see cref="IVideoSource.IsStill"/>: of no time to show, nor to seek in.</summary>
+        public bool IsStill
+        {
+            get { return (bool)GetValue(IsStillProperty); }
+            private set { SetValue(IsStillPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey IsStillPropertyKey =
+            DependencyProperty.RegisterReadOnly("IsStill", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+        public static readonly DependencyProperty IsStillProperty = IsStillPropertyKey.DependencyProperty;
+
         /// <summary>
         /// The position, the duration where it is known and the rate where it is not 1, as the bar shows them:
         /// <c>1:23 / 4:56  ×2</c>.
@@ -396,7 +431,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>
         /// Whether the video is shown as a view into a sphere, looked around with the mouse: a spherical video, in a control
-        /// that draws one - <see cref="VideoControlD3D"/>; <see cref="VideoControl"/> shows it flat.
+        /// that draws one - <see cref="GpuMediaControl"/>; <see cref="MediaControl"/> shows it flat.
         /// </summary>
         public bool IsSpherical
         {
@@ -407,6 +442,10 @@ namespace SharpMediaFoundationInterop.WPF
         private static readonly DependencyPropertyKey IsSphericalPropertyKey =
             DependencyProperty.RegisterReadOnly("IsSpherical", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty IsSphericalProperty = IsSphericalPropertyKey.DependencyProperty;
+
+        /// <summary>Repeats the video as it ends, or stops repeating it: see <see cref="Looping"/>. The R key, over the video.</summary>
+        public static RoutedUICommand ToggleRepeatCommand { get; } =
+            new RoutedUICommand("Repeat", "ToggleRepeat", typeof(VideoControlBase));
 
         /// <summary>Shows the next eye's view: both, then the left, then the right. The E key, over the video.</summary>
         public static RoutedUICommand NextEyeViewCommand { get; } =
@@ -515,23 +554,27 @@ namespace SharpMediaFoundationInterop.WPF
             _hideTimer.Tick += HideTimer_Tick;
 
             // the buttons of any template, or of none: WPF's media commands, routed to the control
-            CommandBindings.Add(new CommandBinding(MediaCommands.TogglePlayPause, (s, e) => TogglePlayPause()));
-            CommandBindings.Add(new CommandBinding(MediaCommands.Play, (s, e) => Play()));
-            CommandBindings.Add(new CommandBinding(MediaCommands.Pause, (s, e) => Pause()));
+            CommandBindings.Add(new CommandBinding(MediaCommands.TogglePlayPause, (s, e) => TogglePlayPause(), CanPlayCommand));
+            CommandBindings.Add(new CommandBinding(MediaCommands.Play, (s, e) => Play(), CanPlayCommand));
+            CommandBindings.Add(new CommandBinding(MediaCommands.Pause, (s, e) => Pause(), CanPlayCommand));
             CommandBindings.Add(new CommandBinding(MediaCommands.Rewind, (s, e) => Rewind(), CanSeekCommand));
             CommandBindings.Add(new CommandBinding(MediaCommands.FastForward, (s, e) => FastForward(), CanSeekCommand));
             CommandBindings.Add(new CommandBinding(MediaCommands.MuteVolume, (s, e) => Mute = !Mute));
-            CommandBindings.Add(new CommandBinding(NextEyeViewCommand, (s, e) => EyeView = EyeView == EyeView.Both ? EyeView.Left : EyeView == EyeView.Left ? EyeView.Right : EyeView.Both,
-                (s, e) => e.CanExecute = IsStereo));
+            CommandBindings.Add(new CommandBinding(ToggleRepeatCommand, (s, e) => ToggleRepeat(), CanSeekCommand));
+            CommandBindings.Add(new CommandBinding(NextEyeViewCommand, (s, e) => NextEyeView(), (s, e) => e.CanExecute = IsStereo));
             CommandBindings.Add(new CommandBinding(ResetViewCommand, (s, e) => ResetView(), (s, e) => e.CanExecute = IsSpherical));
-            CommandBindings.Add(new CommandBinding(NextSubtitleTrackCommand,
-                (s, e) => SubtitleTrack = SubtitleTrack + 1 >= SubtitleTracks.Count ? -1 : SubtitleTrack + 1,
-                (s, e) => e.CanExecute = HasSubtitles));
+            CommandBindings.Add(new CommandBinding(NextSubtitleTrackCommand, (s, e) => NextSubtitleTrack(), (s, e) => e.CanExecute = HasSubtitles));
         }
 
         private void CanSeekCommand(object sender, CanExecuteRoutedEventArgs e)
         {
-            e.CanExecute = SeekableSource != null;
+            e.CanExecute = SeekableSource != null && !IsStill;
+        }
+
+        /// <summary>Whether there is anything to play: a picture, shown and held, has not.</summary>
+        private void CanPlayCommand(object sender, CanExecuteRoutedEventArgs e)
+        {
+            e.CanExecute = !IsStill;
         }
 
         private void VideoControl_Unloaded(object sender, RoutedEventArgs e)
@@ -685,6 +728,24 @@ namespace SharpMediaFoundationInterop.WPF
             SetRate(_rate <= -1 && _rate > -8 ? _rate * 2 : -1);
         }
 
+        /// <summary>Repeats the video as it ends, or stops repeating it: <see cref="Looping"/> turned the other way.</summary>
+        public void ToggleRepeat()
+        {
+            Looping = !Looping;
+        }
+
+        /// <summary>Shows the next eye's view, of a stereo video: both, then the left, then the right - see <see cref="EyeView"/>.</summary>
+        public void NextEyeView()
+        {
+            EyeView = EyeView == EyeView.Both ? EyeView.Left : EyeView == EyeView.Left ? EyeView.Right : EyeView.Both;
+        }
+
+        /// <summary>Shows the next track's subtitles, and after the last none - see <see cref="SubtitleTrack"/>.</summary>
+        public void NextSubtitleTrack()
+        {
+            SubtitleTrack = SubtitleTrack + 1 >= SubtitleTracks.Count ? -1 : SubtitleTrack + 1;
+        }
+
         /// <summary>Plays at a rate, from the frame shown: see <see cref="PlaybackRate"/>.</summary>
         public void SetRate(int rate)
         {
@@ -811,38 +872,43 @@ namespace SharpMediaFoundationInterop.WPF
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
-            if (e.Handled)
+            // the keys are the overlay's: without it, the host's
+            if (e.Handled || !IsOverlayEnabled)
                 return;
 
+            // a picture has nothing to play, nor to seek in
             switch (e.Key)
             {
-                case Key.Space:
-                case Key.K:
+                case Key.Space when !IsStill:
+                case Key.K when !IsStill:
                     TogglePlayPause();
                     break;
-                case Key.J:
+                case Key.J when !IsStill:
                     Rewind();
                     break;
-                case Key.L:
+                case Key.L when !IsStill:
                     FastForward();
                     break;
-                case Key.Left:
+                case Key.Left when !IsStill:
                     SeekBy(TimeSpan.FromSeconds(-5));
                     break;
-                case Key.Right:
+                case Key.Right when !IsStill:
                     SeekBy(TimeSpan.FromSeconds(5));
                     break;
-                case Key.Home:
+                case Key.Home when !IsStill:
                     Seek(TimeSpan.Zero);
                     break;
-                case Key.End:
+                case Key.End when !IsStill:
                     Seek(Duration);
                     break;
+                case Key.R when !IsStill && SeekableSource != null:
+                    ToggleRepeat();
+                    break;
                 case Key.E when IsStereo:
-                    NextEyeViewCommand.Execute(null, this);
+                    NextEyeView();
                     break;
                 case Key.C when HasSubtitles:
-                    NextSubtitleTrackCommand.Execute(null, this);
+                    NextSubtitleTrack();
                     break;
                 default:
                     return;
@@ -910,7 +976,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// </summary>
         private void UpdateControlsVisibility(bool useTransitions)
         {
-            bool visible = ShowControls &&
+            bool visible = IsOverlayEnabled && ShowControls &&
                 (!AutoHideControls || _paused || _dragging || _recentActivity || (_controlsBar?.IsMouseOver ?? false));
             AreControlsVisible = visible;
             VisualStateManager.GoToState(this, visible ? ControlsVisibleState : ControlsHiddenState, useTransitions);
@@ -926,6 +992,12 @@ namespace SharpMediaFoundationInterop.WPF
             if (CanSeek != canSeek)
             {
                 CanSeek = canSeek;
+                CommandManager.InvalidateRequerySuggested();
+            }
+            bool still = (_source as IVideoSource)?.IsStill ?? false;
+            if (IsStill != still)
+            {
+                IsStill = still;
                 CommandManager.InvalidateRequerySuggested();
             }
             IsPlaying = !_paused && _rate == 1;
@@ -1546,8 +1618,8 @@ namespace SharpMediaFoundationInterop.WPF
                 return;
 
             var stop = _stop = new StopFlag();
-            _videoThread = new Thread(() => VideoLoop(stop)) { IsBackground = true, Name = "VideoControl video" };
-            _audioThread = new Thread(() => AudioLoop(stop)) { IsBackground = true, Name = "VideoControl audio" };
+            _videoThread = new Thread(() => VideoLoop(stop)) { IsBackground = true, Name = "MediaControl video" };
+            _audioThread = new Thread(() => AudioLoop(stop)) { IsBackground = true, Name = "MediaControl audio" };
             _videoThread.Start();
             _audioThread.Start();
         }

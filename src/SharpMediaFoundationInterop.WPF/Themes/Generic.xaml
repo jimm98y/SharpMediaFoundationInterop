@@ -200,6 +200,9 @@
                                     <Button x:Name="FastForwardButton" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
                                             Command="MediaCommands.FastForward" Content="&#xEB9D;" ToolTip="Fast forward; again for faster (L)" />
                                 </StackPanel>
+                                <Button x:Name="RepeatButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                        Command="{x:Static local:VideoControlBase.ToggleRepeatCommand}" Content="&#xE8EE;"
+                                        ToolTip="Repeat the video (R)" />
                                 <Button x:Name="SubtitleButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
                                         Width="40" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
                                         Command="{x:Static local:VideoControlBase.NextSubtitleTrackCommand}" Content="CC"
@@ -223,7 +226,21 @@
                         </Trigger>
                         <!-- a live source: pausing is all there is to do -->
                         <Trigger Property="CanSeek" Value="False">
+                            <Setter TargetName="RepeatButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="RewindButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="FastForwardButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="TimeText" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="PART_Seek" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <!-- no overlay: the video alone -->
+                        <Trigger Property="IsOverlayEnabled" Value="False">
+                            <Setter TargetName="PART_ControlsBar" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <!-- a picture: of no time to show, nor to seek in, nor to play -->
+                        <Trigger Property="IsStill" Value="True">
+                            <Setter TargetName="RepeatButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="RewindButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="PlayPauseButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="FastForwardButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="TimeText" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="PART_Seek" Property="Visibility" Value="Collapsed" />
@@ -239,6 +256,10 @@
                         </Trigger>
                         <Trigger Property="HasSubtitles" Value="True">
                             <Setter TargetName="SubtitleButton" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <!-- not repeating: the button dimmed, as the subtitles' is when off -->
+                        <Trigger Property="Looping" Value="False">
+                            <Setter TargetName="RepeatButton" Property="Opacity" Value="0.5" />
                         </Trigger>
                         <Trigger Property="SubtitleTrack" Value="-1">
                             <Setter TargetName="SubtitleButton" Property="Opacity" Value="0.5" />

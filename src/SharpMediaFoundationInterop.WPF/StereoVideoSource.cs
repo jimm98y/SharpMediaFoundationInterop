@@ -1,4 +1,5 @@
 ﻿using System;
+using SharpMediaFoundationInterop.Codecs;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -68,6 +69,15 @@ namespace SharpMediaFoundationInterop.WPF
                 var right = Right.VideoInfo;
                 if (left == null || right == null)
                     return Task.CompletedTask; // not yet: a live source that has not had its first frame
+
+                // Eyes turned to be shown are composed as shown - of frames converted on the CPU, turned already: those as
+                // decoded are not yet, and side by side as decoded would be one over the other once turned.
+                if (IsDecoded(left.PixelFormat) && (!left.Orientation.IsIdentity || !right.Orientation.IsIdentity)
+                    && Left.TrySetOutputFormat(PixelFormat.BGRA32) && Right.TrySetOutputFormat(PixelFormat.BGRA32))
+                {
+                    left = Left.VideoInfo;
+                    right = Right.VideoInfo;
+                }
                 if (left.PixelFormat != right.PixelFormat)
                     throw new NotSupportedException($"The eyes' frames are of different formats: {left.PixelFormat} and {right.PixelFormat}.");
 
@@ -82,30 +92,103 @@ namespace SharpMediaFoundationInterop.WPF
 
         #region Side by side
 
-        // Where the right eye's picture starts across, and the eyes' pictures and frames: of the coded size where NV12, the
-        // picture at its top left; of the picture's alone where BGR24 or BGRA32.
+        // Where the right eye's picture starts across, and each eye's picture and frame: of the coded size where as decoded,
+        // the picture at its top left; of the picture's alone where BGR24 or BGRA32.
         private int _rightX;
         private int _leftWidth, _leftHeight, _leftStride, _leftRows;
         private int _rightWidth, _rightHeight, _rightStride, _rightRows;
-        private int _bytesPerPixel;
+
+        /// <summary>
+        /// A plane of a frame: its bytes a pixel across, as a fraction - of 4:2:0's chroma, a pair of samples of two pixels -
+        /// its rows of the frame's, as a fraction, and the bytes of black, repeated across a row it has no eye's picture for.
+        /// </summary>
+        private readonly struct Plane
+        {
+            public Plane(int bytes, int perPixels, int rowsDivisor, byte[] blank)
+            {
+                Bytes = bytes;
+                PerPixels = perPixels;
+                RowsDivisor = rowsDivisor;
+                Blank = blank;
+            }
+
+            public int Bytes { get; }
+            public int PerPixels { get; }
+            public int RowsDivisor { get; }
+            public byte[] Blank { get; }
+
+            /// <summary>The bytes of a row of so many pixels: of pixels in pairs, of the pairs they are of.</summary>
+            public int RowBytes(int pixels) => (pixels + PerPixels - 1) / PerPixels * Bytes;
+            public int Rows(int frameRows) => (frameRows + RowsDivisor - 1) / RowsDivisor;
+        }
+
+        private Plane[] _planes;
+
+        /// <summary>The planes of frames of a format, and the black of each: of the frame's colour, of its range and bits.</summary>
+        private static Plane[] PlanesOf(VideoInfo info)
+        {
+            switch (info.PixelFormat)
+            {
+                case PixelFormat.BGR24:
+                    return new[] { new Plane(3, 1, 1, new byte[] { 0, 0, 0 }) };
+                case PixelFormat.BGRA32:
+                    return new[] { new Plane(4, 1, 1, new byte[] { 0, 0, 0, 255 }) };
+            }
+
+            // as decoded: of the stream's bits, its black luma - 16 of 8 bits of the limited range, scaled up - and its
+            // neutral chroma, each of a byte, or of the high bits of 16, little-endian
+            var colour = info.ColourOrDefault;
+            int bits = colour.BitDepth;
+            int black = colour.FullRange ? 0 : 16 << (bits - 8);
+            int neutral = 1 << (bits - 1);
+            byte[] Of8(params int[] values) => Array.ConvertAll(values, v => (byte)v);
+            byte[] Of16(params int[] values)
+            {
+                var bytes = new byte[values.Length * 2];
+                for (int i = 0; i < values.Length; i++)
+                    BitConverter.TryWriteBytes(bytes.AsSpan(i * 2), (ushort)(values[i] << (16 - bits)));
+                return bytes;
+            }
+
+            return info.FrameFormat switch
+            {
+                VideoFrameFormat.NV12 => new[] { new Plane(1, 1, 1, Of8(black)), new Plane(2, 2, 2, Of8(neutral, neutral)) },
+                VideoFrameFormat.P010 or VideoFrameFormat.P016 => new[] { new Plane(2, 1, 1, Of16(black)), new Plane(4, 2, 2, Of16(neutral, neutral)) },
+                VideoFrameFormat.YUY2 => new[] { new Plane(4, 2, 1, Of8(black, neutral, black, neutral)) },
+                VideoFrameFormat.Y210 or VideoFrameFormat.Y216 => new[] { new Plane(8, 2, 1, Of16(black, neutral, black, neutral)) },
+                VideoFrameFormat.AYUV => new[] { new Plane(4, 1, 1, Of8(neutral, neutral, black, 255)) },
+                VideoFrameFormat.Y410 => new[] { new Plane(4, 1, 1, BitConverter.GetBytes((uint)(neutral | black << 10 | neutral << 20 | 3 << 30))) },
+                VideoFrameFormat.Y416 => new[] { new Plane(8, 1, 1, Of16(neutral, black, neutral, (1 << bits) - 1)) },
+                VideoFrameFormat.L8 => new[] { new Plane(1, 1, 1, Of8(black)) },
+                VideoFrameFormat.L16 => new[] { new Plane(2, 1, 1, Of16(black)) },
+                _ => throw new NotSupportedException($"Frames of {info.FrameFormat} are not supported."),
+            };
+        }
+
+        /// <summary>Whether frames are as decoded, of the coded size: NV12, or of another frame format.</summary>
+        private static bool IsDecoded(PixelFormat format) => format == PixelFormat.NV12 || format == PixelFormat.Yuv;
 
         private VideoInfo Compose(VideoInfo left, VideoInfo right)
         {
             var format = left.PixelFormat;
-            bool nv12 = format == PixelFormat.NV12;
-            _bytesPerPixel = nv12 ? 1 : format == PixelFormat.BGRA32 ? 4 : 3;
+            bool decoded = IsDecoded(format);
+            if (decoded && left.FrameFormat != right.FrameFormat)
+                throw new NotSupportedException($"The eyes' frames are of different formats: {left.FrameFormat} and {right.FrameFormat}.");
+            _planes = PlanesOf(left);
+            var first = _planes[0];
 
-            _leftWidth = (int)left.OriginalWidth;
-            _leftHeight = (int)left.OriginalHeight;
-            _rightWidth = (int)right.OriginalWidth;
-            _rightHeight = (int)right.OriginalHeight;
-            _leftStride = nv12 ? (int)left.Width : _leftWidth * _bytesPerPixel;
-            _leftRows = nv12 ? (int)left.Height : _leftHeight;
-            _rightStride = nv12 ? (int)right.Width : _rightWidth * _bytesPerPixel;
-            _rightRows = nv12 ? (int)right.Height : _rightHeight;
+            // of the pictures as shown: frames converted are turned already, and frames as decoded are of eyes that are not
+            _leftWidth = (int)left.ShownWidth;
+            _leftHeight = (int)left.ShownHeight;
+            _rightWidth = (int)right.ShownWidth;
+            _rightHeight = (int)right.ShownHeight;
+            _leftStride = decoded ? (int)VideoFrameFormats.Stride(left.FrameFormat, left.Width) : first.RowBytes(_leftWidth);
+            _leftRows = decoded ? (int)left.Height : _leftHeight;
+            _rightStride = decoded ? (int)VideoFrameFormats.Stride(right.FrameFormat, right.Width) : first.RowBytes(_rightWidth);
+            _rightRows = decoded ? (int)right.Height : _rightHeight;
 
-            // NV12's chroma is of two columns at a time: the right picture starts at an even column
-            _rightX = nv12 ? (_leftWidth + 1) & ~1 : _leftWidth;
+            // chroma of two columns at a time: the right picture starts at an even column
+            _rightX = decoded ? (_leftWidth + 1) & ~1 : _leftWidth;
             uint width = (uint)(_rightX + _rightWidth);
             uint height = (uint)Math.Max(_leftHeight, _rightHeight);
             return new VideoInfo
@@ -113,11 +196,13 @@ namespace SharpMediaFoundationInterop.WPF
                 VideoCodec = left.VideoCodec,
                 OriginalWidth = width,
                 OriginalHeight = height,
-                Width = nv12 ? (width + 1) & ~1u : width,
-                Height = nv12 ? (height + 1) & ~1u : height,
+                Width = decoded ? (width + 1) & ~1u : width,
+                Height = decoded ? (height + 1) & ~1u : height,
                 FpsNom = left.FpsNom,
                 FpsDenom = left.FpsDenom,
                 PixelFormat = format,
+                FrameFormat = left.FrameFormat,
+                Colour = left.Colour,
                 StereoLayout = StereoLayout.SideBySide,
                 Projection = left.Projection,
                 ProjectionBounds = left.ProjectionBounds,
@@ -128,40 +213,47 @@ namespace SharpMediaFoundationInterop.WPF
         private byte[] Compose(byte[] left, byte[] right)
         {
             var info = VideoInfo;
-            bool nv12 = info.PixelFormat == PixelFormat.NV12;
-            int stride = nv12 ? (int)info.Width : (int)info.OriginalWidth * _bytesPerPixel;
-            int rows = nv12 ? (int)info.Height : (int)info.OriginalHeight;
-            int size = nv12 ? stride * rows * 3 / 2 : stride * rows;
+            bool decoded = IsDecoded(info.PixelFormat);
+            int stride = decoded ? (int)VideoFrameFormats.Stride(info.FrameFormat, info.Width) : _planes[0].RowBytes((int)info.OriginalWidth);
+            int rows = decoded ? (int)info.Height : (int)info.OriginalHeight;
+            int size = decoded ? (int)VideoFrameFormats.FrameSize(info.FrameFormat, info.Width, info.Height) : stride * rows;
             byte[] frame = ArrayPool<byte>.Shared.Rent(size);
 
-            // the picture: of the luma, black at 16, or of the pixels
-            byte black = nv12 ? (byte)16 : (byte)0;
-            CopyPlane(left, 0, _leftStride, _leftWidth * _bytesPerPixel, _leftHeight, frame, 0, stride, 0, rows, black);
-            CopyPlane(right, 0, _rightStride, _rightWidth * _bytesPerPixel, _rightHeight, frame, 0, stride, _rightX * _bytesPerPixel, rows, black);
-            if (nv12)
+            // each plane, one after another: of 4:2:0, the chroma's after the luma's
+            int leftOffset = 0, rightOffset = 0, offset = 0;
+            foreach (var plane in _planes)
             {
-                // the chroma, at half the height, of pairs of bytes at half the width: as many bytes a row as the luma
-                int chroma = stride * rows;
-                CopyPlane(left, _leftStride * _leftRows, _leftStride, _leftWidth, (_leftHeight + 1) / 2, frame, chroma, stride, 0, rows / 2, 128);
-                CopyPlane(right, _rightStride * _rightRows, _rightStride, _rightWidth, (_rightHeight + 1) / 2, frame, chroma, stride, _rightX, rows / 2, 128);
+                int frameRows = plane.Rows(rows);
+                CopyPlane(left, leftOffset, _leftStride, plane.RowBytes(_leftWidth), plane.Rows(_leftHeight),
+                    frame, offset, stride, 0, plane.RowBytes(_rightX), frameRows, plane.Blank);
+                CopyPlane(right, rightOffset, _rightStride, plane.RowBytes(_rightWidth), plane.Rows(_rightHeight),
+                    frame, offset, stride, plane.RowBytes(_rightX), stride - plane.RowBytes(_rightX), frameRows, plane.Blank);
+                leftOffset += _leftStride * plane.Rows(_leftRows);
+                rightOffset += _rightStride * plane.Rows(_rightRows);
+                offset += stride * frameRows;
             }
             return frame;
         }
 
         /// <summary>
-        /// One eye's plane into its place in the frame's, row by row; the rows of the frame's plane it has none for, or all
-        /// where it is missing, are <paramref name="blank"/>: black, of that plane.
+        /// One eye's plane into its place in the frame's, row by row, of its span of each row - <paramref name="span"/> bytes
+        /// from <paramref name="x"/>; what of the span it has no picture for, or all where it is missing, is
+        /// <paramref name="blank"/>, repeated: black, of that plane.
         /// </summary>
         private static void CopyPlane(byte[] source, int sourceOffset, int sourceStride, int rowBytes, int sourceRows,
-            byte[] target, int targetOffset, int targetStride, int x, int targetRows, byte blank)
+            byte[] target, int targetOffset, int targetStride, int x, int span, int targetRows, byte[] blank)
         {
             for (int y = 0; y < targetRows; y++)
             {
-                var row = target.AsSpan(targetOffset + y * targetStride + x, rowBytes);
+                var row = target.AsSpan(targetOffset + y * targetStride + x, span);
+                int copied = 0;
                 if (source != null && y < sourceRows)
-                    source.AsSpan(sourceOffset + y * sourceStride, rowBytes).CopyTo(row);
-                else
-                    row.Fill(blank);
+                {
+                    copied = Math.Min(rowBytes, span);
+                    source.AsSpan(sourceOffset + y * sourceStride, copied).CopyTo(row);
+                }
+                for (int at = copied; at < span; at++)
+                    row[at] = blank[(at - copied) % blank.Length];
             }
         }
 

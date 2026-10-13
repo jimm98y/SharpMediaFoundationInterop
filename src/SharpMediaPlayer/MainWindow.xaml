@@ -12,8 +12,8 @@
             <TabItem Header="File" x:Name="FileTab">
                 <DockPanel>
                     <ToolBar DockPanel.Dock="Top">
-                        <Button Content="Open video..." Click="OpenVideo_Click" ToolTip="A video, or a HEIC, HEIF or AVIF image" />
-                        <Button Content="Open left and right eye..." Click="OpenStereo_Click" ToolTip="Two videos of a stereo pair, played side by side" />
+                        <Button Content="Open" Click="OpenVideo_Click" ToolTip="A video, or a HEIC, HEIF or AVIF image" />
+                        <Button Content="Open left and right eye..." Click="OpenStereo_Click" Visibility="Collapsed" ToolTip="Two videos of a stereo pair, played side by side" />
                         <Separator />
                         <CheckBox x:Name="UseDirect3D" Content="Direct3D" IsChecked="True" Click="UseDirect3D_Click"
                                   ToolTip="Drawn with Direct3D, which shows a 180 or 360 degree video as a view to look around in; else into a bitmap, flat" />
@@ -22,59 +22,59 @@
                 </DockPanel>
             </TabItem>
             <TabItem Header="MP4">
-                <ctrl:VideoControl Source="{Binding MP4Source}" Looping="True" />
+                <ctrl:MediaControl Source="{Binding MP4Source}" />
             </TabItem>
             <TabItem Header="Screen">
-                <ctrl:VideoControl Source="{Binding ScreenSource}" Looping="True" />
+                <ctrl:MediaControl Source="{Binding ScreenSource}" Looping="True" />
             </TabItem>
             <TabItem Header="Camera">
-                <ctrl:VideoControl Source="{Binding CameraSource}" Looping="True" />
+                <ctrl:MediaControl Source="{Binding CameraSource}" Looping="True" />
             </TabItem>
             <!--<TabItem Header="HEIC">
-                <ctrl:VideoControl Source="{Binding HeicSource}" Looping="True" />
+                <ctrl:MediaControl Source="{Binding HeicSource}" Looping="True" />
             </TabItem>-->
             <!--<TabItem Header="RTSP">
-                <ctrl:VideoControl Source="{Binding RtspSource}" Looping="True" />
+                <ctrl:MediaControl Source="{Binding RtspSource}" Looping="True" />
             </TabItem>-->
         </TabControl>        
     </Grid>
 
     <!--<WrapPanel Orientation="Horizontal">
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
 
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
 
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
 
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
-        <ctrl:VideoControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
+        <ctrl:MediaControl Source="{Binding Source}" Width="256" Height="192" Looping="True" Mute="True" />
 
     </WrapPanel>-->
 

@@ -8,11 +8,11 @@ namespace SharpMediaFoundationInterop.WPF
 {
     /// <summary>
     /// A video control that draws each frame into a bitmap: copied in on the UI thread, then uploaded and converted for the
-    /// GPU by WPF's render thread. It takes frames of any source as they are; see <see cref="VideoControlD3D"/> for the
+    /// GPU by WPF's render thread. It takes frames of any source as they are; see <see cref="GpuMediaControl"/> for the
     /// way through Direct3D. Of a stereo video it shows both eyes as the frame has them, or one eye's picture alone - see
-    /// <see cref="VideoControlBase.EyeView"/>; a spherical video it shows flat, as <see cref="VideoControlD3D"/> does not.
+    /// <see cref="VideoControlBase.EyeView"/>; a spherical video it shows flat, as <see cref="GpuMediaControl"/> does not.
     /// </summary>
-    public class VideoControl : VideoControlBase
+    public class MediaControl : VideoControlBase
     {
         private volatile WriteableBitmap _canvas;
         private Image _image;
@@ -25,7 +25,7 @@ namespace SharpMediaFoundationInterop.WPF
         protected override bool CreateSurface(Image image, VideoInfo videoInfo)
         {
             _image = image;
-            CreateCanvas(videoInfo, new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight));
+            CreateCanvas(videoInfo, new Int32Rect(0, 0, (int)videoInfo.ShownWidth, (int)videoInfo.ShownHeight));
             return true;
         }
 
@@ -55,7 +55,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             // the whole picture, or one eye's: the bitmap made again of that size, where it was of the other
             var view = GetView(videoInfo);
-            var rect = new Int32Rect(0, 0, (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight);
+            var rect = new Int32Rect(0, 0, (int)videoInfo.ShownWidth, (int)videoInfo.ShownHeight);
             if (view.IsOneEye)
             {
                 var (x, y, width, height) = view.EyeRect(videoInfo, view.Eye == EyeView.Right);
@@ -66,7 +66,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             var canvas = _canvas;
             int bytesPerPixel = videoInfo.PixelFormat == PixelFormat.BGRA32 ? 4 : 3;
-            int frameStride = (int)videoInfo.OriginalWidth * bytesPerPixel;
+            int frameStride = (int)videoInfo.ShownWidth * bytesPerPixel;
             int rowBytes = rect.Width * bytesPerPixel;
 
             canvas.Lock();

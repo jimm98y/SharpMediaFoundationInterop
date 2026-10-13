@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using SharpMediaFoundationInterop.Codecs;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -11,10 +12,18 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>
         /// As a decoder makes it: a plane of luma, then one of chroma at half the size each way, of the coded size -
         /// <see cref="VideoInfo.Width"/> by <see cref="VideoInfo.Height"/> - the picture its top left
-        /// <see cref="VideoInfo.OriginalWidth"/> by <see cref="VideoInfo.OriginalHeight"/>. What a GPU converts for
-        /// itself, where the others are converted on the CPU.
+        /// <see cref="VideoInfo.OriginalWidth"/> by <see cref="VideoInfo.OriginalHeight"/>, not yet turned - see
+        /// <see cref="VideoInfo.Orientation"/>. What a GPU converts for itself, where the others are converted on the CPU,
+        /// of <see cref="VideoInfo.ShownWidth"/> by <see cref="VideoInfo.ShownHeight"/>.
         /// </summary>
-        NV12
+        NV12,
+
+        /// <summary>
+        /// As a decoder makes it, as NV12 is, but of another <see cref="VideoInfo.FrameFormat"/> - of more than 8 bits, of
+        /// 4:2:2, 4:4:4 or monochrome - of the coded size: what a GPU converts for itself, as it does NV12. A source asked
+        /// for NV12 hands these out of a stream NV12 does not hold.
+        /// </summary>
+        Yuv
     }
 
     /// <summary>How a frame holds the views of the two eyes, where it holds both.</summary>
@@ -80,6 +89,34 @@ namespace SharpMediaFoundationInterop.WPF
         public uint FpsDenom { get; set; }
         public PixelFormat PixelFormat { get; set; }
 
+        /// <summary>
+        /// The layout of the decoded frames, of the stream's chroma and bits: what <see cref="PixelFormat.NV12"/> and
+        /// <see cref="PixelFormat.Yuv"/> frames are of, and what a source converts on the CPU.
+        /// </summary>
+        public VideoFrameFormat FrameFormat { get; set; } = VideoFrameFormat.NV12;
+
+        /// <summary>
+        /// How the decoded samples become sRGB, as the stream says; null where it says nothing - see
+        /// <see cref="VideoColour.Default"/>.
+        /// </summary>
+        public VideoColour Colour { get; set; }
+
+        /// <summary>
+        /// How the picture is turned and flipped to be shown, as the track says - a phone's upright video, recorded on its
+        /// side. Frames converted on the CPU are of the picture shown already; those as decoded are turned as they are
+        /// converted, on the GPU.
+        /// </summary>
+        public VideoOrientation Orientation { get; set; }
+
+        /// <summary>The width of the picture as it is shown: <see cref="OriginalWidth"/>, or its height, turned on its side.</summary>
+        public uint ShownWidth => Orientation.SwapsAxes ? OriginalHeight : OriginalWidth;
+
+        /// <summary>The height of the picture as it is shown.</summary>
+        public uint ShownHeight => Orientation.SwapsAxes ? OriginalWidth : OriginalHeight;
+
+        /// <summary>The colour, as the stream says it, or what a stream that says nothing is taken to be.</summary>
+        public VideoColour ColourOrDefault => Colour ??= VideoColour.Default(OriginalHeight);
+
         /// <summary>How the frame holds the eyes' views, as the source says: a file by its 'st3d' box.</summary>
         public StereoLayout StereoLayout { get; set; }
 
@@ -121,6 +158,12 @@ namespace SharpMediaFoundationInterop.WPF
         /// </summary>
         /// <returns>Whether the source gives frames of it.</returns>
         bool TrySetOutputFormat(PixelFormat format) => false;
+
+        /// <summary>
+        /// Whether it is a picture, not a video: of one frame, shown and held, of no time - an image. A control shows no
+        /// position, nor a bar to seek with.
+        /// </summary>
+        bool IsStill => false;
 
         /// <summary>
         /// Asks for frames decoded on a device, before the source is initialized: where its decoder can decode on the GPU,

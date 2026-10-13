@@ -450,15 +450,16 @@ namespace SharpMediaFoundationInterop.WPF
                     {
                         videoInfo.VideoCodec = "H265";
 
-                        var dimensions = h265Track.Sps.First().Value.CalculateDimensions();
+                        var sps = h265Track.Sps.First().Value;
+                        var dimensions = sps.CalculateDimensions();
                         videoInfo.OriginalWidth = dimensions.Width;
                         videoInfo.OriginalHeight = dimensions.Height;
 
                         videoInfo.FpsNom = h265Track.Timescale;
                         videoInfo.FpsDenom = (uint)h265Track.DefaultSampleDuration;
 
-                        videoInfo.Width = MediaUtils.RoundToMultipleOf(videoInfo.OriginalWidth, MediaCodecs.DecoderAlignment(VideoCodec.H265));
-                        videoInfo.Height = MediaUtils.RoundToMultipleOf(videoInfo.OriginalHeight, MediaCodecs.DecoderAlignment(VideoCodec.H265));
+                        // the frames of the coded size, the picture cropped of them: 1088 lines of a 1080 line picture
+                        (videoInfo.Width, videoInfo.Height) = TrackColour.HevcFrameSize(sps, videoInfo.OriginalWidth, videoInfo.OriginalHeight);
                     }
                     else if (_videoTrack is AV1Track av1Track)
                     {
@@ -515,6 +516,23 @@ namespace SharpMediaFoundationInterop.WPF
                     {
                         throw new NotSupportedException();
                     }
+
+                    // The bits of the samples and their chroma, of the stream - what its decoder hands out of them - and its
+                    // colour, of the sample entry's 'colr', else of the stream; 8 bits of 4:2:0 of a codec that says neither.
+                    var (bitDepth, chromaFormat) = TrackColour.SamplesOf(_videoTrack) ?? (8, 1);
+                    TrackColour.ThrowIfNotDecoded(_videoTrack, bitDepth, chromaFormat);
+                    videoInfo.FrameFormat = TrackColour.FrameFormatOf(chromaFormat, bitDepth);
+                    var entryColours = _reader.Tracks[_videoTrack.TrackID].Stbl
+                        .Children.OfType<SampleDescriptionBox>().Single()
+                        .Children.OfType<VisualSampleEntry>().First()
+                        .Children.OfType<ColourInformationBox>();
+                    videoInfo.Colour = TrackColour.Of(entryColours, _videoTrack, bitDepth, sceneReferred: false, videoInfo.OriginalHeight);
+
+                    // turned and flipped as its track's matrix says: a phone's upright video, recorded on its side
+                    var matrix = _reader.Track.Select(x => x.Children.OfType<TrackHeaderBox>().First())
+                        .First(x => x.TrackID == _videoTrack.TrackID).Matrix;
+                    if (matrix != null && matrix.Length >= 5)
+                        videoInfo.Orientation = VideoOrientation.FromMatrix(matrix[0], matrix[1], matrix[3], matrix[4]);
 
                     ReadStereoAndProjection(videoInfo);
                 }

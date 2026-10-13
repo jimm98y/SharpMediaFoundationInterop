@@ -19,7 +19,7 @@ namespace SharpMediaFoundationInterop.WPF
     /// the sphere, drawn by the GPU from the frame: looked around by dragging, zoomed with the wheel, of one eye, or of both
     /// side by side.
     /// </remarks>
-    public class VideoControlD3D : VideoControlBase
+    public class GpuMediaControl : VideoControlBase
     {
         private volatile bool _hasSurface;
         private Direct3DDevice _device;

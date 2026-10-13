@@ -57,7 +57,7 @@
         /// <summary>Where an eye's picture is in the frame, in pixels of the picture: all of it, where there is one.</summary>
         public (uint X, uint Y, uint Width, uint Height) EyeRect(VideoInfo info, bool right)
         {
-            uint width = info.OriginalWidth, height = info.OriginalHeight;
+            uint width = info.ShownWidth, height = info.ShownHeight;
             switch (Layout)
             {
                 case StereoLayout.SideBySide:

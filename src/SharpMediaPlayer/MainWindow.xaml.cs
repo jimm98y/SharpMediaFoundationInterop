@@ -62,13 +62,12 @@ namespace SharpMediaFoundationInterop
             _files = files;
             _fileControl?.Dispose();
 
-            // an image is a video of one frame, shown and held: not looped, which would show it again and again
+            // an image is a video of one frame, shown and held; a video is repeated as the control's Repeat button says, off
             bool image = files.Length == 1 && ImageFileSource.IsImage(files[0]);
             IVideoSource source = files.Length == 2
                 ? new StereoVideoSource(new VideoFileSource(files[0]), new VideoFileSource(files[1]))
                 : image ? new ImageFileSource(files[0]) : new VideoFileSource(files[0]);
-            _fileControl = UseDirect3D.IsChecked == true ? new VideoControlD3D() : new VideoControl();
-            _fileControl.Looping = !image;
+            _fileControl = UseDirect3D.IsChecked == true ? new GpuMediaControl() : new MediaControl();
             _fileControl.Source = source;
             FileHost.Content = _fileControl;
             Tabs.SelectedItem = FileTab;

@@ -21,8 +21,8 @@ namespace SharpMediaFoundationInterop.WPF
             get => _videoInfo;
             protected set
             {
-                if (value != null && _outputFormat == PixelFormat.NV12)
-                    value.PixelFormat = PixelFormat.NV12;
+                if (value != null)
+                    value.PixelFormat = PixelFormatOf(value);
                 _videoInfo = value;
             }
         }
@@ -31,16 +31,29 @@ namespace SharpMediaFoundationInterop.WPF
         private PixelFormat _outputFormat = PixelFormat.BGR24;
 
         /// <summary>
-        /// NV12 hands frames out as the decoder makes them, not converted to BGR24 on the CPU: for a control that converts
-        /// them on the GPU. Asked for before the source is initialized.
+        /// Whether frames are handed out as the decoder makes them, for a control that converts them on the GPU: NV12, or of
+        /// another <see cref="VideoInfo.FrameFormat"/>, <see cref="PixelFormat.Yuv"/>.
+        /// </summary>
+        private bool HandsOutDecoded => _outputFormat == PixelFormat.NV12 || _outputFormat == PixelFormat.Yuv;
+
+        /// <summary>The format of the frames handed out of a video: as decoded, of its frame format, or as converted.</summary>
+        private PixelFormat PixelFormatOf(VideoInfo info) =>
+            !HandsOutDecoded ? _outputFormat
+            : info.FrameFormat == VideoFrameFormat.NV12 ? PixelFormat.NV12 : PixelFormat.Yuv;
+
+        /// <summary>
+        /// NV12, or <see cref="PixelFormat.Yuv"/>, hands frames out as the decoder makes them - NV12, or of the stream's
+        /// <see cref="VideoInfo.FrameFormat"/> - not converted on the CPU: for a control that converts them on the GPU.
+        /// BGR24, as by default, and BGRA32 convert them on the CPU, of the stream's colour. Asked for before the source is
+        /// initialized.
         /// </summary>
         public bool TrySetOutputFormat(PixelFormat format)
         {
-            if (format != PixelFormat.NV12 && format != PixelFormat.BGR24)
+            if (format != PixelFormat.NV12 && format != PixelFormat.Yuv && format != PixelFormat.BGR24 && format != PixelFormat.BGRA32)
                 return false;
             _outputFormat = format;
             if (_videoInfo != null)
-                _videoInfo.PixelFormat = format;
+                _videoInfo.PixelFormat = PixelFormatOf(_videoInfo);
             return true;
         }
         public AudioInfo AudioInfo { get; protected set; }
@@ -49,7 +62,6 @@ namespace SharpMediaFoundationInterop.WPF
         public byte[] Empty { get; private set; } = new byte[0];
 
         protected IMediaVideoTransform _videoDecoder;
-        protected IMediaVideoTransform _nv12Decoder;
         protected IMediaAudioTransform _audioDecoder;
 
         /// <summary>Decoded frames, each with the time it is shown at.</summary>
@@ -57,11 +69,14 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>Decoded frames of sound, each with the time it starts at; -1 where the source gives none.</summary>
         protected ConcurrentQueue<(byte[] Pcm, long Timestamp)> _audioRenderQueue = new ConcurrentQueue<(byte[] Pcm, long Timestamp)>();
 
+        /// <summary>The decoder's frame, of its <see cref="VideoInfo.FrameFormat"/>: NV12 of most streams.</summary>
         protected byte[] _nv12Buffer;
-        protected byte[] _rgbBuffer;
         private byte[] _pcmBuffer;
         private int _bytesPerPixel;
         private int _imageBufferLen;
+
+        /// <summary>How the frames' samples become sRGB, converted on the CPU: of the stream's colour.</summary>
+        private VideoColour _colour;
         protected long _videoFrames = 0;
         protected long _audioFrames = 0;
         protected bool _isLowLatency = false;
@@ -326,7 +341,7 @@ namespace SharpMediaFoundationInterop.WPF
                 return null;
             }
 
-            if (_videoDecoder == null || _nv12Decoder == null)
+            if (_videoDecoder == null)
             {
                 CreateVideoDecoder(videoInfo);
             }
@@ -449,38 +464,28 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         /// <summary>A decoded frame made into the picture shown, in an array of the pool, and queued with its time.</summary>
-        private void EnqueuePicture(byte[] nv12, long frameTime, VideoInfo videoInfo)
+        private void EnqueuePicture(byte[] decodedFrame, long frameTime, VideoInfo videoInfo)
         {
-            if (_outputFormat == PixelFormat.NV12)
+            var format = videoInfo.FrameFormat;
+            if (HandsOutDecoded)
             {
                 // as the decoder made it, of its coded size: the GPU converts it
-                int size = (int)(videoInfo.Width * videoInfo.Height * 3 / 2);
+                int size = (int)VideoFrameFormats.FrameSize(format, videoInfo.Width, videoInfo.Height);
                 byte[] frame = ArrayPool<byte>.Shared.Rent(size);
-                Buffer.BlockCopy(nv12, 0, frame, 0, Math.Min(size, nv12.Length));
+                Buffer.BlockCopy(decodedFrame, 0, frame, 0, Math.Min(size, decodedFrame.Length));
                 _videoRenderQueue.Enqueue((frame, frameTime));
                 Interlocked.Increment(ref _videoFrames);
                 return;
             }
 
-            _nv12Decoder.ProcessInput(nv12, frameTime);
-
-            if (_nv12Decoder.ProcessOutput(ref _rgbBuffer, out _))
-            {
-                byte[] decoded = ArrayPool<byte>.Shared.Rent(_imageBufferLen);
-
-                BitmapUtils.CopyBitmap(
-                    _rgbBuffer,
-                    (int)videoInfo.Width,
-                    (int)videoInfo.Height,
-                    decoded,
-                    (int)videoInfo.OriginalWidth,
-                    (int)videoInfo.OriginalHeight,
-                    _bytesPerPixel,
-                    true);
-
-                _videoRenderQueue.Enqueue((decoded, frameTime));
-                Interlocked.Increment(ref _videoFrames);
-            }
+            // converted here, of the stream's colour, top-down: the picture, the top left of the coded frame, turned as
+            // it is shown
+            byte[] picture = ArrayPool<byte>.Shared.Rent(_imageBufferLen);
+            _colour.Convert(decodedFrame, format, (int)VideoFrameFormats.Stride(format, videoInfo.Width), (int)videoInfo.Height,
+                (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight,
+                picture, (int)videoInfo.ShownWidth, (int)videoInfo.ShownHeight, _bytesPerPixel, orientation: videoInfo.Orientation);
+            _videoRenderQueue.Enqueue((picture, frameTime));
+            Interlocked.Increment(ref _videoFrames);
         }
 
         /// <summary>
@@ -817,17 +822,26 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>The decoder, where it is of Media Foundation's, which alone decodes on the GPU here.</summary>
         private IMediaFoundationVideoTransform GpuDecoder => _videoDecoder as IMediaFoundationVideoTransform;
 
+        /// <summary>
+        /// Whether the frames are decoded on the GPU, of the device given: NV12, handed out to a control that converts them,
+        /// of a colour the GPU's video processor shows as well as a shader would, and turned - not mirrored - as it can.
+        /// Others are decoded into the CPU's memory, which the control's shader converts, or this does.
+        /// </summary>
+        private bool DecodesOnGpu(VideoInfo info) =>
+            _direct3D != null && HandsOutDecoded && info.FrameFormat == VideoFrameFormat.NV12 && info.ColourOrDefault.IsVideoProcessorColour
+            && !info.Orientation.IsMirrored;
+
         /// <summary>The decoder made, given the device first where there is one and it can take it.</summary>
         private void InitializeVideoDecoder(VideoInfo info)
         {
             var gpu = GpuDecoder;
-            if (_direct3D != null && gpu != null)
+            if (DecodesOnGpu(info) && gpu != null)
                 gpu.DeviceManager = _direct3D.Manager;
             _videoDecoder.Initialize();
-            if (_direct3D != null && gpu != null && gpu.UsesDevice && gpu.ProvidesSamples && _gpuPool == null)
+            if (DecodesOnGpu(info) && gpu != null && gpu.UsesDevice && gpu.ProvidesSamples && _gpuPool == null)
                 _gpuPool = new GpuFramePool(_direct3D, info.Width, info.Height);
             if (_direct3D != null && Log.InfoEnabled)
-                Log.Info($"{info.VideoCodec} decoded on the {(gpu?.UsesDevice == true ? "GPU" : "CPU")}");
+                Log.Info($"{info.VideoCodec} {info.FrameFormat} decoded on the {(gpu?.UsesDevice == true ? "GPU" : "CPU")}");
         }
 
         /// <summary>
@@ -950,18 +964,17 @@ namespace SharpMediaFoundationInterop.WPF
                     FpsNom = info.FpsNom,
                     FpsDenom = info.FpsDenom,
                     LowLatency = _isLowLatency,
+                    OutputFormat = info.FrameFormat,
                 });
                 InitializeVideoDecoder(info);
             }
 
-            _nv12Decoder = new ColorConverter(PInvoke.MFVideoFormat_NV12, PInvoke.MFVideoFormat_RGB24, info.Width, info.Height);
-            _nv12Decoder.Initialize();
-
-            _bytesPerPixel = 3;
+            // converted on the CPU, where it is not handed out as decoded: of the stream's colour, BGR or BGRA
+            _colour = info.ColourOrDefault;
+            _bytesPerPixel = _outputFormat == PixelFormat.BGRA32 ? 4 : 3;
+            _imageBufferLen = (int)(info.OriginalWidth * info.OriginalHeight) * _bytesPerPixel;
 
             _nv12Buffer = new byte[_videoDecoder.OutputSize];
-            _rgbBuffer = new byte[_nv12Decoder.OutputSize];
-            _imageBufferLen = (int)_nv12Decoder.OutputSize;
         }
 
         /// <summary>The codec of a <see cref="VideoInfo.VideoCodec"/>.</summary>
@@ -1026,12 +1039,6 @@ namespace SharpMediaFoundationInterop.WPF
                     {
                         _videoDecoder.Dispose();
                         _videoDecoder = null;
-                    }
-
-                    if (_nv12Decoder != null)
-                    {
-                        _nv12Decoder.Dispose();
-                        _nv12Decoder = null;
                     }
 
                     if (_audioDecoder != null)

@@ -329,13 +329,15 @@ byte[] pcmSample = ...
 audioOutput.Enqueue(pcmSample, (uint)pcmSample.Length);
 ```
 ## Video control
-`VideoControl` (drawn into a bitmap) and `VideoControlD3D` (drawn with Direct3D) play a video source, with a bar of controls over the bottom of the video. The bar shows as the mouse moves over the video and fades out after `ControlsHideDelay`, or as the mouse leaves; it stays while the video is paused. Set `AutoHideControls="False"` to always show it, or `ShowControls="False"` to never show it.
+`MediaControl` (drawn into a bitmap) and `GpuMediaControl` (drawn with Direct3D) play a video source, with a bar of controls over the bottom of the video. The bar shows as the mouse moves over the video and fades out after `ControlsHideDelay`, or as the mouse leaves; it stays while the video is paused. Set `AutoHideControls="False"` to always show it, or `ShowControls="False"` to never show it.
+
+Set `IsOverlayEnabled="False"` to remove the overlay completely: no bar, and none of its keyboard shortcuts, for an application that draws its own controls. Everything the overlay does is also a public method on the control: `Play()`, `Pause()`, `TogglePlayPause()`, `Rewind()`, `FastForward()`, `SetRate(rate)`, `Seek(position)`, `SeekBy(offset)`, `ToggleRepeat()`, `NextEyeView()`, `NextSubtitleTrack()` and `ResetView()`, with `Looping`, `Mute`, `EyeView` and `SubtitleTrack` as properties. The bar's Repeat button (or R) turns `Looping` on and off; it is off by default, and a video then stops at its end. Subtitles still show without the overlay; set `SubtitleTrack="-1"` to hide them.
 
 The bar is part of the control's template, and can be restyled or replaced from XAML. Its buttons send WPF's `MediaCommands` (`TogglePlayPause`, `Play`, `Pause`, `Rewind`, `FastForward`, `MuteVolume`), and the control's read-only properties say what to show: `IsPlaying`, `CanSeek`, `PlaybackRate`, `Position`, `Duration`, `TimeText` and `AreControlsVisible`. The template is also put in the visual state `ControlsVisible` or `ControlsHidden`. Template parts, all optional: `PART_Image` (the frames are drawn on it), `PART_Seek` (a `Slider` that seeks) and `PART_ControlsBar` (kept shown while the mouse is over it).
 ```xml
-<ctrl:VideoControl Source="{Binding Source}">
-    <ctrl:VideoControl.Template>
-        <ControlTemplate TargetType="ctrl:VideoControl">
+<ctrl:MediaControl Source="{Binding Source}">
+    <ctrl:MediaControl.Template>
+        <ControlTemplate TargetType="ctrl:MediaControl">
             <Grid Background="Transparent">
                 <Image x:Name="PART_Image" />
                 <StackPanel x:Name="Bar" Orientation="Horizontal" VerticalAlignment="Bottom" Background="#80000000">
@@ -352,8 +354,8 @@ The bar is part of the control's template, and can be restyled or replaced from 
                 </Trigger>
             </ControlTemplate.Triggers>
         </ControlTemplate>
-    </ctrl:VideoControl.Template>
-</ctrl:VideoControl>
+    </ctrl:MediaControl.Template>
+</ctrl:MediaControl>
 ```
 To restyle only the default template's buttons, base a style on `{StaticResource {x:Static ctrl:VideoControlBase.ButtonStyleKey}}`. The seek bar - a thin track and a round thumb with a dot, as Windows 11's Media Player draws it - is `VideoControlBase.SeekSliderStyleKey`; its `Foreground` is the accent colour of the part played and the dot, and its `Background` the rest of the track.
 
@@ -368,7 +370,7 @@ Two separate videos, one per eye, play as one stereo video side by side through 
 var source = new StereoVideoSource(new VideoFileSource("left.mp4"), new VideoFileSource("right.mp4"));
 ```
 
-A 180 or 360 degree video (equirectangular, as a VR180 camera writes it, read from the file's `sv3d` box, or forced with `Projection`) is shown by `VideoControlD3D` as a view into the sphere, drawn on the GPU: drag to look around, use the wheel to zoom, and double-click to look straight ahead again. `Yaw`, `Pitch` and `FieldOfView` hold the view and can be bound to. Of a stereo VR video, `EyeView` shows one eye's view, or both side by side. `VideoControl` shows such a video flat.
+A 180 or 360 degree video (equirectangular, as a VR180 camera writes it, read from the file's `sv3d` box, or forced with `Projection`) is shown by `GpuMediaControl` as a view into the sphere, drawn on the GPU: drag to look around, use the wheel to zoom, and double-click to look straight ahead again. `Yaw`, `Pitch` and `FieldOfView` hold the view and can be bound to. Of a stereo VR video, `EyeView` shows one eye's view, or both side by side. `MediaControl` shows such a video flat.
 
 ## Samples
 The console samples run on Windows, macOS and Linux alike; the WPF player is Windows' alone. The recorders take how long to record, in seconds, as their first argument - `dotnet run -- 10` - or record until a key is pressed.

@@ -13,7 +13,7 @@ namespace SharpMediaFoundationInterop.WPF
 {
     /// <summary>
     /// A HEIF image - a HEIC's, an AVIF's - as a video of one frame: decoded whole as it is opened, a grid's tiles each
-    /// decoded and put in their place, made into BGRA as its colour says, then turned, mirrored and cropped as its
+    /// decoded and put in their place, made into BGRA of sRGB as its colour says, then turned, mirrored and cropped as its
     /// properties say. Of a stereo pair - a spatial photo's 'ster' group - both eyes' images, side by side.
     /// </summary>
     /// <remarks>
@@ -49,6 +49,9 @@ namespace SharpMediaFoundationInterop.WPF
             _handedOut = false;
             return Task.CompletedTask;
         }
+
+        /// <summary>A picture: shown and held, of no time.</summary>
+        public bool IsStill => true;
 
         /// <summary>BGRA alone: it is converted here, of the matrix and the range the image says.</summary>
         public bool TrySetOutputFormat(PixelFormat format) => format == PixelFormat.BGRA32;
@@ -157,12 +160,17 @@ namespace SharpMediaFoundationInterop.WPF
 
                 // The colour of the grid, where it says it; else of its tiles, as they are all coded alike. The tiles' own
                 // transformations, which there should be none of, are not applied.
-                image = DecodeTiles(reader, tiles, grid.Columns, (int)grid.OutputWidth, (int)grid.OutputHeight,
-                    properties.OfType<ColourInformationBox>().FirstOrDefault(IsNclx) ?? reader.PropertiesOf(tiles[0]).OfType<ColourInformationBox>().FirstOrDefault(IsNclx));
+                var colours = properties.OfType<ColourInformationBox>().ToList();
+                foreach (var tileColour in reader.PropertiesOf(tiles[0]).OfType<ColourInformationBox>())
+                {
+                    if (!colours.Any(x => x.ColourType == tileColour.ColourType))
+                        colours.Add(tileColour);
+                }
+                image = DecodeTiles(reader, tiles, grid.Columns, (int)grid.OutputWidth, (int)grid.OutputHeight, colours);
             }
             else
             {
-                image = DecodeTiles(reader, new[] { itemID }, 1, -1, -1, properties.OfType<ColourInformationBox>().FirstOrDefault(IsNclx));
+                image = DecodeTiles(reader, new[] { itemID }, 1, -1, -1, properties.OfType<ColourInformationBox>().ToList());
             }
 
             foreach (var property in properties)
@@ -183,16 +191,24 @@ namespace SharpMediaFoundationInterop.WPF
             return image;
         }
 
-        private static bool IsNclx(ColourInformationBox colr) => colr.ColourType == IsoStream.FromFourCC("nclx");
-
         /// <summary>
         /// Coded items decoded, each in its place of a grid of so many columns, and made into BGRA of the size given - -1 for
-        /// the size of the one item there is.
+        /// the size of the one item there is - of the item's 'colr's: its 'nclx', its ICC profile.
         /// </summary>
-        private static Bgra DecodeTiles(ImageReader reader, IReadOnlyList<uint> tiles, int columns, int width, int height, ColourInformationBox colr)
+        private static Bgra DecodeTiles(ImageReader reader, IReadOnlyList<uint> tiles, int columns, int width, int height, IReadOnlyList<ColourInformationBox> colours)
         {
             using var track = reader.CreateTrack(tiles[0])
                 ?? throw new NotSupportedException($"Item {tiles[0]} is of no codec that can be read.");
+
+            // An AVIF's 'av1C' need have no sequence header, which is then in the item itself: read of the first tile, for
+            // what it says - the size, the bits, the colour - before the tiles are decoded.
+            if (track is AV1Track { SequenceHeaderObu: null } withoutHeader)
+            {
+                var first = reader.ReadItem(tiles[0]);
+                withoutHeader.ProcessSample(first, 0, first.Length, out _, out _);
+                if (withoutHeader.SequenceHeaderObu == null)
+                    throw new InvalidDataException($"Item {tiles[0]} has no AV1 sequence header.");
+            }
 
             // the size of a tile, as its stream says it
             VideoCodec codec;
@@ -218,16 +234,25 @@ namespace SharpMediaFoundationInterop.WPF
                     throw new NotSupportedException($"Images of {track.GetType().Name} are not supported.");
             }
 
+            // the bits of its samples and its chroma, and what the decoder hands out of them
+            var (bitDepth, chromaFormat) = TrackColour.SamplesOf(track) ?? (8, 1);
+            TrackColour.ThrowIfNotDecoded(track, bitDepth, chromaFormat);
+            var format = TrackColour.FrameFormatOf(chromaFormat, bitDepth);
+
             if (width < 0)
             {
                 width = tileWidth;
                 height = tileHeight;
             }
 
-            var colour = YuvColour.Of(colr, track);
+            var colour = TrackColour.Of(colours, track, bitDepth, sceneReferred: true);
+            // the decoder's frames, of the coded size - of HEVC its SPS's, the picture cropped of them - the tile at their top left
             uint alignment = MediaCodecs.DecoderAlignment(codec);
-            int stride = (int)MediaUtils.RoundToMultipleOf((uint)tileWidth, alignment);
-            int planeHeight = (int)MediaUtils.RoundToMultipleOf((uint)tileHeight, alignment);
+            var (frameWidth, frameHeight) = track is H265Track hevcTrack
+                ? TrackColour.HevcFrameSize(hevcTrack.Sps.First().Value, (uint)tileWidth, (uint)tileHeight)
+                : (MediaUtils.RoundToMultipleOf((uint)tileWidth, alignment), MediaUtils.RoundToMultipleOf((uint)tileHeight, alignment));
+            int stride = (int)VideoFrameFormats.Stride(format, frameWidth);
+            int planeHeight = (int)frameHeight;
 
             var image = new Bgra(width, height);
             using var decoder = MediaCodecs.CreateVideoDecoder(codec, new VideoDecoderOptions
@@ -236,21 +261,22 @@ namespace SharpMediaFoundationInterop.WPF
                 Height = (uint)tileHeight,
                 FpsNom = 1,
                 FpsDenom = 1,
+                OutputFormat = format,
             });
             decoder.Initialize();
-            byte[] nv12 = new byte[decoder.OutputSize];
+            byte[] frame = new byte[decoder.OutputSize];
             int decoded = 0;
 
             // Each tile a picture of its own, timed by its place: the decoder hands the time back with it.
             void TakeOutput()
             {
-                while (decoder.ProcessOutput(ref nv12, out _, out long time))
+                while (decoder.ProcessOutput(ref frame, out _, out long time))
                 {
                     int index = (int)Math.Round(time / (double)TimeSpan.TicksPerSecond);
                     if (index < 0 || index >= tiles.Count)
                         continue;
-                    image.PutNV12(nv12, stride, planeHeight, tileWidth, tileHeight,
-                        index % columns * tileWidth, index / columns * tileHeight, colour);
+                    colour.Convert(frame, format, stride, planeHeight, tileWidth, tileHeight, image.Pixels, image.Width, image.Height, 4,
+                        index % columns * tileWidth, index / columns * tileHeight, exact: true);
                     decoded++;
                 }
             }
@@ -287,49 +313,6 @@ namespace SharpMediaFoundationInterop.WPF
             _picture = null;
         }
 
-        /// <summary>How YCbCr is made into RGB: the matrix's weights of red and blue, and whether the values are of the full range.</summary>
-        private readonly struct YuvColour
-        {
-            public readonly double Kr, Kb;
-            public readonly bool FullRange;
-
-            private YuvColour(double kr, double kb, bool fullRange)
-            {
-                Kr = kr;
-                Kb = kb;
-                FullRange = fullRange;
-            }
-
-            /// <summary>
-            /// Of the item's 'nclx', or where it has none of the stream's VUI, as HEIF says; where neither says, BT.601 of the
-            /// limited range, as HEVC takes a stream that says nothing to be.
-            /// </summary>
-            public static YuvColour Of(ColourInformationBox colr, ITrack track)
-            {
-                uint matrix = 2;
-                bool fullRange = false;
-                if (colr != null)
-                {
-                    matrix = colr.MatrixCoefficients;
-                    fullRange = colr.FullRangeFlag;
-                }
-                else if (track is H265Track hevc && hevc.Sps.Values.FirstOrDefault() is SharpH265.SeqParameterSetRbsp sps
-                    && sps.VuiParametersPresentFlag != 0 && sps.VuiParameters is SharpH265.VuiParameters vui)
-                {
-                    if (vui.ColourDescriptionPresentFlag != 0)
-                        matrix = vui.MatrixCoeffs;
-                    fullRange = vui.VideoFullRangeFlag != 0;
-                }
-
-                return matrix switch
-                {
-                    1 => new YuvColour(0.2126, 0.0722, fullRange),  // BT.709
-                    9 or 10 => new YuvColour(0.2627, 0.0593, fullRange), // BT.2020
-                    _ => new YuvColour(0.299, 0.114, fullRange),  // BT.601: 5 and 6, and what says nothing
-                };
-            }
-        }
-
         /// <summary>A picture of BGRA, top-down, of rows of its width.</summary>
         private sealed class Bgra
         {
@@ -342,46 +325,6 @@ namespace SharpMediaFoundationInterop.WPF
                 Height = height;
                 Pixels = new byte[width * height * 4];
             }
-
-            /// <summary>
-            /// An NV12 picture of a decoder - its planes of rows of the stride, the chroma's after the luma's plane height -
-            /// put at a place, made into BGRA: what of it falls outside is cut off.
-            /// </summary>
-            public void PutNV12(byte[] nv12, int stride, int planeHeight, int width, int height, int left, int top, YuvColour colour)
-            {
-                int rows = Math.Min(height, Height - top);
-                int columns = Math.Min(width, Width - left);
-                if (rows <= 0 || columns <= 0)
-                    return;
-
-                double yScale = colour.FullRange ? 1 / 255.0 : 1 / 219.0, yOffset = colour.FullRange ? 0 : 16;
-                double cScale = colour.FullRange ? 1 / 255.0 : 1 / 224.0;
-                double kr = colour.Kr, kb = colour.Kb, kg = 1 - kr - kb;
-                double crToR = 2 * (1 - kr), cbToB = 2 * (1 - kb);
-                double cbToG = -2 * (1 - kb) * kb / kg, crToG = -2 * (1 - kr) * kr / kg;
-                int chroma = stride * planeHeight;
-
-                Parallel.For(0, rows, row =>
-                {
-                    int yRow = row * stride;
-                    int cRow = chroma + row / 2 * stride;
-                    int target = ((top + row) * Width + left) * 4;
-                    for (int x = 0; x < columns; x++, target += 4)
-                    {
-                        double y = (nv12[yRow + x] - yOffset) * yScale;
-                        int c = cRow + (x & ~1);
-                        double cb = (nv12[c] - 128) * cScale;
-                        double cr = (nv12[c + 1] - 128) * cScale;
-
-                        Pixels[target] = ToByte(y + cbToB * cb);
-                        Pixels[target + 1] = ToByte(y + cbToG * cb + crToG * cr);
-                        Pixels[target + 2] = ToByte(y + crToR * cr);
-                        Pixels[target + 3] = 255;
-                    }
-                });
-            }
-
-            private static byte ToByte(double value) => (byte)Math.Clamp((int)(value * 255 + 0.5), 0, 255);
 
             /// <summary>Two pictures of one height, the first on the left.</summary>
             public static Bgra SideBySide(Bgra left, Bgra right)
