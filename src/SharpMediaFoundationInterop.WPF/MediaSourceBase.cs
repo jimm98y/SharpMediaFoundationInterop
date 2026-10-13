@@ -13,7 +13,7 @@ using System.Collections.Concurrent;
 
 namespace SharpMediaFoundationInterop.WPF
 {
-    public abstract class VideoSourceBase : ISeekableVideoSource, IAudioSource
+    public abstract class MediaSourceBase : ISeekableVideoSource, IAudioSource
     {
         /// <summary>The video's format - and, of the frames handed out, as asked for: see <see cref="TrySetOutputFormat"/>.</summary>
         public VideoInfo VideoInfo

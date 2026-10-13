@@ -365,9 +365,9 @@ Both controls show subtitles: of a file, its subtitle tracks (3GPP timed text, W
 ### Stereo and VR video
 A stereo video's frame holds both eyes, side by side or top and bottom. `EyeView` shows both as the frame has them, or the left or right eye alone; the bar gets an eye button for it (or press E). `VideoFileSource` reads the layout from the file's `st3d` box, and `StereoLayout` overrides it for a file that does not say.
 
-Two separate videos, one per eye, play as one stereo video side by side through `StereoVideoSource`, which decodes each eye on its own thread and pairs the frames by their times:
+Two separate videos, one per eye, play as one stereo video side by side through `StereoMediaSource`, which decodes each eye on its own thread and pairs the frames by their times:
 ```cs
-var source = new StereoVideoSource(new VideoFileSource("left.mp4"), new VideoFileSource("right.mp4"));
+var source = new StereoMediaSource(new VideoFileSource("left.mp4"), new VideoFileSource("right.mp4"));
 ```
 
 A 180 or 360 degree video (equirectangular, as a VR180 camera writes it, read from the file's `sv3d` box, or forced with `Projection`) is shown by `GpuMediaControl` as a view into the sphere, drawn on the GPU: drag to look around, use the wheel to zoom, and double-click to look straight ahead again. `Yaw`, `Pitch` and `FieldOfView` hold the view and can be bound to. Of a stereo VR video, `EyeView` shows one eye's view, or both side by side. `MediaControl` shows such a video flat.

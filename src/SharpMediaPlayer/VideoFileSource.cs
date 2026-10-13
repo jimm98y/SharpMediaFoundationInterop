@@ -11,7 +11,7 @@ using System.IO;
 
 namespace SharpMediaFoundationInterop.WPF
 {
-    public class VideoFileSource : VideoSourceBase, ISubtitleSource
+    public class VideoFileSource : MediaSourceBase, ISubtitleSource
     {
         private string _path;
         private BufferedStream _fs;

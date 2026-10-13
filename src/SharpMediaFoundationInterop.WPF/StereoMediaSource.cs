@@ -19,7 +19,7 @@ namespace SharpMediaFoundationInterop.WPF
     /// frame of each other; a left frame with no right one of its time is shown with the right frame shown last, and where
     /// the right eye runs out first, its last frame stays.
     /// </remarks>
-    public sealed class StereoVideoSource : ISeekableVideoSource, IAudioSource, ISubtitleSource
+    public sealed class StereoMediaSource : ISeekableVideoSource, IAudioSource, ISubtitleSource
     {
         private readonly bool _ownsSources;
         private readonly object _initLock = new object();
@@ -39,7 +39,7 @@ namespace SharpMediaFoundationInterop.WPF
         public AudioInfo AudioInfo => (Left as IAudioSource)?.AudioInfo;
 
         /// <param name="ownsSources">Whether the sources are disposed with this one.</param>
-        public StereoVideoSource(IVideoSource left, IVideoSource right, bool ownsSources = true)
+        public StereoMediaSource(IVideoSource left, IVideoSource right, bool ownsSources = true)
         {
             Left = left ?? throw new ArgumentNullException(nameof(left));
             Right = right ?? throw new ArgumentNullException(nameof(right));
@@ -390,7 +390,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             if (_rightThread != null)
                 return;
-            _rightThread = new Thread(RightLoop) { IsBackground = true, Name = "StereoVideoSource right eye" };
+            _rightThread = new Thread(RightLoop) { IsBackground = true, Name = "StereoMediaSource right eye" };
             _rightThread.Start();
         }
 

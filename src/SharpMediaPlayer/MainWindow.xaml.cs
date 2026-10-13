@@ -65,7 +65,7 @@ namespace SharpMediaFoundationInterop
             // an image is a video of one frame, shown and held; a video is repeated as the control's Repeat button says, off
             bool image = files.Length == 1 && ImageFileSource.IsImage(files[0]);
             IVideoSource source = files.Length == 2
-                ? new StereoVideoSource(new VideoFileSource(files[0]), new VideoFileSource(files[1]))
+                ? new StereoMediaSource(new VideoFileSource(files[0]), new VideoFileSource(files[1]))
                 : image ? new ImageFileSource(files[0]) : new VideoFileSource(files[0]);
             _fileControl = UseDirect3D.IsChecked == true ? new GpuMediaControl() : new MediaControl();
             _fileControl.Source = source;

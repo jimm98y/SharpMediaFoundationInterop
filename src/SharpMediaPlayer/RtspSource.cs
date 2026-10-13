@@ -15,7 +15,7 @@ using System.IO;
 
 namespace SharpMediaFoundationInterop.WPF
 {
-    public class RtspSource : VideoSourceBase
+    public class RtspSource : MediaSourceBase
     {
         private RTSPClient _rtspClient;
         private string _uri;
