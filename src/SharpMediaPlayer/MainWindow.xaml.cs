@@ -16,7 +16,7 @@ namespace SharpMediaFoundationInterop
         public IVideoSource HeicSource { get { return new ImageFileSource("test.heic"); } } // heic
         public IVideoSource RtspSource { get { return new RtspSource("rtsp://127.0.0.1:8554", "admin", "password"); } }
 
-        private const string VideoFilter = "Videos|*.mp4;*.mov;*.m4v;*.3gp|All files|*.*";
+        private const string VideoFilter = "Videos and images|*.mp4;*.mov;*.m4v;*.3gp;*.heic;*.heif;*.hif;*.avif|Videos|*.mp4;*.mov;*.m4v;*.3gp|Images|*.heic;*.heif;*.hif;*.avif|All files|*.*";
 
         // what the File tab plays: one video, or a stereo pair's two
         private string[] _files;
@@ -62,11 +62,13 @@ namespace SharpMediaFoundationInterop
             _files = files;
             _fileControl?.Dispose();
 
+            // an image is a video of one frame, shown and held: not looped, which would show it again and again
+            bool image = files.Length == 1 && ImageFileSource.IsImage(files[0]);
             IVideoSource source = files.Length == 2
                 ? new StereoVideoSource(new VideoFileSource(files[0]), new VideoFileSource(files[1]))
-                : new VideoFileSource(files[0]);
+                : image ? new ImageFileSource(files[0]) : new VideoFileSource(files[0]);
             _fileControl = UseDirect3D.IsChecked == true ? new VideoControlD3D() : new VideoControl();
-            _fileControl.Looping = true;
+            _fileControl.Looping = !image;
             _fileControl.Source = source;
             FileHost.Content = _fileControl;
             Tabs.SelectedItem = FileTab;

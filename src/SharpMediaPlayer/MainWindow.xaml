@@ -12,7 +12,7 @@
             <TabItem Header="File" x:Name="FileTab">
                 <DockPanel>
                     <ToolBar DockPanel.Dock="Top">
-                        <Button Content="Open video..." Click="OpenVideo_Click" />
+                        <Button Content="Open video..." Click="OpenVideo_Click" ToolTip="A video, or a HEIC, HEIF or AVIF image" />
                         <Button Content="Open left and right eye..." Click="OpenStereo_Click" ToolTip="Two videos of a stereo pair, played side by side" />
                         <Separator />
                         <CheckBox x:Name="UseDirect3D" Content="Direct3D" IsChecked="True" Click="UseDirect3D_Click"
