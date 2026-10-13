@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop
     {
         public IVideoSource ScreenSource { get { return new ScreenSource(); } }
         public IVideoSource CameraSource { get { return new CameraSource(); } }
-        public IVideoSource MP4Source { get { return new VideoFileSource("frag_bunny.mp4"); } } // H264
+        public IVideoSource MP4Source { get { return new MediaFileSource("frag_bunny.mp4"); } } // H264
         public IVideoSource HeicSource { get { return new ImageFileSource("test.heic"); } } // heic
         public IVideoSource RtspSource { get { return new RtspSource("rtsp://127.0.0.1:8554", "admin", "password"); } }
 
@@ -20,7 +20,7 @@ namespace SharpMediaFoundationInterop
 
         // what the File tab plays: one video, or a stereo pair's two
         private string[] _files;
-        private VideoControlBase _fileControl;
+        private MediaControlBase _fileControl;
 
         public MainWindow()
         {
@@ -65,8 +65,8 @@ namespace SharpMediaFoundationInterop
             // an image is a video of one frame, shown and held; a video is repeated as the control's Repeat button says, off
             bool image = files.Length == 1 && ImageFileSource.IsImage(files[0]);
             IVideoSource source = files.Length == 2
-                ? new StereoMediaSource(new VideoFileSource(files[0]), new VideoFileSource(files[1]))
-                : image ? new ImageFileSource(files[0]) : new VideoFileSource(files[0]);
+                ? new StereoMediaSource(new MediaFileSource(files[0]), new MediaFileSource(files[1]))
+                : image ? new ImageFileSource(files[0]) : new MediaFileSource(files[0]);
             _fileControl = UseDirect3D.IsChecked == true ? new GpuMediaControl() : new MediaControl();
             _fileControl.Source = source;
             FileHost.Content = _fileControl;

@@ -7,9 +7,9 @@ namespace SharpMediaFoundationInterop.WPF
 {
     /// <summary>
     /// What a track's stream, and the boxes of its file, say of its samples: their bits and chroma, the frames a decoder
-    /// hands out of them, and their colour - as a <see cref="VideoColour"/>.
+    /// hands out of them, and their color - as a <see cref="VideoColor"/>.
     /// </summary>
-    internal static class TrackColour
+    internal static class TrackColor
     {
         /// <summary>
         /// The bits of the stream's samples and its chroma, of H.273's chroma_format_idc - 0 monochrome, 1 4:2:0, 2 4:2:2,
@@ -89,24 +89,24 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         /// <summary>
-        /// The colour of a picture of these 'colr's - an 'nclx', an ICC profile, either, both or none - coded in this stream:
+        /// The color of a picture of these 'colr's - an 'nclx', an ICC profile, either, both or none - coded in this stream:
         /// of the ICC profile where it is of a matrix and curves, for the primaries and the transfer; else of the 'nclx', else
         /// of the stream's - HEVC's or AVC's VUI, AV1's sequence header - but of a video whose stream says it, the stream's.
         /// The matrix and the range are of the same: an ICC profile has none.
         /// </summary>
         /// <param name="sceneReferred">An image's, whose camera's curve is undone; a video's is shown as sRGB's.</param>
-        /// <param name="height">Of a video, its height: of what matrix it is of where it says none - see <see cref="VideoColour.FromCodes"/>.</param>
-        public static VideoColour Of(IEnumerable<ColourInformationBox> colours, ITrack track, int bitDepth, bool sceneReferred, uint height = 0)
+        /// <param name="height">Of a video, its height: of what matrix it is of where it says none - see <see cref="VideoColor.FromCodes"/>.</param>
+        public static VideoColor Of(IEnumerable<ColourInformationBox> colors, ITrack track, int bitDepth, bool sceneReferred, uint height = 0)
         {
-            colours = colours.ToList();
-            var nclx = colours.FirstOrDefault(x => x.ColourType == IsoStream.FromFourCC("nclx"));
+            colors = colors.ToList();
+            var nclx = colors.FirstOrDefault(x => x.ColourType == IsoStream.FromFourCC("nclx"));
 
             // A video's stream says what its decoder's samples are, where it says it: over its sample entry's 'colr', which
             // can say otherwise - a file of GBR, its 'nclx' of BT.709's matrix. An image's 'colr' is said over its stream's,
             // as HEIF says.
             int primaries = 2, transfer = 2, matrix = 2;
             bool fullRange = false;
-            var stream = StreamColour(track);
+            var stream = StreamColor(track);
             bool streamDescribes = stream is { } said && (said.Primaries != 2 || said.Transfer != 2 || said.Matrix != 2);
             if (nclx != null && (sceneReferred || !streamDescribes))
                 (primaries, transfer, matrix, fullRange) = (nclx.ColourPrimaries, nclx.TransferCharacteristics, nclx.MatrixCoefficients, nclx.FullRangeFlag);
@@ -114,16 +114,16 @@ namespace SharpMediaFoundationInterop.WPF
                 (primaries, transfer, matrix, fullRange) = fromStream;
 
             // an ICC profile, of a matrix and curves, says the primaries and the transfer over what else does
-            var prof = colours.FirstOrDefault(x => x.ColourType == IsoStream.FromFourCC("prof") || x.ColourType == IsoStream.FromFourCC("rICC"));
+            var prof = colors.FirstOrDefault(x => x.ColourType == IsoStream.FromFourCC("prof") || x.ColourType == IsoStream.FromFourCC("rICC"));
             if (prof?.ICCProfile?.Data is StreamMarker marker && ReadBytes(marker) is byte[] icc
-                && VideoColour.FromIcc(icc, matrix, fullRange, bitDepth, height) is VideoColour profiled)
+                && VideoColor.FromIcc(icc, matrix, fullRange, bitDepth, height) is VideoColor profiled)
                 return profiled;
 
-            return VideoColour.FromCodes(primaries, transfer, matrix, fullRange, bitDepth, sceneReferred, height);
+            return VideoColor.FromCodes(primaries, transfer, matrix, fullRange, bitDepth, sceneReferred, height);
         }
 
-        /// <summary>What a stream says of its colour: HEVC's and AVC's VUI, AV1's sequence header; null where it says nothing.</summary>
-        private static (int Primaries, int Transfer, int Matrix, bool FullRange)? StreamColour(ITrack track)
+        /// <summary>What a stream says of its color: HEVC's and AVC's VUI, AV1's sequence header; null where it says nothing.</summary>
+        private static (int Primaries, int Transfer, int Matrix, bool FullRange)? StreamColor(ITrack track)
         {
             switch (track)
             {

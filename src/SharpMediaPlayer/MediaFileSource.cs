@@ -11,7 +11,7 @@ using System.IO;
 
 namespace SharpMediaFoundationInterop.WPF
 {
-    public class VideoFileSource : MediaSourceBase, ISubtitleSource
+    public class MediaFileSource : MediaSourceBase, ISubtitleSource
     {
         private string _path;
         private BufferedStream _fs;
@@ -21,7 +21,7 @@ namespace SharpMediaFoundationInterop.WPF
         private ITrack _videoTrack;
         private ITrack _audioTrack;
 
-        public VideoFileSource(string path)
+        public MediaFileSource(string path)
         {
             this._path = path ?? throw new ArgumentNullException(nameof(path));
         }
@@ -459,7 +459,7 @@ namespace SharpMediaFoundationInterop.WPF
                         videoInfo.FpsDenom = (uint)h265Track.DefaultSampleDuration;
 
                         // the frames of the coded size, the picture cropped of them: 1088 lines of a 1080 line picture
-                        (videoInfo.Width, videoInfo.Height) = TrackColour.HevcFrameSize(sps, videoInfo.OriginalWidth, videoInfo.OriginalHeight);
+                        (videoInfo.Width, videoInfo.Height) = TrackColor.HevcFrameSize(sps, videoInfo.OriginalWidth, videoInfo.OriginalHeight);
                     }
                     else if (_videoTrack is AV1Track av1Track)
                     {
@@ -518,15 +518,15 @@ namespace SharpMediaFoundationInterop.WPF
                     }
 
                     // The bits of the samples and their chroma, of the stream - what its decoder hands out of them - and its
-                    // colour, of the sample entry's 'colr', else of the stream; 8 bits of 4:2:0 of a codec that says neither.
-                    var (bitDepth, chromaFormat) = TrackColour.SamplesOf(_videoTrack) ?? (8, 1);
-                    TrackColour.ThrowIfNotDecoded(_videoTrack, bitDepth, chromaFormat);
-                    videoInfo.FrameFormat = TrackColour.FrameFormatOf(chromaFormat, bitDepth);
-                    var entryColours = _reader.Tracks[_videoTrack.TrackID].Stbl
+                    // color, of the sample entry's 'colr', else of the stream; 8 bits of 4:2:0 of a codec that says neither.
+                    var (bitDepth, chromaFormat) = TrackColor.SamplesOf(_videoTrack) ?? (8, 1);
+                    TrackColor.ThrowIfNotDecoded(_videoTrack, bitDepth, chromaFormat);
+                    videoInfo.FrameFormat = TrackColor.FrameFormatOf(chromaFormat, bitDepth);
+                    var entryColors = _reader.Tracks[_videoTrack.TrackID].Stbl
                         .Children.OfType<SampleDescriptionBox>().Single()
                         .Children.OfType<VisualSampleEntry>().First()
                         .Children.OfType<ColourInformationBox>();
-                    videoInfo.Colour = TrackColour.Of(entryColours, _videoTrack, bitDepth, sceneReferred: false, videoInfo.OriginalHeight);
+                    videoInfo.Color = TrackColor.Of(entryColors, _videoTrack, bitDepth, sceneReferred: false, videoInfo.OriginalHeight);
 
                     // turned and flipped as its track's matrix says: a phone's upright video, recorded on its side
                     var matrix = _reader.Track.Select(x => x.Children.OfType<TrackHeaderBox>().First())

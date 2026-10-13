@@ -49,7 +49,7 @@ namespace SharpMediaFoundationInterop.WPF
     [TemplatePart(Name = "PART_ControlsBar", Type = typeof(FrameworkElement))]
     [TemplateVisualState(GroupName = ControlsStates, Name = ControlsVisibleState)]
     [TemplateVisualState(GroupName = ControlsStates, Name = ControlsHiddenState)]
-    public abstract class VideoControlBase : Control, IDisposable
+    public abstract class MediaControlBase : Control, IDisposable
     {
         private object _waveSync = new object();
         private IAudioOutput _waveOut;
@@ -60,21 +60,21 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>
         /// The style of the default template's buttons, to base another on:
-        /// <c>BasedOn="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"</c>.
+        /// <c>BasedOn="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"</c>.
         /// </summary>
-        public static ComponentResourceKey ButtonStyleKey { get; } = new ComponentResourceKey(typeof(VideoControlBase), "ButtonStyle");
+        public static ComponentResourceKey ButtonStyleKey { get; } = new ComponentResourceKey(typeof(MediaControlBase), "ButtonStyle");
 
         /// <summary>
-        /// The style of the default template's seek bar - a thin track of the accent colour, its Foreground, and a round
-        /// thumb with a dot in it - to base another on: <c>BasedOn="{StaticResource {x:Static local:VideoControlBase.SeekSliderStyleKey}}"</c>.
+        /// The style of the default template's seek bar - a thin track of the accent color, its Foreground, and a round
+        /// thumb with a dot in it - to base another on: <c>BasedOn="{StaticResource {x:Static local:MediaControlBase.SeekSliderStyleKey}}"</c>.
         /// </summary>
-        public static ComponentResourceKey SeekSliderStyleKey { get; } = new ComponentResourceKey(typeof(VideoControlBase), "SeekSliderStyle");
+        public static ComponentResourceKey SeekSliderStyleKey { get; } = new ComponentResourceKey(typeof(MediaControlBase), "SeekSliderStyle");
 
         /// <summary>
         /// The data template the default template draws a subtitle with, its text the content: to draw them otherwise, one of
         /// this key in the application's resources.
         /// </summary>
-        public static ComponentResourceKey SubtitleTemplateKey { get; } = new ComponentResourceKey(typeof(VideoControlBase), "SubtitleTemplate");
+        public static ComponentResourceKey SubtitleTemplateKey { get; } = new ComponentResourceKey(typeof(MediaControlBase), "SubtitleTemplate");
 
         private Image _image;
         private Slider _seekSlider;
@@ -102,11 +102,11 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty SourceProperty =
-            DependencyProperty.Register("Source", typeof(IVideoSource), typeof(VideoControlBase), new PropertyMetadata(null, OnSourceChanged));
+            DependencyProperty.Register("Source", typeof(IVideoSource), typeof(MediaControlBase), new PropertyMetadata(null, OnSourceChanged));
 
         private static void OnSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var sender = (VideoControlBase)d;
+            var sender = (MediaControlBase)d;
             var source = e.NewValue as IVideoSource;
             sender._source = source;
             if (source != null && sender.AutoPlay)
@@ -132,11 +132,11 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty LoopingProperty =
-            DependencyProperty.Register("Looping", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false, OnIsLoopingChanged));
+            DependencyProperty.Register("Looping", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false, OnIsLoopingChanged));
 
         private static void OnIsLoopingChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var sender = d as VideoControlBase;
+            var sender = d as MediaControlBase;
             if (sender != null)
             {
                 sender._isLooping = (bool)e.NewValue;
@@ -150,7 +150,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty AutoPlayProperty =
-            DependencyProperty.Register("AutoPlay", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(true));
+            DependencyProperty.Register("AutoPlay", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(true));
 
         public bool Mute
         {
@@ -159,11 +159,11 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty MuteProperty =
-            DependencyProperty.Register("Mute", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false, OnMuteChanged));
+            DependencyProperty.Register("Mute", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false, OnMuteChanged));
 
         private static void OnMuteChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            var sender = d as VideoControlBase;
+            var sender = d as MediaControlBase;
             if (sender != null)
             {
                 sender._isMute = (bool)e.NewValue;
@@ -180,7 +180,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty ShowControlsProperty =
-            DependencyProperty.Register("ShowControls", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(true, OnControlsShownChanged));
+            DependencyProperty.Register("ShowControls", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(true, OnControlsShownChanged));
 
         /// <summary>
         /// Whether the overlay is there at all: the bar of controls, and the keys that do what it does - played, sought,
@@ -195,7 +195,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty IsOverlayEnabledProperty =
-            DependencyProperty.Register("IsOverlayEnabled", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(true, OnControlsShownChanged));
+            DependencyProperty.Register("IsOverlayEnabled", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(true, OnControlsShownChanged));
 
         /// <summary>
         /// Whether the bar is shown only while the mouse moves over the video, or a key is pressed, and hidden
@@ -209,7 +209,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty AutoHideControlsProperty =
-            DependencyProperty.Register("AutoHideControls", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(true, OnControlsShownChanged));
+            DependencyProperty.Register("AutoHideControls", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(true, OnControlsShownChanged));
 
         /// <summary>How long the bar stays after the mouse stops moving over the video.</summary>
         public TimeSpan ControlsHideDelay
@@ -219,7 +219,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty ControlsHideDelayProperty =
-            DependencyProperty.Register("ControlsHideDelay", typeof(TimeSpan), typeof(VideoControlBase), new PropertyMetadata(TimeSpan.FromSeconds(2.5)));
+            DependencyProperty.Register("ControlsHideDelay", typeof(TimeSpan), typeof(MediaControlBase), new PropertyMetadata(TimeSpan.FromSeconds(2.5)));
 
         /// <summary>Whether the bar is shown now: for a template's triggers, as the visual states say it.</summary>
         public bool AreControlsVisible
@@ -229,12 +229,12 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey AreControlsVisiblePropertyKey =
-            DependencyProperty.RegisterReadOnly("AreControlsVisible", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+            DependencyProperty.RegisterReadOnly("AreControlsVisible", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty AreControlsVisibleProperty = AreControlsVisiblePropertyKey.DependencyProperty;
 
         private static void OnControlsShownChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((VideoControlBase)d).UpdateControlsVisibility(true);
+            ((MediaControlBase)d).UpdateControlsVisibility(true);
         }
 
         public bool IsPaused
@@ -244,7 +244,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty IsPausedProperty =
-            DependencyProperty.Register("IsPaused", typeof(bool), typeof(VideoControlBase), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnIsPausedChanged));
+            DependencyProperty.Register("IsPaused", typeof(bool), typeof(MediaControlBase), new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnIsPausedChanged));
 
         /// <summary>
         /// Whether the video plays forwards at 1x: what a play/pause button pauses - paused, or played at another rate, it
@@ -257,12 +257,12 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey IsPlayingPropertyKey =
-            DependencyProperty.RegisterReadOnly("IsPlaying", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+            DependencyProperty.RegisterReadOnly("IsPlaying", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty IsPlayingProperty = IsPlayingPropertyKey.DependencyProperty;
 
         private static void OnIsPausedChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((VideoControlBase)d).SetPaused((bool)e.NewValue);
+            ((MediaControlBase)d).SetPaused((bool)e.NewValue);
         }
 
         /// <summary>
@@ -276,7 +276,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey PlaybackRatePropertyKey =
-            DependencyProperty.RegisterReadOnly("PlaybackRate", typeof(int), typeof(VideoControlBase), new PropertyMetadata(1));
+            DependencyProperty.RegisterReadOnly("PlaybackRate", typeof(int), typeof(MediaControlBase), new PropertyMetadata(1));
         public static readonly DependencyProperty PlaybackRateProperty = PlaybackRatePropertyKey.DependencyProperty;
 
         /// <summary>The time of the frame shown, from the start of the video.</summary>
@@ -287,7 +287,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey PositionPropertyKey =
-            DependencyProperty.RegisterReadOnly("Position", typeof(TimeSpan), typeof(VideoControlBase), new PropertyMetadata(TimeSpan.Zero));
+            DependencyProperty.RegisterReadOnly("Position", typeof(TimeSpan), typeof(MediaControlBase), new PropertyMetadata(TimeSpan.Zero));
         public static readonly DependencyProperty PositionProperty = PositionPropertyKey.DependencyProperty;
 
         /// <summary>How long the video is; zero where it is not known - a live stream.</summary>
@@ -298,7 +298,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey DurationPropertyKey =
-            DependencyProperty.RegisterReadOnly("Duration", typeof(TimeSpan), typeof(VideoControlBase), new PropertyMetadata(TimeSpan.Zero));
+            DependencyProperty.RegisterReadOnly("Duration", typeof(TimeSpan), typeof(MediaControlBase), new PropertyMetadata(TimeSpan.Zero));
         public static readonly DependencyProperty DurationProperty = DurationPropertyKey.DependencyProperty;
 
         /// <summary>Whether the video can be sought in, and played at other rates: a file can, a live stream cannot.</summary>
@@ -309,7 +309,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey CanSeekPropertyKey =
-            DependencyProperty.RegisterReadOnly("CanSeek", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+            DependencyProperty.RegisterReadOnly("CanSeek", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty CanSeekProperty = CanSeekPropertyKey.DependencyProperty;
 
         /// <summary>Whether the source is a picture, not a video - see <see cref="IVideoSource.IsStill"/>: of no time to show, nor to seek in.</summary>
@@ -320,7 +320,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey IsStillPropertyKey =
-            DependencyProperty.RegisterReadOnly("IsStill", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+            DependencyProperty.RegisterReadOnly("IsStill", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty IsStillProperty = IsStillPropertyKey.DependencyProperty;
 
         /// <summary>
@@ -334,7 +334,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey TimeTextPropertyKey =
-            DependencyProperty.RegisterReadOnly("TimeText", typeof(string), typeof(VideoControlBase), new PropertyMetadata(string.Empty));
+            DependencyProperty.RegisterReadOnly("TimeText", typeof(string), typeof(MediaControlBase), new PropertyMetadata(string.Empty));
         public static readonly DependencyProperty TimeTextProperty = TimeTextPropertyKey.DependencyProperty;
 
         #endregion
@@ -349,7 +349,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty EyeViewProperty =
-            DependencyProperty.Register("EyeView", typeof(EyeView), typeof(VideoControlBase),
+            DependencyProperty.Register("EyeView", typeof(EyeView), typeof(MediaControlBase),
                 new FrameworkPropertyMetadata(EyeView.Both, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnViewChanged));
 
         /// <summary>
@@ -363,7 +363,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty StereoLayoutProperty =
-            DependencyProperty.Register("StereoLayout", typeof(StereoLayout?), typeof(VideoControlBase), new PropertyMetadata(null, OnViewChanged));
+            DependencyProperty.Register("StereoLayout", typeof(StereoLayout?), typeof(MediaControlBase), new PropertyMetadata(null, OnViewChanged));
 
         /// <summary>
         /// What each eye's picture is of, where the source does not say, or says otherwise; null, as it is by default, for
@@ -377,7 +377,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty ProjectionProperty =
-            DependencyProperty.Register("Projection", typeof(VideoProjection?), typeof(VideoControlBase), new PropertyMetadata(null, OnViewChanged));
+            DependencyProperty.Register("Projection", typeof(VideoProjection?), typeof(MediaControlBase), new PropertyMetadata(null, OnViewChanged));
 
         /// <summary>Of a spherical video, degrees to the right of straight ahead the view looks: dragged with the mouse.</summary>
         public double Yaw
@@ -387,7 +387,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty YawProperty =
-            DependencyProperty.Register("Yaw", typeof(double), typeof(VideoControlBase),
+            DependencyProperty.Register("Yaw", typeof(double), typeof(MediaControlBase),
                 new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnViewChanged));
 
         /// <summary>Of a spherical video, degrees up from straight ahead the view looks, -90 to 90: dragged with the mouse.</summary>
@@ -398,7 +398,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty PitchProperty =
-            DependencyProperty.Register("Pitch", typeof(double), typeof(VideoControlBase),
+            DependencyProperty.Register("Pitch", typeof(double), typeof(MediaControlBase),
                 new FrameworkPropertyMetadata(0.0, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnViewChanged, CoercePitch));
 
         private static object CoercePitch(DependencyObject d, object value) => Math.Clamp((double)value, -90.0, 90.0);
@@ -411,7 +411,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty FieldOfViewProperty =
-            DependencyProperty.Register("FieldOfView", typeof(double), typeof(VideoControlBase),
+            DependencyProperty.Register("FieldOfView", typeof(double), typeof(MediaControlBase),
                 new FrameworkPropertyMetadata(DefaultFieldOfView, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnViewChanged, CoerceFieldOfView));
 
         private const double DefaultFieldOfView = 90;
@@ -426,7 +426,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey IsStereoPropertyKey =
-            DependencyProperty.RegisterReadOnly("IsStereo", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+            DependencyProperty.RegisterReadOnly("IsStereo", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty IsStereoProperty = IsStereoPropertyKey.DependencyProperty;
 
         /// <summary>
@@ -440,24 +440,24 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey IsSphericalPropertyKey =
-            DependencyProperty.RegisterReadOnly("IsSpherical", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+            DependencyProperty.RegisterReadOnly("IsSpherical", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty IsSphericalProperty = IsSphericalPropertyKey.DependencyProperty;
 
         /// <summary>Repeats the video as it ends, or stops repeating it: see <see cref="Looping"/>. The R key, over the video.</summary>
         public static RoutedUICommand ToggleRepeatCommand { get; } =
-            new RoutedUICommand("Repeat", "ToggleRepeat", typeof(VideoControlBase));
+            new RoutedUICommand("Repeat", "ToggleRepeat", typeof(MediaControlBase));
 
         /// <summary>Shows the next eye's view: both, then the left, then the right. The E key, over the video.</summary>
         public static RoutedUICommand NextEyeViewCommand { get; } =
-            new RoutedUICommand("Next eye", "NextEyeView", typeof(VideoControlBase));
+            new RoutedUICommand("Next eye", "NextEyeView", typeof(MediaControlBase));
 
         /// <summary>Looks straight ahead again, at the field of view a spherical video starts at.</summary>
         public static RoutedUICommand ResetViewCommand { get; } =
-            new RoutedUICommand("Reset view", "ResetView", typeof(VideoControlBase));
+            new RoutedUICommand("Reset view", "ResetView", typeof(MediaControlBase));
 
         private static void OnViewChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((VideoControlBase)d).OnViewChanged(e.Property);
+            ((MediaControlBase)d).OnViewChanged(e.Property);
         }
 
         /// <summary>
@@ -471,7 +471,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey ShowsSideBySidePropertyKey =
-            DependencyProperty.RegisterReadOnly("ShowsSideBySide", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+            DependencyProperty.RegisterReadOnly("ShowsSideBySide", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty ShowsSideBySideProperty = ShowsSideBySidePropertyKey.DependencyProperty;
 
         #endregion
@@ -489,12 +489,12 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         public static readonly DependencyProperty SubtitleTrackProperty =
-            DependencyProperty.Register("SubtitleTrack", typeof(int), typeof(VideoControlBase),
+            DependencyProperty.Register("SubtitleTrack", typeof(int), typeof(MediaControlBase),
                 new FrameworkPropertyMetadata(-1, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnSubtitleTrackChanged));
 
         private static void OnSubtitleTrackChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((VideoControlBase)d).LoadSubtitles();
+            ((MediaControlBase)d).LoadSubtitles();
         }
 
         /// <summary>The tracks of subtitles the source has: of a file, its own and those of files beside it.</summary>
@@ -505,7 +505,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey SubtitleTracksPropertyKey =
-            DependencyProperty.RegisterReadOnly("SubtitleTracks", typeof(IReadOnlyList<SubtitleTrackInfo>), typeof(VideoControlBase),
+            DependencyProperty.RegisterReadOnly("SubtitleTracks", typeof(IReadOnlyList<SubtitleTrackInfo>), typeof(MediaControlBase),
                 new PropertyMetadata(Array.Empty<SubtitleTrackInfo>()));
         public static readonly DependencyProperty SubtitleTracksProperty = SubtitleTracksPropertyKey.DependencyProperty;
 
@@ -517,7 +517,7 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey HasSubtitlesPropertyKey =
-            DependencyProperty.RegisterReadOnly("HasSubtitles", typeof(bool), typeof(VideoControlBase), new PropertyMetadata(false));
+            DependencyProperty.RegisterReadOnly("HasSubtitles", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty HasSubtitlesProperty = HasSubtitlesPropertyKey.DependencyProperty;
 
         /// <summary>The subtitle shown now, of the frame shown: empty where there is none. Lines apart by line breaks.</summary>
@@ -528,22 +528,22 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static readonly DependencyPropertyKey SubtitleTextPropertyKey =
-            DependencyProperty.RegisterReadOnly("SubtitleText", typeof(string), typeof(VideoControlBase), new PropertyMetadata(string.Empty));
+            DependencyProperty.RegisterReadOnly("SubtitleText", typeof(string), typeof(MediaControlBase), new PropertyMetadata(string.Empty));
         public static readonly DependencyProperty SubtitleTextProperty = SubtitleTextPropertyKey.DependencyProperty;
 
         /// <summary>Shows the next track of subtitles: none, then each track, then none again. The C key, over the video.</summary>
         public static RoutedUICommand NextSubtitleTrackCommand { get; } =
-            new RoutedUICommand("Next subtitles", "NextSubtitleTrack", typeof(VideoControlBase));
+            new RoutedUICommand("Next subtitles", "NextSubtitleTrack", typeof(MediaControlBase));
 
         #endregion
 
-        static VideoControlBase()
+        static MediaControlBase()
         {
             // one template for every control made of this: each is styled as this, the drawing of frames aside
-            DefaultStyleKeyProperty.OverrideMetadata(typeof(VideoControlBase), new FrameworkPropertyMetadata(typeof(VideoControlBase)));
+            DefaultStyleKeyProperty.OverrideMetadata(typeof(MediaControlBase), new FrameworkPropertyMetadata(typeof(MediaControlBase)));
         }
 
-        protected VideoControlBase()
+        protected MediaControlBase()
         {
             Loaded += VideoControl_Loaded;
             Unloaded += VideoControl_Unloaded;
@@ -1929,7 +1929,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
-        ~VideoControlBase()
+        ~MediaControlBase()
         {
             Dispose(disposing: false);
         }

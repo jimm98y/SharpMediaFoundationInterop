@@ -15,7 +15,7 @@ namespace SharpMediaFoundationInterop.WPF
     /// <summary>
     /// Draws frames into a BGRA texture shared with other devices - Direct3D 9's, for WPF's D3DImage - on the GPU: a frame
     /// as decoded - NV12, or of any <see cref="VideoInfo.FrameFormat"/> - uploaded as it is and converted by a pixel shader,
-    /// of the stream's colour; one decoded on the GPU converted where it is by the GPU's video processor; a BGRA one
+    /// of the stream's color; one decoded on the GPU converted where it is by the GPU's video processor; a BGRA one
     /// uploaded as it is, a BGR24 one widened to BGRA on the way. That is the whole frame; or, of a <see cref="VideoView"/>, one eye's half of it copied out, or a
     /// view into a spherical video drawn from it by a pixel shader - into a texture of the view's own size.
     /// </summary>
@@ -173,8 +173,8 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         /// <summary>
-        /// The video processor, of frames decoded on the GPU - NV12 of a colour it shows as the shader would, of the matrix
-        /// and the range it is told: see <see cref="VideoColour.IsVideoProcessorColour"/>.
+        /// The video processor, of frames decoded on the GPU - NV12 of a color it shows as the shader would, of the matrix
+        /// and the range it is told: see <see cref="VideoColor.IsVideoProcessorColor"/>.
         /// </summary>
         private void CreateVideoProcessor()
         {
@@ -221,9 +221,9 @@ namespace SharpMediaFoundationInterop.WPF
 
             // YCbCr in of the stream's matrix - BT.709's, or BT.601's - and range; full range RGB out. Its bits: Usage 0,
             // RGB_Range 1, YCbCr_Matrix 2, YCbCr_xvYCC 3, Nominal_Range 4 and 5 - of 16 to 235 1, of 0 to 255 2.
-            var colour = _info.ColourOrDefault;
+            var color = _info.ColorOrDefault;
             var inputSpace = new D3D11_VIDEO_PROCESSOR_COLOR_SPACE();
-            inputSpace._bitfield = (colour.IsBt709Matrix ? 0b100u : 0u) | ((colour.FullRange ? 2u : 1u) << 4);
+            inputSpace._bitfield = (color.IsBt709Matrix ? 0b100u : 0u) | ((color.FullRange ? 2u : 1u) << 4);
             _videoContext.VideoProcessorSetStreamColorSpace(_processor, 0, inputSpace);
             var outputSpace = new D3D11_VIDEO_PROCESSOR_COLOR_SPACE();
             _videoContext.VideoProcessorSetOutputColorSpace(_processor, outputSpace);
@@ -578,9 +578,9 @@ float4 PS(Vertex input) : SV_Target
 
         // Of each pixel of the picture, its samples read of the frame's planes, as its format lays them out - each plane a
         // texture of the frame's bytes as they are - made into the three values of the stream's matrix and range, and those
-        // shown through the table of the stream's colour: see VideoColour.
+        // shown through the table of the stream's color: see VideoColor.
         private const string YuvShader = @"
-cbuffer Colour : register(b0)
+cbuffer Color : register(b0)
 {
     float4 Coded;    // the layout: 0 4:2:0, 1 4:2:2 packed, 2 AYUV, 3 Y410 and Y416, 4 monochrome; the codes of a texture's 1, of the
                      // luma and of the chroma; 1 to look the values up in the table
@@ -700,19 +700,19 @@ float4 PS(Vertex input) : SV_Target
 
         /// <summary>
         /// The textures a frame as decoded is uploaded into - of its format's planes, each as the bytes lay them out - the
-        /// shader that converts them, and the table of the stream's colour.
+        /// shader that converts them, and the table of the stream's color.
         /// </summary>
         private void CreateYuvConverter()
         {
             var format = _info.FrameFormat;
-            var colour = _info.ColourOrDefault;
+            var color = _info.ColorOrDefault;
             var orientation = _info.Orientation;
             uint w = _info.Width, h = _info.Height;
             _frameStride = (int)VideoFrameFormats.Stride(format, w);
             _plane0Rows = (int)h;
 
             // the textures, and of a texture's 1 how many codes: of 16 bit samples, of the stream's bits in the high ones
-            float codesOf16 = 65535f / (1 << (16 - colour.BitDepth));
+            float codesOf16 = 65535f / (1 << (16 - color.BitDepth));
             (DXGI_FORMAT Plane0, uint Width0, DXGI_FORMAT Plane1, int Layout, float Codes) = format switch
             {
                 VideoFrameFormat.NV12 => (DXGI_FORMAT.DXGI_FORMAT_R8_UNORM, w, DXGI_FORMAT.DXGI_FORMAT_R8G8_UNORM, 0, 255f),
@@ -736,10 +736,10 @@ float4 PS(Vertex input) : SV_Target
                 _plane1 = CreatePlane(Plane1, (w + 1) / 2, (uint)_plane1Rows, out _plane1View);
             }
 
-            var table = colour.Table;
+            var table = color.Table;
             if (table != null)
             {
-                const uint n = VideoColour.TableSize;
+                const uint n = VideoColor.TableSize;
                 var tableDesc = new D3D11_TEXTURE3D_DESC
                 {
                     Width = n,
@@ -780,16 +780,16 @@ float4 PS(Vertex input) : SV_Target
                 LumaCodes = Codes,
                 ChromaCodes = Codes,
                 LookUp = table != null ? 1 : 0,
-                LumaOffset = colour.LumaOffset,
-                LumaScale = colour.LumaScale,
-                ChromaOffset = colour.ChromaOffset,
-                ChromaScale = colour.ChromaScale,
-                Y0 = colour.YCoefficients[0], Y1 = colour.YCoefficients[1], Y2 = colour.YCoefficients[2],
-                CbBelow0 = colour.CbBelow[0], CbBelow1 = colour.CbBelow[1], CbBelow2 = colour.CbBelow[2],
-                CbAbove0 = colour.CbAbove[0], CbAbove1 = colour.CbAbove[1], CbAbove2 = colour.CbAbove[2],
-                CrBelow0 = colour.CrBelow[0], CrBelow1 = colour.CrBelow[1], CrBelow2 = colour.CrBelow[2],
-                CrAbove0 = colour.CrAbove[0], CrAbove1 = colour.CrAbove[1], CrAbove2 = colour.CrAbove[2],
-                TableSize = VideoColour.TableSize,
+                LumaOffset = color.LumaOffset,
+                LumaScale = color.LumaScale,
+                ChromaOffset = color.ChromaOffset,
+                ChromaScale = color.ChromaScale,
+                Y0 = color.YCoefficients[0], Y1 = color.YCoefficients[1], Y2 = color.YCoefficients[2],
+                CbBelow0 = color.CbBelow[0], CbBelow1 = color.CbBelow[1], CbBelow2 = color.CbBelow[2],
+                CbAbove0 = color.CbAbove[0], CbAbove1 = color.CbAbove[1], CbAbove2 = color.CbAbove[2],
+                CrBelow0 = color.CrBelow[0], CrBelow1 = color.CrBelow[1], CrBelow2 = color.CrBelow[2],
+                CrAbove0 = color.CrAbove[0], CrAbove1 = color.CrAbove[1], CrAbove2 = color.CrAbove[2],
+                TableSize = VideoColor.TableSize,
                 TurnA = orientation.A, TurnB = orientation.B, TurnC = orientation.C, TurnD = orientation.D,
                 TurnOffsetX = orientation.OffsetX((int)_info.OriginalWidth),
                 TurnOffsetY = orientation.OffsetY((int)_info.OriginalHeight),

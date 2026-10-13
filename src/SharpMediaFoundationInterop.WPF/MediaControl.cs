@@ -10,9 +10,9 @@ namespace SharpMediaFoundationInterop.WPF
     /// A video control that draws each frame into a bitmap: copied in on the UI thread, then uploaded and converted for the
     /// GPU by WPF's render thread. It takes frames of any source as they are; see <see cref="GpuMediaControl"/> for the
     /// way through Direct3D. Of a stereo video it shows both eyes as the frame has them, or one eye's picture alone - see
-    /// <see cref="VideoControlBase.EyeView"/>; a spherical video it shows flat, as <see cref="GpuMediaControl"/> does not.
+    /// <see cref="MediaControlBase.EyeView"/>; a spherical video it shows flat, as <see cref="GpuMediaControl"/> does not.
     /// </summary>
-    public class MediaControl : VideoControlBase
+    public class MediaControl : MediaControlBase
     {
         private volatile WriteableBitmap _canvas;
         private Image _image;

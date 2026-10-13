@@ -97,9 +97,9 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>
         /// How the decoded samples become sRGB, as the stream says; null where it says nothing - see
-        /// <see cref="VideoColour.Default"/>.
+        /// <see cref="VideoColor.Default"/>.
         /// </summary>
-        public VideoColour Colour { get; set; }
+        public VideoColor Color { get; set; }
 
         /// <summary>
         /// How the picture is turned and flipped to be shown, as the track says - a phone's upright video, recorded on its
@@ -114,8 +114,8 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>The height of the picture as it is shown.</summary>
         public uint ShownHeight => Orientation.SwapsAxes ? OriginalWidth : OriginalHeight;
 
-        /// <summary>The colour, as the stream says it, or what a stream that says nothing is taken to be.</summary>
-        public VideoColour ColourOrDefault => Colour ??= VideoColour.Default(OriginalHeight);
+        /// <summary>The color, as the stream says it, or what a stream that says nothing is taken to be.</summary>
+        public VideoColor ColorOrDefault => Color ??= VideoColor.Default(OriginalHeight);
 
         /// <summary>How the frame holds the eyes' views, as the source says: a file by its 'st3d' box.</summary>
         public StereoLayout StereoLayout { get; set; }

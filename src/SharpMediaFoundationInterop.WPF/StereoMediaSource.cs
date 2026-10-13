@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop.WPF
     /// The two eyes of a stereo video, each of a source of its own, as one source of side by side frames: the left eye's
     /// picture in the left half, the right eye's in the right, those of the same time together. Each eye is decoded on a
     /// thread of its own - the left on the thread frames are asked for on, the right ahead of it - and the pair is played,
-    /// sought in and shown as any other source's frames: see <see cref="VideoControlBase.EyeView"/> to show one eye.
+    /// sought in and shown as any other source's frames: see <see cref="MediaControlBase.EyeView"/> to show one eye.
     /// </summary>
     /// <remarks>
     /// The sound and the subtitles are the left source's, where it has any. Frames are paired by their times, within half a
@@ -124,7 +124,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         private Plane[] _planes;
 
-        /// <summary>The planes of frames of a format, and the black of each: of the frame's colour, of its range and bits.</summary>
+        /// <summary>The planes of frames of a format, and the black of each: of the frame's color, of its range and bits.</summary>
         private static Plane[] PlanesOf(VideoInfo info)
         {
             switch (info.PixelFormat)
@@ -137,9 +137,9 @@ namespace SharpMediaFoundationInterop.WPF
 
             // as decoded: of the stream's bits, its black luma - 16 of 8 bits of the limited range, scaled up - and its
             // neutral chroma, each of a byte, or of the high bits of 16, little-endian
-            var colour = info.ColourOrDefault;
-            int bits = colour.BitDepth;
-            int black = colour.FullRange ? 0 : 16 << (bits - 8);
+            var color = info.ColorOrDefault;
+            int bits = color.BitDepth;
+            int black = color.FullRange ? 0 : 16 << (bits - 8);
             int neutral = 1 << (bits - 1);
             byte[] Of8(params int[] values) => Array.ConvertAll(values, v => (byte)v);
             byte[] Of16(params int[] values)
@@ -202,7 +202,7 @@ namespace SharpMediaFoundationInterop.WPF
                 FpsDenom = left.FpsDenom,
                 PixelFormat = format,
                 FrameFormat = left.FrameFormat,
-                Colour = left.Colour,
+                Color = left.Color,
                 StereoLayout = StereoLayout.SideBySide,
                 Projection = left.Projection,
                 ProjectionBounds = left.ProjectionBounds,

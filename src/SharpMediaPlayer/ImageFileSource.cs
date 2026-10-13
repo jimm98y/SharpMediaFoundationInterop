@@ -13,7 +13,7 @@ namespace SharpMediaFoundationInterop.WPF
 {
     /// <summary>
     /// A HEIF image - a HEIC's, an AVIF's - as a video of one frame: decoded whole as it is opened, a grid's tiles each
-    /// decoded and put in their place, made into BGRA of sRGB as its colour says, then turned, mirrored and cropped as its
+    /// decoded and put in their place, made into BGRA of sRGB as its color says, then turned, mirrored and cropped as its
     /// properties say. Of a stereo pair - a spatial photo's 'ster' group - both eyes' images, side by side.
     /// </summary>
     /// <remarks>
@@ -165,7 +165,7 @@ namespace SharpMediaFoundationInterop.WPF
         private static readonly uint GridType = IsoStream.FromFourCC("grid");
 
         /// <summary>
-        /// An item's image: coded, or a grid of coded tiles - the decoder, its frames and their colour - and as its
+        /// An item's image: coded, or a grid of coded tiles - the decoder, its frames and their color - and as its
         /// transformative properties say it is shown: of its clean aperture, then turned and flipped, as HEIF orders them.
         /// </summary>
         private sealed class Item : IDisposable
@@ -177,7 +177,7 @@ namespace SharpMediaFoundationInterop.WPF
             private int _tileWidth, _tileHeight;
             private int _stride, _planeHeight;
             private VideoFrameFormat _format;
-            private VideoColour _colour;
+            private VideoColor _color;
 
             // the picture: of the canvas - the grid's output, or the one tile - the clean aperture's part
             private int _cropLeft, _cropTop, _width, _height;
@@ -205,10 +205,10 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 var properties = reader.PropertiesOf(itemID);
 
-                // The tiles of a grid, of its colour where it says it, else of its tiles', as they are all coded alike. The
+                // The tiles of a grid, of its color where it says it, else of its tiles', as they are all coded alike. The
                 // tiles' own transformations, which there should be none of, are not applied.
                 int canvasWidth = -1, canvasHeight = -1;
-                var colours = properties.OfType<ColourInformationBox>().ToList();
+                var colors = properties.OfType<ColourInformationBox>().ToList();
                 if (reader.ItemTypeOf(itemID) == GridType)
                 {
                     var grid = reader.ReadGrid(itemID);
@@ -217,10 +217,10 @@ namespace SharpMediaFoundationInterop.WPF
                         throw new InvalidDataException($"The grid {itemID} of {grid.Rows}x{grid.Columns} has {_tiles.Count} tiles.");
                     _columns = grid.Columns;
                     (canvasWidth, canvasHeight) = ((int)grid.OutputWidth, (int)grid.OutputHeight);
-                    foreach (var tileColour in reader.PropertiesOf(_tiles[0]).OfType<ColourInformationBox>())
+                    foreach (var tileColor in reader.PropertiesOf(_tiles[0]).OfType<ColourInformationBox>())
                     {
-                        if (!colours.Any(x => x.ColourType == tileColour.ColourType))
-                            colours.Add(tileColour);
+                        if (!colors.Any(x => x.ColourType == tileColor.ColourType))
+                            colors.Add(tileColor);
                     }
                 }
                 else
@@ -233,7 +233,7 @@ namespace SharpMediaFoundationInterop.WPF
                     ?? throw new NotSupportedException($"Item {_tiles[0]} is of no codec that can be read.");
 
                 // An AVIF's 'av1C' need have no sequence header, which is then in the item itself: read of the first tile,
-                // for what it says - the size, the bits, the colour - before the tiles are decoded.
+                // for what it says - the size, the bits, the color - before the tiles are decoded.
                 if (_track is AV1Track { SequenceHeaderObu: null } withoutHeader)
                 {
                     var first = reader.ReadItem(_tiles[0]);
@@ -266,16 +266,16 @@ namespace SharpMediaFoundationInterop.WPF
                 if (canvasWidth < 0)
                     (canvasWidth, canvasHeight) = (_tileWidth, _tileHeight);
 
-                // the bits of its samples and its chroma, what the decoder hands out of them, and their colour
-                var (bitDepth, chromaFormat) = TrackColour.SamplesOf(_track) ?? (8, 1);
-                TrackColour.ThrowIfNotDecoded(_track, bitDepth, chromaFormat);
-                _format = TrackColour.FrameFormatOf(chromaFormat, bitDepth);
-                _colour = TrackColour.Of(colours, _track, bitDepth, sceneReferred: true);
+                // the bits of its samples and its chroma, what the decoder hands out of them, and their color
+                var (bitDepth, chromaFormat) = TrackColor.SamplesOf(_track) ?? (8, 1);
+                TrackColor.ThrowIfNotDecoded(_track, bitDepth, chromaFormat);
+                _format = TrackColor.FrameFormatOf(chromaFormat, bitDepth);
+                _color = TrackColor.Of(colors, _track, bitDepth, sceneReferred: true);
 
                 // the decoder's frames, of the coded size - of HEVC its SPS's, the picture cropped of them - the tile at their top left
                 uint alignment = MediaCodecs.DecoderAlignment(_codec);
                 var (frameWidth, frameHeight) = _track is H265Track hevcTrack
-                    ? TrackColour.HevcFrameSize(hevcTrack.Sps.First().Value, (uint)_tileWidth, (uint)_tileHeight)
+                    ? TrackColor.HevcFrameSize(hevcTrack.Sps.First().Value, (uint)_tileWidth, (uint)_tileHeight)
                     : (MediaUtils.RoundToMultipleOf((uint)_tileWidth, alignment), MediaUtils.RoundToMultipleOf((uint)_tileHeight, alignment));
                 _stride = (int)VideoFrameFormats.Stride(_format, frameWidth);
                 _planeHeight = (int)frameHeight;
@@ -348,7 +348,7 @@ namespace SharpMediaFoundationInterop.WPF
                             continue;
                         var placement = new FramePlacement(index % _columns * _tileWidth - _cropLeft, index / _columns * _tileHeight - _cropTop,
                             _width, _height, _orientation, targetX, 0);
-                        _colour.Convert(frame, _format, _stride, _planeHeight, _tileWidth, _tileHeight, target, targetWidth, 4, placement, exact: true);
+                        _color.Convert(frame, _format, _stride, _planeHeight, _tileWidth, _tileHeight, target, targetWidth, 4, placement, exact: true);
                         decoded++;
                     }
                 }

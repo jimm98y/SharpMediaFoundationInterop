@@ -8,8 +8,8 @@ namespace SharpMediaFoundationInterop.WPF
 {
     /// <summary>
     /// How a picture's decoded samples - Y, Cb and Cr of 8, 10 or 12 bits - become the sRGB it is shown as, of the codes of
-    /// ITU-T H.273 a stream says its colour by: of its matrix and range, the samples made into three values - R'G'B' of
-    /// most matrices - and those, of its transfer, made linear; of its primaries made into sRGB's - colours sRGB has not
+    /// ITU-T H.273 a stream says its color by: of its matrix and range, the samples made into three values - R'G'B' of
+    /// most matrices - and those, of its transfer, made linear; of its primaries made into sRGB's - colors sRGB has not
     /// are clipped - and encoded by sRGB's transfer.
     /// </summary>
     /// <remarks>
@@ -26,7 +26,7 @@ namespace SharpMediaFoundationInterop.WPF
     /// display of a curve like it, and as players show it.
     /// </para>
     /// </remarks>
-    public sealed class VideoColour
+    public sealed class VideoColor
     {
         // H.273 MatrixCoefficients
         private const int MatrixIdentity = 0, MatrixYCgCo = 8, MatrixBt2020Cl = 10, MatrixSt2085 = 11, MatrixChromaticityCl = 13, MatrixICtCp = 14;
@@ -59,7 +59,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>Whether a camera's curve is undone into the scene's light, as an image's is; else shown as sRGB's.</summary>
         public bool SceneReferred { get; }
 
-        /// <summary>What the colour is of, as it was said: of the codes, or of an ICC profile.</summary>
+        /// <summary>What the color is of, as it was said: of the codes, or of an ICC profile.</summary>
         public string Description { get; }
 
         /// <summary>Whether the three values are sRGB's R'G'B' already: shown as they are, of no table.</summary>
@@ -69,7 +69,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// Whether a GPU's video processor shows it as well as this does: 8 bit SDR of BT.709's primaries, or sRGB's, of
         /// BT.601's or BT.709's matrix - what it is told of, the matrix and the range - and of R'G'B' shown as it is.
         /// </summary>
-        public bool IsVideoProcessorColour { get; }
+        public bool IsVideoProcessorColor { get; }
 
         /// <summary>Of the video processor's, whether the matrix is BT.709's, not BT.601's.</summary>
         internal bool IsBt709Matrix { get; }
@@ -108,7 +108,7 @@ namespace SharpMediaFoundationInterop.WPF
             99 / 4096.0, 309 / 4096.0, 3688 / 4096.0,
         });
 
-        private VideoColour(int matrix, bool fullRange, int bitDepth, double[] primariesToXyzD65, Func<double, double>[] toLinear,
+        private VideoColor(int matrix, bool fullRange, int bitDepth, double[] primariesToXyzD65, Func<double, double>[] toLinear,
             int transfer, bool isSrgb, bool sceneReferred, bool videoProcessor, string description)
         {
             if (bitDepth != 8 && bitDepth != 10 && bitDepth != 12)
@@ -126,7 +126,7 @@ namespace SharpMediaFoundationInterop.WPF
                 _ => Values.Rgb,
             };
             IsSrgb = isSrgb && _values == Values.Rgb;
-            IsVideoProcessorColour = videoProcessor && bitDepth == 8 && IsSrgb && matrix is 1 or 2 or 5 or 6;
+            IsVideoProcessorColor = videoProcessor && bitDepth == 8 && IsSrgb && matrix is 1 or 2 or 5 or 6;
             IsBt709Matrix = matrix == 1;
 
             // ICtCp is of BT.2020's primaries, whatever is said
@@ -247,7 +247,7 @@ namespace SharpMediaFoundationInterop.WPF
         #region Of what a stream says
 
         /// <summary>
-        /// The colour of the codes of H.273 - ColourPrimaries, TransferCharacteristics and MatrixCoefficients - and the range,
+        /// The color of the codes of H.273 - ColourPrimaries, TransferCharacteristics and MatrixCoefficients - and the range,
         /// of samples of so many bits.
         /// </summary>
         /// <param name="sceneReferred">An image's, whose camera's curve is undone; a video's is shown as sRGB's.</param>
@@ -255,23 +255,23 @@ namespace SharpMediaFoundationInterop.WPF
         /// Of a video that says no matrix, the height of its picture: of 720 lines and more BT.709's, else BT.601's, as a
         /// video of either is made; 0 for BT.601's, as an image that says none is taken to be.
         /// </param>
-        public static VideoColour FromCodes(int primaries, int transfer, int matrix, bool fullRange, int bitDepth, bool sceneReferred, uint height = 0)
+        public static VideoColor FromCodes(int primaries, int transfer, int matrix, bool fullRange, int bitDepth, bool sceneReferred, uint height = 0)
         {
             if (matrix == 2 && height >= 720)
                 matrix = 1;
             var toLinear = TransferToLinear(transfer, sceneReferred);
             bool srgbTransfer = transfer is 0 or 2 or 3 or 13 || !sceneReferred && IsCameraCurve(transfer);
             bool isSrgb = primaries is 1 or 2 && srgbTransfer;
-            return new VideoColour(matrix, fullRange, bitDepth, PrimariesToXyzD65(primaries), new[] { toLinear, toLinear, toLinear },
+            return new VideoColor(matrix, fullRange, bitDepth, PrimariesToXyzD65(primaries), new[] { toLinear, toLinear, toLinear },
                 transfer, isSrgb, sceneReferred, videoProcessor: true,
                 $"primaries {primaries}, transfer {transfer}, matrix {matrix}, {(fullRange ? "full" : "limited")} range, {bitDepth} bits");
         }
 
         /// <summary>
-        /// The colour of an ICC profile - of a matrix and curves, as an iPhone's Display P3 is - for the primaries and the
+        /// The color of an ICC profile - of a matrix and curves, as an iPhone's Display P3 is - for the primaries and the
         /// transfer, and of the matrix and the range the stream says; null where the profile is not of a matrix and curves.
         /// </summary>
-        public static VideoColour FromIcc(byte[] icc, int matrix, bool fullRange, int bitDepth, uint height = 0)
+        public static VideoColor FromIcc(byte[] icc, int matrix, bool fullRange, int bitDepth, uint height = 0)
         {
             if (matrix == MatrixICtCp || icc == null || !IccProfile.TryParse(icc, out var profile))
                 return null;
@@ -279,15 +279,15 @@ namespace SharpMediaFoundationInterop.WPF
                 matrix = 1;
             var toXyzD65 = Multiply(Bradford(D50, D65), profile.ToXyzD50);
             bool isSrgb = IsIdentity(Multiply(XyzD65ToSrgb, toXyzD65)) && profile.ToLinear.All(IsSrgbCurve);
-            return new VideoColour(matrix, fullRange, bitDepth, toXyzD65, profile.ToLinear, transfer: 13, isSrgb, sceneReferred: true,
+            return new VideoColor(matrix, fullRange, bitDepth, toXyzD65, profile.ToLinear, transfer: 13, isSrgb, sceneReferred: true,
                 videoProcessor: false, $"ICC profile, matrix {matrix}, {(fullRange ? "full" : "limited")} range, {bitDepth} bits");
         }
 
         /// <summary>
-        /// What a video that says nothing of its colour is taken to be: 8 bits of the limited range, of BT.709's matrix of
+        /// What a video that says nothing of its color is taken to be: 8 bits of the limited range, of BT.709's matrix of
         /// 720 lines and more, else BT.601's, of sRGB's primaries and curve - what a decoder of either makes.
         /// </summary>
-        public static VideoColour Default(uint height) => FromCodes(2, 2, 2, false, 8, sceneReferred: false, height);
+        public static VideoColor Default(uint height) => FromCodes(2, 2, 2, false, 8, sceneReferred: false, height);
 
         /// <summary>Whether a transfer is a camera's curve - BT.709's and the like - of SDR.</summary>
         private static bool IsCameraCurve(int transfer) => transfer is 1 or 6 or 7 or 14 or 15 or 11 or 12;
@@ -306,7 +306,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>
         /// The three values, as the samples make them, shown: sRGB's R'G'B', of 0 to 1 - each made linear, of sRGB's
-        /// primaries, HDR rolled off, encoded by sRGB's curve. What a table of a video's colour is made of.
+        /// primaries, HDR rolled off, encoded by sRGB's curve. What a table of a video's color is made of.
         /// </summary>
         public void Display(double t0, double t1, double t2, out double sr, out double sg, out double sb)
         {

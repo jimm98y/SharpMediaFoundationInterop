@@ -15,11 +15,11 @@ namespace SharpMediaFoundationInterop.WPF
     /// </summary>
     /// <remarks>
     /// Of a stereo video it shows both eyes as the frame has them, or one eye's picture alone - see
-    /// <see cref="VideoControlBase.EyeView"/>. A spherical video - a VR180 or 360 degree camera's - it shows as a view into
+    /// <see cref="MediaControlBase.EyeView"/>. A spherical video - a VR180 or 360 degree camera's - it shows as a view into
     /// the sphere, drawn by the GPU from the frame: looked around by dragging, zoomed with the wheel, of one eye, or of both
     /// side by side.
     /// </remarks>
-    public class GpuMediaControl : VideoControlBase
+    public class GpuMediaControl : MediaControlBase
     {
         private volatile bool _hasSurface;
         private Direct3DDevice _device;

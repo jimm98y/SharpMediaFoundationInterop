@@ -2,8 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:local="clr-namespace:SharpMediaFoundationInterop.WPF">
 
-    <!-- The default template's buttons: VideoControlBase.ButtonStyleKey, for another style to be based on -->
-    <Style x:Key="{ComponentResourceKey TypeInTargetAssembly={x:Type local:VideoControlBase}, ResourceId=ButtonStyle}" TargetType="{x:Type Button}">
+    <!-- The default template's buttons: MediaControlBase.ButtonStyleKey, for another style to be based on -->
+    <Style x:Key="{ComponentResourceKey TypeInTargetAssembly={x:Type local:MediaControlBase}, ResourceId=ButtonStyle}" TargetType="{x:Type Button}">
         <Setter Property="Width" Value="36" />
         <Setter Property="Height" Value="28" />
         <Setter Property="Margin" Value="2,0" />
@@ -51,7 +51,7 @@
         </Setter>
     </Style>
 
-    <!-- the seek bar's thumb: a circle with a dot of the accent colour in it, bigger under the mouse, smaller dragged -->
+    <!-- the seek bar's thumb: a circle with a dot of the accent color in it, bigger under the mouse, smaller dragged -->
     <Style x:Key="SeekThumb" TargetType="{x:Type Thumb}">
         <Setter Property="Width" Value="20" />
         <Setter Property="Height" Value="20" />
@@ -79,11 +79,11 @@
     </Style>
 
     <!--
-        The seek bar, as Windows 11's Media Player draws it: a thin rounded track, of the accent colour - the slider's
+        The seek bar, as Windows 11's Media Player draws it: a thin rounded track, of the accent color - the slider's
         Foreground - up to the thumb and of its Background after it, and a round thumb with a dot in it. Clicked anywhere,
-        it goes there. VideoControlBase.SeekSliderStyleKey, for another style to be based on.
+        it goes there. MediaControlBase.SeekSliderStyleKey, for another style to be based on.
     -->
-    <Style x:Key="{ComponentResourceKey TypeInTargetAssembly={x:Type local:VideoControlBase}, ResourceId=SeekSliderStyle}" TargetType="{x:Type Slider}">
+    <Style x:Key="{ComponentResourceKey TypeInTargetAssembly={x:Type local:MediaControlBase}, ResourceId=SeekSliderStyle}" TargetType="{x:Type Slider}">
         <Setter Property="Focusable" Value="False" />
         <Setter Property="IsMoveToPointEnabled" Value="True" />
         <Setter Property="Height" Value="20" />
@@ -112,10 +112,10 @@
 
     <!--
         A subtitle, its text the content: of a 720 line picture, scaled with what it is shown over, at its bottom. The
-        default template's, VideoControlBase.SubtitleTemplateKey: one of the key in an application's resources draws them
+        default template's, MediaControlBase.SubtitleTemplateKey: one of the key in an application's resources draws them
         otherwise.
     -->
-    <DataTemplate x:Key="{ComponentResourceKey TypeInTargetAssembly={x:Type local:VideoControlBase}, ResourceId=SubtitleTemplate}">
+    <DataTemplate x:Key="{ComponentResourceKey TypeInTargetAssembly={x:Type local:MediaControlBase}, ResourceId=SubtitleTemplate}">
         <Viewbox Stretch="Uniform" VerticalAlignment="Bottom">
             <Grid Width="1280" Height="720">
                 <Border x:Name="Box" VerticalAlignment="Bottom" HorizontalAlignment="Center"
@@ -140,11 +140,11 @@
         The subtitle, SubtitleText, is over the picture itself - scaled with it - and over each half of it, both eyes' views,
         where ShowsSideBySide.
     -->
-    <Style TargetType="{x:Type local:VideoControlBase}">
+    <Style TargetType="{x:Type local:MediaControlBase}">
         <Setter Property="Focusable" Value="True" />
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="{x:Type local:VideoControlBase}">
+                <ControlTemplate TargetType="{x:Type local:MediaControlBase}">
                     <Grid Background="Transparent">
                         <VisualStateManager.VisualStateGroups>
                             <VisualStateGroup x:Name="ControlsStates">
@@ -175,9 +175,9 @@
                                 <UniformGrid x:Name="SubtitleLayer" Rows="1" Columns="1" IsHitTestVisible="False"
                                              Width="{Binding ActualWidth, ElementName=PART_Image}" Height="{Binding ActualHeight, ElementName=PART_Image}">
                                     <ContentPresenter Content="{TemplateBinding SubtitleText}"
-                                                      ContentTemplate="{StaticResource {x:Static local:VideoControlBase.SubtitleTemplateKey}}" />
+                                                      ContentTemplate="{StaticResource {x:Static local:MediaControlBase.SubtitleTemplateKey}}" />
                                     <ContentPresenter x:Name="SecondSubtitle" Visibility="Collapsed" Content="{TemplateBinding SubtitleText}"
-                                                      ContentTemplate="{StaticResource {x:Static local:VideoControlBase.SubtitleTemplateKey}}" />
+                                                      ContentTemplate="{StaticResource {x:Static local:MediaControlBase.SubtitleTemplateKey}}" />
                                 </UniformGrid>
                             </Grid>
                         </Viewbox>
@@ -193,30 +193,30 @@
                             </Border.Background>
                             <DockPanel LastChildFill="True">
                                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <Button x:Name="RewindButton" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                    <Button x:Name="RewindButton" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                             Command="MediaCommands.Rewind" Content="&#xEB9E;" ToolTip="Play backwards; again for faster (J)" />
-                                    <Button x:Name="PlayPauseButton" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                    <Button x:Name="PlayPauseButton" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                             Command="MediaCommands.TogglePlayPause" Content="&#xE768;" ToolTip="Play or pause (Space, K)" />
-                                    <Button x:Name="FastForwardButton" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                    <Button x:Name="FastForwardButton" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                             Command="MediaCommands.FastForward" Content="&#xEB9D;" ToolTip="Fast forward; again for faster (L)" />
                                 </StackPanel>
-                                <Button x:Name="RepeatButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
-                                        Command="{x:Static local:VideoControlBase.ToggleRepeatCommand}" Content="&#xE8EE;"
+                                <Button x:Name="RepeatButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
+                                        Command="{x:Static local:MediaControlBase.ToggleRepeatCommand}" Content="&#xE8EE;"
                                         ToolTip="Repeat the video (R)" />
-                                <Button x:Name="SubtitleButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                <Button x:Name="SubtitleButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                         Width="40" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
-                                        Command="{x:Static local:VideoControlBase.NextSubtitleTrackCommand}" Content="CC"
+                                        Command="{x:Static local:MediaControlBase.NextSubtitleTrackCommand}" Content="CC"
                                         ToolTip="Subtitles: the next track, or off (C)" Visibility="Collapsed" />
-                                <Button x:Name="EyeButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:VideoControlBase.ButtonStyleKey}}"
+                                <Button x:Name="EyeButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                         Width="40" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
-                                        Command="{x:Static local:VideoControlBase.NextEyeViewCommand}" Content="L R"
+                                        Command="{x:Static local:MediaControlBase.NextEyeViewCommand}" Content="L R"
                                         ToolTip="Both eyes, the left or the right (E)" Visibility="Collapsed" />
                                 <TextBlock x:Name="TimeText" DockPanel.Dock="Right"
                                            Margin="8,0,2,0" VerticalAlignment="Center"
                                            Foreground="White" FontFamily="Consolas" FontSize="12"
                                            Text="{TemplateBinding TimeText}" />
                                 <Slider x:Name="PART_Seek" Margin="6,0" VerticalAlignment="Center" Minimum="0" Maximum="1"
-                                        Style="{StaticResource {x:Static local:VideoControlBase.SeekSliderStyleKey}}" />
+                                        Style="{StaticResource {x:Static local:MediaControlBase.SeekSliderStyleKey}}" />
                             </DockPanel>
                         </Border>
                     </Grid>

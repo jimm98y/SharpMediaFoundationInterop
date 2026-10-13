@@ -591,7 +591,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 width = (int)r.U(16) + 1;
                 height = (int)r.U(16) + 1;
 
-                // the colour description of the colour space: ISO/IEC 23091-2's codes
+                // the color description of the color space: ISO/IEC 23091-2's codes
                 (byte primaries, byte transfer, byte matrix) = colorSpace switch
                 {
                     1 => ((byte)6, (byte)6, (byte)6), // BT.601

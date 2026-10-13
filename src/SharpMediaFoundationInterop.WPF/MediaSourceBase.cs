@@ -44,7 +44,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>
         /// NV12, or <see cref="PixelFormat.Yuv"/>, hands frames out as the decoder makes them - NV12, or of the stream's
         /// <see cref="VideoInfo.FrameFormat"/> - not converted on the CPU: for a control that converts them on the GPU.
-        /// BGR24, as by default, and BGRA32 convert them on the CPU, of the stream's colour. Asked for before the source is
+        /// BGR24, as by default, and BGRA32 convert them on the CPU, of the stream's color. Asked for before the source is
         /// initialized.
         /// </summary>
         public bool TrySetOutputFormat(PixelFormat format)
@@ -75,8 +75,8 @@ namespace SharpMediaFoundationInterop.WPF
         private int _bytesPerPixel;
         private int _imageBufferLen;
 
-        /// <summary>How the frames' samples become sRGB, converted on the CPU: of the stream's colour.</summary>
-        private VideoColour _colour;
+        /// <summary>How the frames' samples become sRGB, converted on the CPU: of the stream's color.</summary>
+        private VideoColor _color;
         protected long _videoFrames = 0;
         protected long _audioFrames = 0;
         protected bool _isLowLatency = false;
@@ -478,10 +478,10 @@ namespace SharpMediaFoundationInterop.WPF
                 return;
             }
 
-            // converted here, of the stream's colour, top-down: the picture, the top left of the coded frame, turned as
+            // converted here, of the stream's color, top-down: the picture, the top left of the coded frame, turned as
             // it is shown
             byte[] picture = ArrayPool<byte>.Shared.Rent(_imageBufferLen);
-            _colour.Convert(decodedFrame, format, (int)VideoFrameFormats.Stride(format, videoInfo.Width), (int)videoInfo.Height,
+            _color.Convert(decodedFrame, format, (int)VideoFrameFormats.Stride(format, videoInfo.Width), (int)videoInfo.Height,
                 (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight, picture, (int)videoInfo.ShownWidth, _bytesPerPixel,
                 FramePlacement.Whole((int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight, videoInfo.Orientation));
             _videoRenderQueue.Enqueue((picture, frameTime));
@@ -824,11 +824,11 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>
         /// Whether the frames are decoded on the GPU, of the device given: NV12, handed out to a control that converts them,
-        /// of a colour the GPU's video processor shows as well as a shader would, and turned - not mirrored - as it can.
+        /// of a color the GPU's video processor shows as well as a shader would, and turned - not mirrored - as it can.
         /// Others are decoded into the CPU's memory, which the control's shader converts, or this does.
         /// </summary>
         private bool DecodesOnGpu(VideoInfo info) =>
-            _direct3D != null && HandsOutDecoded && info.FrameFormat == VideoFrameFormat.NV12 && info.ColourOrDefault.IsVideoProcessorColour
+            _direct3D != null && HandsOutDecoded && info.FrameFormat == VideoFrameFormat.NV12 && info.ColorOrDefault.IsVideoProcessorColor
             && !info.Orientation.IsMirrored;
 
         /// <summary>The decoder made, given the device first where there is one and it can take it.</summary>
@@ -969,8 +969,8 @@ namespace SharpMediaFoundationInterop.WPF
                 InitializeVideoDecoder(info);
             }
 
-            // converted on the CPU, where it is not handed out as decoded: of the stream's colour, BGR or BGRA
-            _colour = info.ColourOrDefault;
+            // converted on the CPU, where it is not handed out as decoded: of the stream's color, BGR or BGRA
+            _color = info.ColorOrDefault;
             _bytesPerPixel = _outputFormat == PixelFormat.BGRA32 ? 4 : 3;
             _imageBufferLen = (int)(info.OriginalWidth * info.OriginalHeight) * _bytesPerPixel;
 
