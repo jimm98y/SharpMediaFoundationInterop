@@ -17,6 +17,16 @@ using System.Windows.Threading;
 
 namespace SharpMediaFoundationInterop.WPF
 {
+    /// <summary>How a control shows the position, and what it steps by: see <see cref="MediaControlBase.PositionFormat"/>.</summary>
+    public enum PositionFormat
+    {
+        /// <summary>A time, of minutes and seconds; a step is a second.</summary>
+        Time,
+
+        /// <summary>The frame shown, of how many; a step is a frame.</summary>
+        Frames
+    }
+
     /// <summary>
     /// What a video control does whatever it draws with: its properties, its threads, its clock, trick play and its bar of
     /// controls. Drawing a frame is left to the control made of it - <see cref="MediaControl"/> into a bitmap,
@@ -36,8 +46,8 @@ namespace SharpMediaFoundationInterop.WPF
     /// <para>Without the overlay - <see cref="IsOverlayEnabled"/> false - there is no bar, nor keys to play by: what it does is
     /// the host's to do, of the control's methods - <see cref="Play"/>, <see cref="Pause"/>, <see cref="TogglePlayPause"/>,
     /// <see cref="Rewind"/>, <see cref="FastForward"/>, <see cref="SetRate"/>, <see cref="Seek"/>, <see cref="SeekBy"/>,
-    /// <see cref="ToggleRepeat"/>, <see cref="NextEyeView"/>, <see cref="NextSubtitleTrack"/>, <see cref="ResetView"/> - and
-    /// properties.</para>
+    /// <see cref="StepBackward"/>, <see cref="StepForward"/>, <see cref="TogglePositionFormat"/>, <see cref="ToggleRepeat"/>,
+    /// <see cref="NextEyeView"/>, <see cref="NextSubtitleTrack"/>, <see cref="ResetView"/> - and properties.</para>
     /// <para>Parts of the template, each optional: <c>PART_Image</c>, the image frames are drawn on; <c>PART_Seek</c>, a
     /// slider of the position, which seeks; <c>PART_ControlsBar</c>, the bar, kept shown while the mouse is over it.</para>
     /// <para>Subtitles are the template's too: the text shown now is <see cref="SubtitleText"/>, shown twice - over each
@@ -312,6 +322,26 @@ namespace SharpMediaFoundationInterop.WPF
             DependencyProperty.RegisterReadOnly("CanSeek", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty CanSeekProperty = CanSeekPropertyKey.DependencyProperty;
 
+        /// <summary>
+        /// Whether the position is shown as a time or as frames - the frame shown, of how many - and what a step goes by: a
+        /// second, or a frame. The overlay's time, clicked, or T, turns it the other way.
+        /// </summary>
+        public PositionFormat PositionFormat
+        {
+            get { return (PositionFormat)GetValue(PositionFormatProperty); }
+            set { SetValue(PositionFormatProperty, value); }
+        }
+
+        public static readonly DependencyProperty PositionFormatProperty =
+            DependencyProperty.Register("PositionFormat", typeof(PositionFormat), typeof(MediaControlBase),
+                new PropertyMetadata(PositionFormat.Time, (d, e) => ((MediaControlBase)d).OnPositionFormatChanged()));
+
+        private void OnPositionFormatChanged()
+        {
+            _timeTextSeconds = -1; // made again
+            UpdatePosition();
+        }
+
         /// <summary>Whether the source is a picture, not a video - see <see cref="IVideoSource.IsStill"/>: of no time to show, nor to seek in.</summary>
         public bool IsStill
         {
@@ -443,6 +473,18 @@ namespace SharpMediaFoundationInterop.WPF
             DependencyProperty.RegisterReadOnly("IsSpherical", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
         public static readonly DependencyProperty IsSphericalProperty = IsSphericalPropertyKey.DependencyProperty;
 
+        /// <summary>Steps back a second, or a frame - see <see cref="PositionFormat"/>. The Left key, over the video.</summary>
+        public static RoutedUICommand StepBackwardCommand { get; } =
+            new RoutedUICommand("Step backward", "StepBackward", typeof(MediaControlBase));
+
+        /// <summary>Steps forward a second, or a frame - see <see cref="PositionFormat"/>. The Right key, over the video.</summary>
+        public static RoutedUICommand StepForwardCommand { get; } =
+            new RoutedUICommand("Step forward", "StepForward", typeof(MediaControlBase));
+
+        /// <summary>Shows the position as frames, or as a time again: see <see cref="PositionFormat"/>. The T key, over the video.</summary>
+        public static RoutedUICommand TogglePositionFormatCommand { get; } =
+            new RoutedUICommand("Time or frames", "TogglePositionFormat", typeof(MediaControlBase));
+
         /// <summary>Repeats the video as it ends, or stops repeating it: see <see cref="Looping"/>. The R key, over the video.</summary>
         public static RoutedUICommand ToggleRepeatCommand { get; } =
             new RoutedUICommand("Repeat", "ToggleRepeat", typeof(MediaControlBase));
@@ -561,6 +603,9 @@ namespace SharpMediaFoundationInterop.WPF
             CommandBindings.Add(new CommandBinding(MediaCommands.FastForward, (s, e) => FastForward(), CanSeekCommand));
             CommandBindings.Add(new CommandBinding(MediaCommands.MuteVolume, (s, e) => Mute = !Mute));
             CommandBindings.Add(new CommandBinding(ToggleRepeatCommand, (s, e) => ToggleRepeat(), CanSeekCommand));
+            CommandBindings.Add(new CommandBinding(StepBackwardCommand, (s, e) => StepBackward(), CanSeekCommand));
+            CommandBindings.Add(new CommandBinding(StepForwardCommand, (s, e) => StepForward(), CanSeekCommand));
+            CommandBindings.Add(new CommandBinding(TogglePositionFormatCommand, (s, e) => TogglePositionFormat(), CanSeekCommand));
             CommandBindings.Add(new CommandBinding(NextEyeViewCommand, (s, e) => NextEyeView(), (s, e) => e.CanExecute = IsStereo));
             CommandBindings.Add(new CommandBinding(ResetViewCommand, (s, e) => ResetView(), (s, e) => e.CanExecute = IsSpherical));
             CommandBindings.Add(new CommandBinding(NextSubtitleTrackCommand, (s, e) => NextSubtitleTrack(), (s, e) => e.CanExecute = HasSubtitles));
@@ -728,6 +773,82 @@ namespace SharpMediaFoundationInterop.WPF
             SetRate(_rate <= -1 && _rate > -8 ? _rate * 2 : -1);
         }
 
+        /// <summary>
+        /// Steps back: a second, playing on as before; or of frames, to the frame before the one shown, paused - see
+        /// <see cref="PositionFormat"/>.
+        /// </summary>
+        public void StepBackward() => Step(-1);
+
+        /// <summary>
+        /// Steps forward: a second, playing on as before; or of frames, to the frame after the one shown, paused - see
+        /// <see cref="PositionFormat"/>.
+        /// </summary>
+        public void StepForward() => Step(1);
+
+        /// <summary>Shows the position as frames, or as a time again: <see cref="PositionFormat"/> turned the other way.</summary>
+        public void TogglePositionFormat()
+        {
+            PositionFormat = PositionFormat == PositionFormat.Time ? PositionFormat.Frames : PositionFormat.Time;
+        }
+
+        private void Step(int direction)
+        {
+            var seekable = SeekableSource;
+            if (seekable == null || IsStill)
+                return;
+            if (PositionFormat == PositionFormat.Time)
+            {
+                SeekBy(TimeSpan.FromSeconds(direction));
+                return;
+            }
+
+            // A frame on, paused there, as a player steps. Of a source that indexes its frames, that frame's time; of one
+            // that does not, of the frame rate - half a frame from the frame wanted, as a seek is to the frame at a time or
+            // the first after it.
+            long current = CurrentTime();
+            long target;
+            long frame = seekable.FrameAt(current);
+            if (frame >= 0)
+            {
+                long count = seekable.FrameCount;
+                long next = Math.Clamp(frame + direction, 0, count > 0 ? count - 1 : long.MaxValue);
+                target = seekable.TimeOfFrame(next);
+                if (target < 0)
+                    return;
+            }
+            else
+            {
+                long duration = FrameDuration();
+                if (duration <= 0)
+                    return;
+                target = Math.Max(seekable.StartTime, current + direction * duration - duration / 2);
+            }
+            IsPaused = true;
+            SeekTo(target, 1);
+        }
+
+        /// <summary>The time a frame is shown for, of the source's frame rate; 0 where it says none.</summary>
+        private long FrameDuration()
+        {
+            var info = (_source as IVideoSource)?.VideoInfo;
+            return info != null && info.FpsNom > 0 && info.FpsDenom > 0 ? TimeSpan.TicksPerSecond * info.FpsDenom / info.FpsNom : 0;
+        }
+
+        /// <summary>The frame shown, from 1, and of how many: of the source's index, or of its frame rate; null where neither is.</summary>
+        private (long Frame, long Count)? FramesOf(long time)
+        {
+            var seekable = SeekableSource;
+            if (seekable == null)
+                return null;
+            long frame = seekable.FrameAt(time);
+            if (frame >= 0)
+                return (frame + 1, seekable.FrameCount);
+            long duration = FrameDuration();
+            if (duration <= 0)
+                return null;
+            return ((time - seekable.StartTime + duration / 2) / duration + 1, seekable.Duration > 0 ? (seekable.Duration + duration / 2) / duration : -1);
+        }
+
         /// <summary>Repeats the video as it ends, or stops repeating it: <see cref="Looping"/> turned the other way.</summary>
         public void ToggleRepeat()
         {
@@ -890,10 +1011,13 @@ namespace SharpMediaFoundationInterop.WPF
                     FastForward();
                     break;
                 case Key.Left when !IsStill:
-                    SeekBy(TimeSpan.FromSeconds(-5));
+                    StepBackward();
                     break;
                 case Key.Right when !IsStill:
-                    SeekBy(TimeSpan.FromSeconds(5));
+                    StepForward();
+                    break;
+                case Key.T when !IsStill && SeekableSource != null:
+                    TogglePositionFormat();
                     break;
                 case Key.Home when !IsStill:
                     Seek(TimeSpan.Zero);
@@ -1029,6 +1153,21 @@ namespace SharpMediaFoundationInterop.WPF
                 _updatingSlider = true;
                 _seekSlider.Value = Math.Min(_seekSlider.Maximum, Position.Ticks);
                 _updatingSlider = false;
+            }
+
+            // of frames: the frame shown, of how many, where they are known
+            if (PositionFormat == PositionFormat.Frames && seekable != null && shown >= 0 && FramesOf(shown) is { } frames)
+            {
+                var (frame, count) = frames;
+                if (frame != _timeTextSeconds || count != _timeTextDuration || _rate != _timeTextRate)
+                {
+                    _timeTextSeconds = frame;
+                    _timeTextDuration = count;
+                    _timeTextRate = _rate;
+                    string frameRate = _rate == 1 ? "" : _rate > 0 ? $"  ×{_rate}" : $"  ◀×{-_rate}";
+                    TimeText = count > 0 ? $"frame {frame} / {count}{frameRate}" : $"frame {frame}{frameRate}";
+                }
+                return;
             }
 
             // made again only as the second shown, the duration or the rate changes: not of every frame

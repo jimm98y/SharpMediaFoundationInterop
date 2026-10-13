@@ -517,6 +517,15 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>The time of the first frame, which a position is counted from.</summary>
         public virtual long StartTime => 0;
 
+        /// <summary>How many frames there are; -1 of a source that does not index them, as by default.</summary>
+        public virtual long FrameCount => -1;
+
+        /// <summary>The number of the frame shown at a time, from 0 - the last at or before it; -1 where frames are not indexed.</summary>
+        public virtual long FrameAt(long time) => -1;
+
+        /// <summary>The time a frame is shown at, of its number; -1 where frames are not indexed, or there is no such frame.</summary>
+        public virtual long TimeOfFrame(long frame) => -1;
+
         /// <summary>The time of the frame handed out last; -1 before the first.</summary>
         public long Position => Interlocked.Read(ref _position);
         private long _position = -1;

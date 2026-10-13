@@ -230,6 +230,15 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>The number of the last seek done: that of the frame handed out last.</summary>
         long Request { get; }
+
+        /// <summary>How many frames there are, of a source that indexes them - a file; -1 of one that does not.</summary>
+        long FrameCount => -1;
+
+        /// <summary>The number of the frame shown at a time, from 0 - the last at or before it; -1 where frames are not indexed.</summary>
+        long FrameAt(long time) => -1;
+
+        /// <summary>The time a frame is shown at, of its number; -1 where frames are not indexed, or there is no such frame.</summary>
+        long TimeOfFrame(long frame) => -1;
     }
 
     public interface IAudioSource : IDisposable

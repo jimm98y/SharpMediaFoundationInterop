@@ -315,12 +315,29 @@ namespace SharpMediaFoundationInterop.WPF
         // The times of the video's key frames, in 100 ns units, in order, and the numbers of their samples; the times of the
         // audio's samples, of the 'moov' and of any fragments. Null for a file whose track has no samples.
         private long[] _syncTimes;
+
+        // the time each frame is shown at, in the order shown: what a frame's number is of
+        private long[] _frameTimes;
         private uint[] _syncSamples;
         private long[] _audioTimes;
         private long _startTime;
         private long _duration = -1;
 
         public override bool CanSeek => _syncTimes != null && _syncTimes.Length > 0;
+
+        public override long FrameCount => _frameTimes?.Length ?? -1;
+
+        public override long FrameAt(long time)
+        {
+            if (_frameTimes == null || _frameTimes.Length == 0)
+                return -1;
+            int i = Array.BinarySearch(_frameTimes, time);
+            // the last at or before it; of a time before the first, the first
+            return Math.Max(0, i >= 0 ? i : ~i - 1);
+        }
+
+        public override long TimeOfFrame(long frame) =>
+            _frameTimes != null && frame >= 0 && frame < _frameTimes.Length ? _frameTimes[frame] : -1;
         public override long Duration => _duration;
         public override long StartTime => _startTime;
 
@@ -370,6 +387,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             _syncTimes = null;
             _syncSamples = null;
+            _frameTimes = null;
             _audioTimes = null;
             _startTime = 0;
             _duration = -1;
@@ -379,10 +397,12 @@ namespace SharpMediaFoundationInterop.WPF
                 return;
 
             var syncs = new List<(long Time, uint Sample)>();
+            var frames = new long[video.Length];
             long start = long.MaxValue, end = long.MinValue;
             for (int i = 0; i < video.Length; i++)
             {
                 long time = MediaUtils.ToTicks(video[i].PTS, _videoTrack.Timescale);
+                frames[i] = time;
                 start = Math.Min(start, time);
                 end = Math.Max(end, MediaUtils.ToTicks(video[i].PTS + video[i].Duration, _videoTrack.Timescale));
                 if (video[i].IsSyncSample)
@@ -391,6 +411,8 @@ namespace SharpMediaFoundationInterop.WPF
             syncs.Sort((a, b) => a.Time.CompareTo(b.Time));
             _syncTimes = syncs.Select(s => s.Time).ToArray();
             _syncSamples = syncs.Select(s => s.Sample).ToArray();
+            Array.Sort(frames);
+            _frameTimes = frames;
             _startTime = start;
             _duration = end - start;
 

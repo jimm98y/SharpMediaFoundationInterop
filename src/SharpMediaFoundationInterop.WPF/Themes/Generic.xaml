@@ -193,12 +193,18 @@
                             </Border.Background>
                             <DockPanel LastChildFill="True">
                                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button x:Name="StepBackwardButton" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
+                                            Command="{x:Static local:MediaControlBase.StepBackwardCommand}" Content="&#xE892;"
+                                            ToolTip="Back a second, or a frame (Left)" />
                                     <Button x:Name="RewindButton" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                             Command="MediaCommands.Rewind" Content="&#xEB9E;" ToolTip="Play backwards; again for faster (J)" />
                                     <Button x:Name="PlayPauseButton" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                             Command="MediaCommands.TogglePlayPause" Content="&#xE768;" ToolTip="Play or pause (Space, K)" />
                                     <Button x:Name="FastForwardButton" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                             Command="MediaCommands.FastForward" Content="&#xEB9D;" ToolTip="Fast forward; again for faster (L)" />
+                                    <Button x:Name="StepForwardButton" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
+                                            Command="{x:Static local:MediaControlBase.StepForwardCommand}" Content="&#xE893;"
+                                            ToolTip="Forward a second, or a frame (Right)" />
                                 </StackPanel>
                                 <Button x:Name="RepeatButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                         Command="{x:Static local:MediaControlBase.ToggleRepeatCommand}" Content="&#xE8EE;"
@@ -211,10 +217,14 @@
                                         Width="40" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
                                         Command="{x:Static local:MediaControlBase.NextEyeViewCommand}" Content="L R"
                                         ToolTip="Both eyes, the left or the right (E)" Visibility="Collapsed" />
-                                <TextBlock x:Name="TimeText" DockPanel.Dock="Right"
-                                           Margin="8,0,2,0" VerticalAlignment="Center"
-                                           Foreground="White" FontFamily="Consolas" FontSize="12"
-                                           Text="{TemplateBinding TimeText}" />
+                                <!-- the time, or the frame: clicked, the other -->
+                                <Button x:Name="TimeButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
+                                        Width="Auto" Padding="6,0" Margin="6,0,2,0"
+                                        Command="{x:Static local:MediaControlBase.TogglePositionFormatCommand}" ToolTip="Time or frames (T)">
+                                    <TextBlock x:Name="TimeText" VerticalAlignment="Center"
+                                               Foreground="White" FontFamily="Consolas" FontSize="12"
+                                               Text="{TemplateBinding TimeText}" />
+                                </Button>
                                 <Slider x:Name="PART_Seek" Margin="6,0" VerticalAlignment="Center" Minimum="0" Maximum="1"
                                         Style="{StaticResource {x:Static local:MediaControlBase.SeekSliderStyleKey}}" />
                             </DockPanel>
@@ -226,10 +236,12 @@
                         </Trigger>
                         <!-- a live source: pausing is all there is to do -->
                         <Trigger Property="CanSeek" Value="False">
+                            <Setter TargetName="StepBackwardButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="StepForwardButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="RepeatButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="RewindButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="FastForwardButton" Property="Visibility" Value="Collapsed" />
-                            <Setter TargetName="TimeText" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="TimeButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="PART_Seek" Property="Visibility" Value="Collapsed" />
                         </Trigger>
                         <!-- no overlay: the video alone -->
@@ -238,11 +250,13 @@
                         </Trigger>
                         <!-- a picture: of no time to show, nor to seek in, nor to play -->
                         <Trigger Property="IsStill" Value="True">
+                            <Setter TargetName="StepBackwardButton" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="StepForwardButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="RepeatButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="RewindButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="PlayPauseButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="FastForwardButton" Property="Visibility" Value="Collapsed" />
-                            <Setter TargetName="TimeText" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="TimeButton" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="PART_Seek" Property="Visibility" Value="Collapsed" />
                         </Trigger>
                         <!-- a stereo video: an eye can be chosen -->

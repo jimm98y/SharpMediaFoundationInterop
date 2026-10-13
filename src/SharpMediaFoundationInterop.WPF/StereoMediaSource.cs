@@ -448,6 +448,11 @@ namespace SharpMediaFoundationInterop.WPF
 
         public long StartTime => LeftSeekable?.StartTime ?? 0;
 
+        // the pair's frames are the left eye's, which the right's are paired with
+        public long FrameCount => LeftSeekable?.FrameCount ?? -1;
+        public long FrameAt(long time) => LeftSeekable?.FrameAt(time) ?? -1;
+        public long TimeOfFrame(long frame) => LeftSeekable?.TimeOfFrame(frame) ?? -1;
+
         public int Rate { get; private set; } = 1;
 
         // The seek asked for last, and each eye's of it; and the seek of the pair handed out last.
