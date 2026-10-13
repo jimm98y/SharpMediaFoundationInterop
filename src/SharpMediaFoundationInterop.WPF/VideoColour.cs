@@ -373,9 +373,30 @@ namespace SharpMediaFoundationInterop.WPF
                 }
             }
 
-            sr = SrgbEncode(Math.Clamp(sr, 0, 1));
-            sg = SrgbEncode(Math.Clamp(sg, 0, 1));
-            sb = SrgbEncode(Math.Clamp(sb, 0, 1));
+            sr = EncodeSrgb(sr);
+            sg = EncodeSrgb(sg);
+            sb = EncodeSrgb(sb);
+        }
+
+        // sRGB's curve of 0 to 1, of so many steps, looked up between them: within a millionth of the curve - of 8 bits,
+        // a thousandth of a step - where three powers a pixel were most of the time of converting it
+        private const int EncodeSteps = 16384;
+        private static readonly float[] SrgbEncodeTable = BuildEncodeTable();
+
+        private static float[] BuildEncodeTable()
+        {
+            var table = new float[EncodeSteps + 2];
+            for (int i = 0; i <= EncodeSteps; i++)
+                table[i] = (float)SrgbEncode(i / (double)EncodeSteps);
+            table[EncodeSteps + 1] = table[EncodeSteps];
+            return table;
+        }
+
+        private static double EncodeSrgb(double linear)
+        {
+            double at = Math.Clamp(linear, 0, 1) * EncodeSteps;
+            int i = (int)at;
+            return SrgbEncodeTable[i] + (SrgbEncodeTable[i + 1] - SrgbEncodeTable[i]) * (at - i);
         }
 
         /// <summary>A sample - its codes, of <see cref="BitDepth"/> bits - made into a BGRA pixel, exactly, at a place of an array.</summary>
@@ -448,26 +469,26 @@ namespace SharpMediaFoundationInterop.WPF
             }
         }
 
-        /// <summary>The table looked up between its steps, of the three values, into a pixel of 3 or 4 bytes, BGR(A).</summary>
-        private static void LookUp(ushort[] table, double t0, double t1, double t2, byte[] pixels, int at)
+        /// <summary>The table looked up between its steps, of the three values, into a pixel's B, G and R.</summary>
+        private static unsafe void LookUp(ushort* table, float t0, float t1, float t2, byte* pixel)
         {
             const int n = TableSize;
-            double x = Math.Clamp(t0, 0, 1) * (n - 1), y = Math.Clamp(t1, 0, 1) * (n - 1), z = Math.Clamp(t2, 0, 1) * (n - 1);
+            float x = Math.Clamp(t0, 0f, 1f) * (n - 1), y = Math.Clamp(t1, 0f, 1f) * (n - 1), z = Math.Clamp(t2, 0f, 1f) * (n - 1);
             int x0 = Math.Min((int)x, n - 2), y0 = Math.Min((int)y, n - 2), z0 = Math.Min((int)z, n - 2);
-            double fx = x - x0, fy = y - y0, fz = z - z0;
-            int i000 = ((z0 * n + y0) * n + x0) * 4;
-            int dx = 4, dy = n * 4, dz = n * n * 4;
+            float fx = x - x0, fy = y - y0, fz = z - z0;
+            ushort* corner = table + ((z0 * n + y0) * n + x0) * 4;
+            const int dx = 4, dy = n * 4, dz = n * n * 4;
             for (int c = 0; c < 3; c++)
             {
-                int i = i000 + c;
-                double c00 = table[i] + (table[i + dx] - table[i]) * fx;
-                double c10 = table[i + dy] + (table[i + dy + dx] - table[i + dy]) * fx;
-                double c01 = table[i + dz] + (table[i + dz + dx] - table[i + dz]) * fx;
-                double c11 = table[i + dz + dy] + (table[i + dz + dy + dx] - table[i + dz + dy]) * fx;
-                double c0 = c00 + (c10 - c00) * fy;
-                double c1 = c01 + (c11 - c01) * fy;
+                ushort* i = corner + c;
+                float c00 = i[0] + (i[dx] - i[0]) * fx;
+                float c10 = i[dy] + (i[dy + dx] - i[dy]) * fx;
+                float c01 = i[dz] + (i[dz + dx] - i[dz]) * fx;
+                float c11 = i[dz + dy] + (i[dz + dy + dx] - i[dz + dy]) * fx;
+                float c0 = c00 + (c10 - c00) * fy;
+                float c1 = c01 + (c11 - c01) * fy;
                 // BGR: the table's R first
-                pixels[at + 2 - c] = (byte)((c0 + (c1 - c0) * fz) * (255.0 / 65535) + 0.5);
+                pixel[2 - c] = (byte)((c0 + (c1 - c0) * fz) * (255f / 65535) + 0.5f);
             }
         }
 
@@ -478,131 +499,183 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>
         /// A decoded frame of any <see cref="VideoFrameFormat"/> - rows of <paramref name="stride"/> bytes; of 4:2:0, the
         /// chroma's plane after the luma's <paramref name="planeHeight"/> rows; samples of more than 8 bits in the high
-        /// ones of 16 - made into BGR or BGRA, <paramref name="width"/> by <paramref name="height"/> of it at a place of the
-        /// target, what of it falls outside cut off.
+        /// ones of 16 - made into BGR or BGRA: <paramref name="width"/> by <paramref name="height"/> of it, written where
+        /// <paramref name="placement"/> says, into a target of rows of <paramref name="targetWidth"/> pixels. What of it
+        /// falls outside the picture - a grid's tiles past its size, a crop - is cut off.
         /// </summary>
         /// <param name="exact">Of each pixel exactly, as an image is; else of the table, as a video's frames are.</param>
-        /// <param name="orientation">
-        /// Turned and flipped as it is shown, each pixel written where it is shown: into a target of the picture's size as
-        /// shown, at its top left.
-        /// </param>
-        public void Convert(byte[] frame, VideoFrameFormat format, int stride, int planeHeight, int width, int height,
-            byte[] target, int targetWidth, int targetHeight, int bytesPerPixel, int left = 0, int top = 0, bool exact = false,
-            VideoOrientation orientation = default)
+        public unsafe void Convert(byte[] frame, VideoFrameFormat format, int stride, int planeHeight, int width, int height,
+            byte[] target, int targetWidth, int bytesPerPixel, in FramePlacement placement, bool exact = false)
         {
-            int rows = Math.Min(height, targetHeight - top);
-            int columns = Math.Min(width, targetWidth - left);
-            if (!orientation.IsIdentity)
-            {
-                var (shownWidth, shownHeight) = orientation.Shown((uint)width, (uint)height);
-                if (left != 0 || top != 0 || targetWidth != shownWidth || targetHeight != shownHeight)
-                    throw new ArgumentException("A picture turned is written whole, into a target of its size as shown.");
-                (rows, columns) = (height, width);
-            }
-            if (rows <= 0 || columns <= 0)
+            var p = placement;
+            int x0 = Math.Max(0, -p.Left), x1 = Math.Min(width, p.PictureWidth - p.Left);
+            int y0 = Math.Max(0, -p.Top), y1 = Math.Min(height, p.PictureHeight - p.Top);
+            if (x1 <= x0 || y1 <= y0)
                 return;
 
-            // Where each pixel goes: of its row, where the row's first does, and how far on each next one is - the
-            // matrix, x' = A x + C y and y' = B x + D y, of a picture shown from its top left.
-            int a = orientation.A, b = orientation.B, c = orientation.C, d = orientation.D;
-            int shiftX = (a < 0 ? columns - 1 : 0) + (c < 0 ? rows - 1 : 0);
-            int shiftY = (b < 0 ? columns - 1 : 0) + (d < 0 ? rows - 1 : 0);
-            int step = (b * targetWidth + a) * bytesPerPixel;
+            // what is read, and written, of pointers: within the frame, and every corner within the target
+            long read = format is VideoFrameFormat.NV12 or VideoFrameFormat.P010 or VideoFrameFormat.P016
+                ? (long)stride * planeHeight + (long)((y1 - 1) / 2 + 1) * stride
+                : (long)y1 * stride;
+            if (frame.Length < read || (long)stride * (y1 - 1) + VideoFrameFormats.Stride(format, (uint)x1) > frame.Length)
+                throw new ArgumentException("The frame is smaller than its stride and rows say.", nameof(frame));
 
-            var table = exact ? null : Table;
-            // of 16 bit samples, the stream's bits down from the high ones; monochrome's chroma, none, the neutral
+            var o = p.Orientation;
+            int a = o.A, b = o.B, c = o.C, d = o.D;
+            int shiftX = (a < 0 ? p.PictureWidth - 1 : 0) + (c < 0 ? p.PictureHeight - 1 : 0) + p.TargetX;
+            int shiftY = (b < 0 ? p.PictureWidth - 1 : 0) + (d < 0 ? p.PictureHeight - 1 : 0) + p.TargetY;
+            int targetRows = target.Length / (targetWidth * bytesPerPixel);
+            (int X, int Y) Shown(int x, int y) => (a * (p.Left + x) + c * (p.Top + y) + shiftX, b * (p.Left + x) + d * (p.Top + y) + shiftY);
+            foreach (var (x, y) in new[] { (x0, y0), (x1 - 1, y0), (x0, y1 - 1), (x1 - 1, y1 - 1) })
+            {
+                var (sx, sy) = Shown(x, y);
+                if (sx < 0 || sx >= targetWidth || sy < 0 || sy >= targetRows)
+                    throw new ArgumentException("The frame placed falls outside the target.", nameof(placement));
+            }
+
+            // each pixel on from the one before it, along a row of the frame: the matrix, x' = A x + C y and y' = B x + D y
+            int step = (b * targetWidth + a) * bytesPerPixel;
+            int mode = IsSrgb ? 0 : exact ? 2 : 1;
+            var table = mode == 1 ? Table : null;
+            int columns = x1 - x0;
             int shift = 16 - BitDepth;
             int neutral = 1 << (BitDepth - 1);
             int chroma = stride * planeHeight;
-            Parallel.For(0, rows, row =>
+            Parallel.For(y0, y1, () => new int[columns * 3], (row, _, codes) =>
             {
-                var words = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, ushort>(frame);
-                var dwords = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(frame);
-                int line = row * stride;
-                int chromaLine = chroma + row / 2 * stride;
-                int at = ((d * row + shiftY + top) * targetWidth + c * row + shiftX + left) * bytesPerPixel;
-                for (int x = 0; x < columns; x++, at += step)
+                var (sx, sy) = Shown(x0, row);
+                fixed (byte* source = frame)
+                fixed (byte* output = target)
+                fixed (int* samples = codes)
+                fixed (ushort* lookUp = table)
                 {
-                    int pair = x & ~1;
-                    int y, cb, cr;
-                    switch (format)
-                    {
-                        case VideoFrameFormat.NV12:
-                            (y, cb, cr) = (frame[line + x], frame[chromaLine + pair], frame[chromaLine + pair + 1]);
-                            break;
-                        case VideoFrameFormat.P010:
-                        case VideoFrameFormat.P016:
-                            {
-                                int c = chromaLine / 2 + pair;
-                                (y, cb, cr) = (words[line / 2 + x] >> shift, words[c] >> shift, words[c + 1] >> shift);
-                                break;
-                            }
-                        case VideoFrameFormat.YUY2:
-                            {
-                                // of each two pixels Y0, Cb, Y1, Cr
-                                int p = line + pair * 2;
-                                (y, cb, cr) = (frame[p + (x & 1) * 2], frame[p + 1], frame[p + 3]);
-                                break;
-                            }
-                        case VideoFrameFormat.Y210:
-                        case VideoFrameFormat.Y216:
-                            {
-                                int p = line / 2 + pair * 2;
-                                (y, cb, cr) = (words[p + (x & 1) * 2] >> shift, words[p + 1] >> shift, words[p + 3] >> shift);
-                                break;
-                            }
-                        case VideoFrameFormat.AYUV:
-                            {
-                                // Cr, Cb, Y, alpha
-                                int p = line + x * 4;
-                                (y, cb, cr) = (frame[p + 2], frame[p + 1], frame[p]);
-                                break;
-                            }
-                        case VideoFrameFormat.Y410:
-                            {
-                                // Cb of bits 0 to 9, Y of 10 to 19, Cr of 20 to 29
-                                uint packed = dwords[line / 4 + x];
-                                (y, cb, cr) = ((int)(packed >> 10) & 0x3FF, (int)packed & 0x3FF, (int)(packed >> 20) & 0x3FF);
-                                break;
-                            }
-                        case VideoFrameFormat.Y416:
-                            {
-                                // Cb, Y, Cr, alpha
-                                int p = line / 2 + x * 4;
-                                (y, cb, cr) = (words[p + 1] >> shift, words[p] >> shift, words[p + 2] >> shift);
-                                break;
-                            }
-                        case VideoFrameFormat.L8:
-                            (y, cb, cr) = (frame[line + x], neutral, neutral);
-                            break;
-                        case VideoFrameFormat.L16:
-                            (y, cb, cr) = (words[line / 2 + x] >> shift, neutral, neutral);
-                            break;
-                        default:
-                            throw new NotSupportedException($"Frames of {format} are not supported.");
-                    }
-
-                    Values3(y, cb, cr, out double t0, out double t1, out double t2);
-                    if (IsSrgb)
-                    {
-                        target[at] = ToByte(t2);
-                        target[at + 1] = ToByte(t1);
-                        target[at + 2] = ToByte(t0);
-                    }
-                    else if (table != null)
-                    {
-                        LookUp(table, t0, t1, t2, target, at);
-                    }
-                    else
-                    {
-                        Display(t0, t1, t2, out double r, out double g, out double b);
-                        (target[at], target[at + 1], target[at + 2]) = (ToByte(b), ToByte(g), ToByte(r));
-                    }
-                    if (bytesPerPixel == 4)
-                        target[at + 3] = 255;
+                    ReadRow(source, format, stride, chroma, row, x0, columns, shift, neutral, samples);
+                    WriteRow(samples, columns, output + ((long)sy * targetWidth + sx) * bytesPerPixel, step, bytesPerPixel, mode, lookUp);
                 }
-            });
+                return codes;
+            }, _ => { });
         }
+
+        /// <summary>
+        /// The codes of a row of a frame, from a column on, as its format lays them out: so many of Y, then as many of Cb,
+        /// then of Cr - of monochrome, the neutral chroma.
+        /// </summary>
+        private static unsafe void ReadRow(byte* frame, VideoFrameFormat format, int stride, int chroma, int row, int x0, int count,
+            int shift, int neutral, int* codes)
+        {
+            int* ys = codes, cbs = codes + count, crs = codes + 2 * count;
+            byte* line = frame + (long)row * stride;
+            byte* chromaLine = frame + chroma + (long)(row / 2) * stride;
+            switch (format)
+            {
+                case VideoFrameFormat.NV12:
+                    for (int i = 0; i < count; i++)
+                    {
+                        int x = x0 + i, pair = x & ~1;
+                        (ys[i], cbs[i], crs[i]) = (line[x], chromaLine[pair], chromaLine[pair + 1]);
+                    }
+                    break;
+                case VideoFrameFormat.P010:
+                case VideoFrameFormat.P016:
+                    {
+                        ushort* luma = (ushort*)line, pairs = (ushort*)chromaLine;
+                        for (int i = 0; i < count; i++)
+                        {
+                            int x = x0 + i, pair = x & ~1;
+                            (ys[i], cbs[i], crs[i]) = (luma[x] >> shift, pairs[pair] >> shift, pairs[pair + 1] >> shift);
+                        }
+                        break;
+                    }
+                case VideoFrameFormat.YUY2:
+                    // of each two pixels Y0, Cb, Y1, Cr
+                    for (int i = 0; i < count; i++)
+                    {
+                        int x = x0 + i;
+                        byte* two = line + (x & ~1) * 2;
+                        (ys[i], cbs[i], crs[i]) = (two[(x & 1) * 2], two[1], two[3]);
+                    }
+                    break;
+                case VideoFrameFormat.Y210:
+                case VideoFrameFormat.Y216:
+                    for (int i = 0; i < count; i++)
+                    {
+                        int x = x0 + i;
+                        ushort* two = (ushort*)line + (x & ~1) * 2;
+                        (ys[i], cbs[i], crs[i]) = (two[(x & 1) * 2] >> shift, two[1] >> shift, two[3] >> shift);
+                    }
+                    break;
+                case VideoFrameFormat.AYUV:
+                    // Cr, Cb, Y, alpha
+                    for (int i = 0; i < count; i++)
+                    {
+                        byte* pixel = line + (x0 + i) * 4;
+                        (ys[i], cbs[i], crs[i]) = (pixel[2], pixel[1], pixel[0]);
+                    }
+                    break;
+                case VideoFrameFormat.Y410:
+                    // Cb of bits 0 to 9, Y of 10 to 19, Cr of 20 to 29
+                    for (int i = 0; i < count; i++)
+                    {
+                        uint packed = ((uint*)line)[x0 + i];
+                        (ys[i], cbs[i], crs[i]) = ((int)(packed >> 10) & 0x3FF, (int)packed & 0x3FF, (int)(packed >> 20) & 0x3FF);
+                    }
+                    break;
+                case VideoFrameFormat.Y416:
+                    // Cb, Y, Cr, alpha
+                    for (int i = 0; i < count; i++)
+                    {
+                        ushort* pixel = (ushort*)line + (x0 + i) * 4;
+                        (ys[i], cbs[i], crs[i]) = (pixel[1] >> shift, pixel[0] >> shift, pixel[2] >> shift);
+                    }
+                    break;
+                case VideoFrameFormat.L8:
+                    for (int i = 0; i < count; i++)
+                        (ys[i], cbs[i], crs[i]) = (line[x0 + i], neutral, neutral);
+                    break;
+                case VideoFrameFormat.L16:
+                    for (int i = 0; i < count; i++)
+                        (ys[i], cbs[i], crs[i]) = (((ushort*)line)[x0 + i] >> shift, neutral, neutral);
+                    break;
+                default:
+                    throw new NotSupportedException($"Frames of {format} are not supported.");
+            }
+        }
+
+        /// <summary>
+        /// A row's codes made into pixels, each <paramref name="step"/> bytes on from the one before: of sRGB as they are,
+        /// of the table, or exactly.
+        /// </summary>
+        private unsafe void WriteRow(int* codes, int count, byte* at, int step, int bytesPerPixel, int mode, ushort* table)
+        {
+            int* ys = codes, cbs = codes + count, crs = codes + 2 * count;
+            float[] y0 = _ofY[0], y1 = _ofY[1], y2 = _ofY[2];
+            float[] cb0 = _ofCb[0], cb1 = _ofCb[1], cb2 = _ofCb[2];
+            float[] cr0 = _ofCr[0], cr1 = _ofCr[1], cr2 = _ofCr[2];
+            for (int i = 0; i < count; i++, at += step)
+            {
+                int y = ys[i], cb = cbs[i], cr = crs[i];
+                float t0 = y0[y] + cb0[cb] + cr0[cr];
+                float t1 = y1[y] + cb1[cb] + cr1[cr];
+                float t2 = y2[y] + cb2[cb] + cr2[cr];
+                if (mode == 0)
+                {
+                    (at[0], at[1], at[2]) = (ToByte(t2), ToByte(t1), ToByte(t0));
+                }
+                else if (mode == 1)
+                {
+                    LookUp(table, t0, t1, t2, at);
+                }
+                else
+                {
+                    Display(t0, t1, t2, out double r, out double g, out double bl);
+                    (at[0], at[1], at[2]) = (ToByte(bl), ToByte(g), ToByte(r));
+                }
+                if (bytesPerPixel == 4)
+                    at[3] = 255;
+            }
+        }
+
+        private static byte ToByte(float value) => (byte)Math.Clamp((int)(value * 255f + 0.5f), 0, 255);
 
         #endregion
 
@@ -800,6 +873,43 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         #endregion
+    }
+
+    /// <summary>
+    /// Where a frame's pixels go: the frame at a place of a picture - a grid's tile, at its column and row, or a crop's
+    /// offset - the picture turned and flipped as it is shown, and that at a place of the target. What of the frame falls
+    /// outside the picture is cut off.
+    /// </summary>
+    public readonly struct FramePlacement
+    {
+        public FramePlacement(int left, int top, int pictureWidth, int pictureHeight, VideoOrientation orientation = default, int targetX = 0, int targetY = 0)
+        {
+            Left = left;
+            Top = top;
+            PictureWidth = pictureWidth;
+            PictureHeight = pictureHeight;
+            Orientation = orientation;
+            TargetX = targetX;
+            TargetY = targetY;
+        }
+
+        /// <summary>A whole frame's picture, of its size, shown turned at the target's top left.</summary>
+        public static FramePlacement Whole(int width, int height, VideoOrientation orientation = default) =>
+            new FramePlacement(0, 0, width, height, orientation);
+
+        /// <summary>Where in the picture the frame's top left is: of a crop, before its start.</summary>
+        public int Left { get; }
+        public int Top { get; }
+
+        /// <summary>The picture's size, before it is turned.</summary>
+        public int PictureWidth { get; }
+        public int PictureHeight { get; }
+
+        public VideoOrientation Orientation { get; }
+
+        /// <summary>Where in the target the picture shown starts.</summary>
+        public int TargetX { get; }
+        public int TargetY { get; }
     }
 
     /// <summary>

@@ -118,296 +118,278 @@ namespace SharpMediaFoundationInterop.WPF
             using var reader = new ImageReader();
             reader.Parse(container);
 
-            // a spatial photo's two eyes, left then right, where the file groups them
+            // a spatial photo's two eyes, left then right, where the file groups them; else the primary item
             var stereo = reader.Groups.OfType<StereoEntityGroupBox>().FirstOrDefault(x => x.EntityId?.Length == 2);
-            Bgra picture;
-            var info = new VideoInfo();
-            if (stereo != null)
-            {
-                var left = DecodeItem(reader, stereo.EntityId[0]);
-                var right = DecodeItem(reader, stereo.EntityId[1]);
-                picture = Bgra.SideBySide(left, right);
-                info.StereoLayout = StereoLayout.SideBySide;
-            }
-            else
-            {
-                picture = DecodeItem(reader, reader.PrimaryItemID);
-            }
+            var ids = stereo != null ? new[] { stereo.EntityId[0], stereo.EntityId[1] } : new[] { reader.PrimaryItemID };
 
-            _picture = picture.Pixels;
-            info.Width = info.OriginalWidth = (uint)picture.Width;
-            info.Height = info.OriginalHeight = (uint)picture.Height;
-            info.FpsNom = 1;
-            info.FpsDenom = 1;
-            info.PixelFormat = PixelFormat.BGRA32;
-            VideoInfo = info;
+            // Each item's picture as it is shown, side by side, the first on the left: the one picture made, and each tile
+            // of each item converted into its place of it - cropped, turned and flipped as it goes - not a picture of each
+            // item, and of each of its transformations, copied on.
+            var items = new List<Item>();
+            try
+            {
+                foreach (var id in ids)
+                    items.Add(Item.Of(reader, id));
+
+                int width = items.Sum(x => x.ShownWidth), height = items.Max(x => x.ShownHeight);
+                if ((long)width * height * 4 > Array.MaxLength)
+                    throw new NotSupportedException($"An image of {width}x{height} is larger than an array holds.");
+                var picture = new byte[width * height * 4];
+                int left = 0;
+                foreach (var item in items)
+                {
+                    item.Decode(reader, picture, width, left);
+                    left += item.ShownWidth;
+                }
+
+                _picture = picture;
+                VideoInfo = new VideoInfo
+                {
+                    Width = (uint)width,
+                    OriginalWidth = (uint)width,
+                    Height = (uint)height,
+                    OriginalHeight = (uint)height,
+                    FpsNom = 1,
+                    FpsDenom = 1,
+                    PixelFormat = PixelFormat.BGRA32,
+                    StereoLayout = stereo != null ? StereoLayout.SideBySide : StereoLayout.Mono,
+                };
+            }
+            finally
+            {
+                foreach (var item in items)
+                    item.Dispose();
+            }
         }
 
         private static readonly uint GridType = IsoStream.FromFourCC("grid");
 
-        /// <summary>An item's image: coded, or a grid of coded tiles; then as its transformative properties say, in their order.</summary>
-        private static Bgra DecodeItem(ImageReader reader, uint itemID)
-        {
-            var properties = reader.PropertiesOf(itemID);
-
-            Bgra image;
-            if (reader.ItemTypeOf(itemID) == GridType)
-            {
-                var grid = reader.ReadGrid(itemID);
-                var tiles = reader.DerivedFrom(itemID);
-                if (tiles.Count != grid.Rows * grid.Columns)
-                    throw new InvalidDataException($"The grid {itemID} of {grid.Rows}x{grid.Columns} has {tiles.Count} tiles.");
-
-                // The colour of the grid, where it says it; else of its tiles, as they are all coded alike. The tiles' own
-                // transformations, which there should be none of, are not applied.
-                var colours = properties.OfType<ColourInformationBox>().ToList();
-                foreach (var tileColour in reader.PropertiesOf(tiles[0]).OfType<ColourInformationBox>())
-                {
-                    if (!colours.Any(x => x.ColourType == tileColour.ColourType))
-                        colours.Add(tileColour);
-                }
-                image = DecodeTiles(reader, tiles, grid.Columns, (int)grid.OutputWidth, (int)grid.OutputHeight, colours);
-            }
-            else
-            {
-                image = DecodeTiles(reader, new[] { itemID }, 1, -1, -1, properties.OfType<ColourInformationBox>().ToList());
-            }
-
-            foreach (var property in properties)
-            {
-                switch (property)
-                {
-                    case CleanApertureBox clap:
-                        image = image.Crop(clap);
-                        break;
-                    case ImageRotation irot:
-                        image = image.RotateAnticlockwise(irot.Angle & 3);
-                        break;
-                    case ImageMirror imir:
-                        image = image.Mirror(imir.Axis);
-                        break;
-                }
-            }
-            return image;
-        }
-
         /// <summary>
-        /// Coded items decoded, each in its place of a grid of so many columns, and made into BGRA of the size given - -1 for
-        /// the size of the one item there is - of the item's 'colr's: its 'nclx', its ICC profile.
+        /// An item's image: coded, or a grid of coded tiles - the decoder, its frames and their colour - and as its
+        /// transformative properties say it is shown: of its clean aperture, then turned and flipped, as HEIF orders them.
         /// </summary>
-        private static Bgra DecodeTiles(ImageReader reader, IReadOnlyList<uint> tiles, int columns, int width, int height, IReadOnlyList<ColourInformationBox> colours)
+        private sealed class Item : IDisposable
         {
-            using var track = reader.CreateTrack(tiles[0])
-                ?? throw new NotSupportedException($"Item {tiles[0]} is of no codec that can be read.");
+            private ITrack _track;
+            private VideoCodec _codec;
+            private IReadOnlyList<uint> _tiles;
+            private int _columns;
+            private int _tileWidth, _tileHeight;
+            private int _stride, _planeHeight;
+            private VideoFrameFormat _format;
+            private VideoColour _colour;
 
-            // An AVIF's 'av1C' need have no sequence header, which is then in the item itself: read of the first tile, for
-            // what it says - the size, the bits, the colour - before the tiles are decoded.
-            if (track is AV1Track { SequenceHeaderObu: null } withoutHeader)
+            // the picture: of the canvas - the grid's output, or the one tile - the clean aperture's part
+            private int _cropLeft, _cropTop, _width, _height;
+            private VideoOrientation _orientation;
+
+            public int ShownWidth => _orientation.SwapsAxes ? _height : _width;
+            public int ShownHeight => _orientation.SwapsAxes ? _width : _height;
+
+            public static Item Of(ImageReader reader, uint itemID)
             {
-                var first = reader.ReadItem(tiles[0]);
-                withoutHeader.ProcessSample(first, 0, first.Length, out _, out _);
-                if (withoutHeader.SequenceHeaderObu == null)
-                    throw new InvalidDataException($"Item {tiles[0]} has no AV1 sequence header.");
-            }
-
-            // the size of a tile, as its stream says it
-            VideoCodec codec;
-            int tileWidth, tileHeight;
-            switch (track)
-            {
-                case H265Track hevc:
-                    codec = VideoCodec.H265;
-                    var hevcSize = hevc.Sps.First().Value.CalculateDimensions();
-                    (tileWidth, tileHeight) = ((int)hevcSize.Width, (int)hevcSize.Height);
-                    break;
-                case H264Track avc:
-                    codec = VideoCodec.H264;
-                    var avcSize = avc.Sps.First().Value.CalculateDimensions();
-                    (tileWidth, tileHeight) = ((int)avcSize.Width, (int)avcSize.Height);
-                    break;
-                case AV1Track av1:
-                    codec = VideoCodec.AV1;
-                    var av1Size = av1.SequenceHeaderObu.CalculateDimensions();
-                    (tileWidth, tileHeight) = ((int)av1Size.Width, (int)av1Size.Height);
-                    break;
-                default:
-                    throw new NotSupportedException($"Images of {track.GetType().Name} are not supported.");
-            }
-
-            // the bits of its samples and its chroma, and what the decoder hands out of them
-            var (bitDepth, chromaFormat) = TrackColour.SamplesOf(track) ?? (8, 1);
-            TrackColour.ThrowIfNotDecoded(track, bitDepth, chromaFormat);
-            var format = TrackColour.FrameFormatOf(chromaFormat, bitDepth);
-
-            if (width < 0)
-            {
-                width = tileWidth;
-                height = tileHeight;
-            }
-
-            var colour = TrackColour.Of(colours, track, bitDepth, sceneReferred: true);
-            // the decoder's frames, of the coded size - of HEVC its SPS's, the picture cropped of them - the tile at their top left
-            uint alignment = MediaCodecs.DecoderAlignment(codec);
-            var (frameWidth, frameHeight) = track is H265Track hevcTrack
-                ? TrackColour.HevcFrameSize(hevcTrack.Sps.First().Value, (uint)tileWidth, (uint)tileHeight)
-                : (MediaUtils.RoundToMultipleOf((uint)tileWidth, alignment), MediaUtils.RoundToMultipleOf((uint)tileHeight, alignment));
-            int stride = (int)VideoFrameFormats.Stride(format, frameWidth);
-            int planeHeight = (int)frameHeight;
-
-            var image = new Bgra(width, height);
-            using var decoder = MediaCodecs.CreateVideoDecoder(codec, new VideoDecoderOptions
-            {
-                Width = (uint)tileWidth,
-                Height = (uint)tileHeight,
-                FpsNom = 1,
-                FpsDenom = 1,
-                OutputFormat = format,
-            });
-            decoder.Initialize();
-            byte[] frame = new byte[decoder.OutputSize];
-            int decoded = 0;
-
-            // Each tile a picture of its own, timed by its place: the decoder hands the time back with it.
-            void TakeOutput()
-            {
-                while (decoder.ProcessOutput(ref frame, out _, out long time))
+                var item = new Item();
+                try
                 {
-                    int index = (int)Math.Round(time / (double)TimeSpan.TicksPerSecond);
-                    if (index < 0 || index >= tiles.Count)
-                        continue;
-                    colour.Convert(frame, format, stride, planeHeight, tileWidth, tileHeight, image.Pixels, image.Width, image.Height, 4,
-                        index % columns * tileWidth, index / columns * tileHeight, exact: true);
-                    decoded++;
+                    item.Plan(reader, itemID);
+                    return item;
+                }
+                catch
+                {
+                    item.Dispose();
+                    throw;
                 }
             }
 
-            for (int i = 0; i < tiles.Count; i++)
+            private void Plan(ImageReader reader, uint itemID)
             {
-                long time = i * TimeSpan.TicksPerSecond;
+                var properties = reader.PropertiesOf(itemID);
+
+                // The tiles of a grid, of its colour where it says it, else of its tiles', as they are all coded alike. The
+                // tiles' own transformations, which there should be none of, are not applied.
+                int canvasWidth = -1, canvasHeight = -1;
+                var colours = properties.OfType<ColourInformationBox>().ToList();
+                if (reader.ItemTypeOf(itemID) == GridType)
+                {
+                    var grid = reader.ReadGrid(itemID);
+                    _tiles = reader.DerivedFrom(itemID);
+                    if (_tiles.Count != grid.Rows * grid.Columns)
+                        throw new InvalidDataException($"The grid {itemID} of {grid.Rows}x{grid.Columns} has {_tiles.Count} tiles.");
+                    _columns = grid.Columns;
+                    (canvasWidth, canvasHeight) = ((int)grid.OutputWidth, (int)grid.OutputHeight);
+                    foreach (var tileColour in reader.PropertiesOf(_tiles[0]).OfType<ColourInformationBox>())
+                    {
+                        if (!colours.Any(x => x.ColourType == tileColour.ColourType))
+                            colours.Add(tileColour);
+                    }
+                }
+                else
+                {
+                    _tiles = new[] { itemID };
+                    _columns = 1;
+                }
+
+                _track = reader.CreateTrack(_tiles[0])
+                    ?? throw new NotSupportedException($"Item {_tiles[0]} is of no codec that can be read.");
+
+                // An AVIF's 'av1C' need have no sequence header, which is then in the item itself: read of the first tile,
+                // for what it says - the size, the bits, the colour - before the tiles are decoded.
+                if (_track is AV1Track { SequenceHeaderObu: null } withoutHeader)
+                {
+                    var first = reader.ReadItem(_tiles[0]);
+                    withoutHeader.ProcessSample(first, 0, first.Length, out _, out _);
+                    if (withoutHeader.SequenceHeaderObu == null)
+                        throw new InvalidDataException($"Item {_tiles[0]} has no AV1 sequence header.");
+                }
+
+                // the size of a tile, as its stream says it
+                switch (_track)
+                {
+                    case H265Track hevc:
+                        _codec = VideoCodec.H265;
+                        var hevcSize = hevc.Sps.First().Value.CalculateDimensions();
+                        (_tileWidth, _tileHeight) = ((int)hevcSize.Width, (int)hevcSize.Height);
+                        break;
+                    case H264Track avc:
+                        _codec = VideoCodec.H264;
+                        var avcSize = avc.Sps.First().Value.CalculateDimensions();
+                        (_tileWidth, _tileHeight) = ((int)avcSize.Width, (int)avcSize.Height);
+                        break;
+                    case AV1Track av1:
+                        _codec = VideoCodec.AV1;
+                        var av1Size = av1.SequenceHeaderObu.CalculateDimensions();
+                        (_tileWidth, _tileHeight) = ((int)av1Size.Width, (int)av1Size.Height);
+                        break;
+                    default:
+                        throw new NotSupportedException($"Images of {_track.GetType().Name} are not supported.");
+                }
+                if (canvasWidth < 0)
+                    (canvasWidth, canvasHeight) = (_tileWidth, _tileHeight);
+
+                // the bits of its samples and its chroma, what the decoder hands out of them, and their colour
+                var (bitDepth, chromaFormat) = TrackColour.SamplesOf(_track) ?? (8, 1);
+                TrackColour.ThrowIfNotDecoded(_track, bitDepth, chromaFormat);
+                _format = TrackColour.FrameFormatOf(chromaFormat, bitDepth);
+                _colour = TrackColour.Of(colours, _track, bitDepth, sceneReferred: true);
+
+                // the decoder's frames, of the coded size - of HEVC its SPS's, the picture cropped of them - the tile at their top left
+                uint alignment = MediaCodecs.DecoderAlignment(_codec);
+                var (frameWidth, frameHeight) = _track is H265Track hevcTrack
+                    ? TrackColour.HevcFrameSize(hevcTrack.Sps.First().Value, (uint)_tileWidth, (uint)_tileHeight)
+                    : (MediaUtils.RoundToMultipleOf((uint)_tileWidth, alignment), MediaUtils.RoundToMultipleOf((uint)_tileHeight, alignment));
+                _stride = (int)VideoFrameFormats.Stride(_format, frameWidth);
+                _planeHeight = (int)frameHeight;
+
+                // of the canvas, the clean aperture, then turned and flipped: each 'irot' and 'imir' after the one before
+                (_cropLeft, _cropTop, _width, _height) = (0, 0, canvasWidth, canvasHeight);
+                foreach (var property in properties)
+                {
+                    switch (property)
+                    {
+                        case CleanApertureBox clap:
+                            (_cropLeft, _cropTop, _width, _height) = CleanAperture(clap, canvasWidth, canvasHeight);
+                            break;
+                        case ImageRotation irot:
+                            // anticlockwise, of quarters
+                            _orientation = _orientation.Then(VideoOrientation.Of((4 - (irot.Angle & 3)) % 4 * 90));
+                            break;
+                        case ImageMirror imir:
+                            // about a vertical axis - left and right swapped - of axis 0, about a horizontal one - top and bottom - of 1
+                            _orientation = _orientation.Then(imir.Axis ? new VideoOrientation(1, 0, 0, -1) : new VideoOrientation(-1, 0, 0, 1));
+                            break;
+                    }
+                }
+            }
+
+            /// <summary>
+            /// The clean aperture of a 'clap', of a picture: of its size, centred off the picture's centre by its offsets -
+            /// where it starts, and its size.
+            /// </summary>
+            private static (int Left, int Top, int Width, int Height) CleanAperture(CleanApertureBox clap, int pictureWidth, int pictureHeight)
+            {
+                static double Fraction(uint n, uint d) => d == 0 ? 0 : (int)n / (double)d;
+
+                int width = Math.Clamp((int)Math.Round(Fraction(clap.CleanApertureWidthN, clap.CleanApertureWidthD)), 1, pictureWidth);
+                int height = Math.Clamp((int)Math.Round(Fraction(clap.CleanApertureHeightN, clap.CleanApertureHeightD)), 1, pictureHeight);
+                double centreX = Fraction(clap.HorizOffN, clap.HorizOffD) + (pictureWidth - 1) / 2.0;
+                double centreY = Fraction(clap.VertOffN, clap.VertOffD) + (pictureHeight - 1) / 2.0;
+                int left = Math.Clamp((int)Math.Round(centreX - (width - 1) / 2.0), 0, pictureWidth - width);
+                int top = Math.Clamp((int)Math.Round(centreY - (height - 1) / 2.0), 0, pictureHeight - height);
+                return (left, top, width, height);
+            }
+
+            /// <summary>
+            /// The tiles decoded, each converted into its place of the picture as it is shown, at a column of the target - a
+            /// picture of rows of so many pixels, BGRA.
+            /// </summary>
+            public void Decode(ImageReader reader, byte[] target, int targetWidth, int targetX)
+            {
+                using var decoder = MediaCodecs.CreateVideoDecoder(_codec, new VideoDecoderOptions
+                {
+                    Width = (uint)_tileWidth,
+                    Height = (uint)_tileHeight,
+                    FpsNom = 1,
+                    FpsDenom = 1,
+                    OutputFormat = _format,
+                });
+                decoder.Initialize();
+
+                // the decoder's frame: a tile's, or of a large image's one item, as large as its picture
+                byte[] frame = new byte[decoder.OutputSize];
+                int decoded = 0;
+
+                // Each tile a picture of its own, timed by its place: the decoder hands the time back with it.
+                void TakeOutput()
+                {
+                    while (decoder.ProcessOutput(ref frame, out _, out long time))
+                    {
+                        int index = (int)Math.Round(time / (double)TimeSpan.TicksPerSecond);
+                        if (index < 0 || index >= _tiles.Count)
+                            continue;
+                        var placement = new FramePlacement(index % _columns * _tileWidth - _cropLeft, index / _columns * _tileHeight - _cropTop,
+                            _width, _height, _orientation, targetX, 0);
+                        _colour.Convert(frame, _format, _stride, _planeHeight, _tileWidth, _tileHeight, target, targetWidth, 4, placement, exact: true);
+                        decoded++;
+                    }
+                }
+
                 var units = new List<ArraySegment<byte>>();
-                if (i == 0)
+                for (int i = 0; i < _tiles.Count; i++)
                 {
-                    foreach (var unit in track.GetContainerSamples())
-                        units.Add(new ArraySegment<byte>(unit));
-                }
-                units.AddRange(track.ParseSample(reader.ReadItem(tiles[i])));
+                    long time = i * TimeSpan.TicksPerSecond;
+                    units.Clear();
+                    if (i == 0)
+                    {
+                        foreach (var unit in _track.GetContainerSamples())
+                            units.Add(new ArraySegment<byte>(unit));
+                    }
+                    units.AddRange(_track.ParseSample(reader.ReadItem(_tiles[i])));
 
-                foreach (var unit in units)
-                {
-                    if (decoder.ProcessInput(unit, time))
-                        TakeOutput();
+                    foreach (var unit in units)
+                    {
+                        if (decoder.ProcessInput(unit, time))
+                            TakeOutput();
+                    }
                 }
+
+                decoder.BeginDrain();
+                TakeOutput();
+                decoder.EndDrain();
+
+                if (decoded != _tiles.Count)
+                    throw new InvalidDataException($"{decoded} of the {_tiles.Count} tiles were decoded.");
             }
 
-            decoder.BeginDrain();
-            TakeOutput();
-            decoder.EndDrain();
-
-            if (decoded != tiles.Count)
-                throw new InvalidDataException($"{decoded} of the {tiles.Count} tiles were decoded.");
-            return image;
+            public void Dispose()
+            {
+                _track?.Dispose();
+                _track = null;
+            }
         }
 
         public void Dispose()
         {
             _picture = null;
-        }
-
-        /// <summary>A picture of BGRA, top-down, of rows of its width.</summary>
-        private sealed class Bgra
-        {
-            public readonly int Width, Height;
-            public readonly byte[] Pixels;
-
-            public Bgra(int width, int height)
-            {
-                Width = width;
-                Height = height;
-                Pixels = new byte[width * height * 4];
-            }
-
-            /// <summary>Two pictures of one height, the first on the left.</summary>
-            public static Bgra SideBySide(Bgra left, Bgra right)
-            {
-                var both = new Bgra(left.Width + right.Width, Math.Max(left.Height, right.Height));
-                for (int row = 0; row < both.Height; row++)
-                {
-                    if (row < left.Height)
-                        Buffer.BlockCopy(left.Pixels, row * left.Width * 4, both.Pixels, row * both.Width * 4, left.Width * 4);
-                    if (row < right.Height)
-                        Buffer.BlockCopy(right.Pixels, row * right.Width * 4, both.Pixels, (row * both.Width + left.Width) * 4, right.Width * 4);
-                }
-                return both;
-            }
-
-            /// <summary>Turned anticlockwise by so many quarters, as 'irot' turns.</summary>
-            public Bgra RotateAnticlockwise(int quarters)
-            {
-                if (quarters == 0)
-                    return this;
-
-                var turned = quarters == 2 ? new Bgra(Width, Height) : new Bgra(Height, Width);
-                var source = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(Pixels).ToArray();
-                var target = new uint[source.Length];
-                int w = Width, h = Height, tw = turned.Width;
-                Parallel.For(0, h, y =>
-                {
-                    for (int x = 0; x < w; x++)
-                    {
-                        // where the pixel at (x, y) goes
-                        var (tx, ty) = quarters switch
-                        {
-                            1 => (y, w - 1 - x),
-                            2 => (w - 1 - x, h - 1 - y),
-                            _ => (h - 1 - y, x),
-                        };
-                        target[ty * tw + tx] = source[y * w + x];
-                    }
-                });
-                Buffer.BlockCopy(target, 0, turned.Pixels, 0, turned.Pixels.Length);
-                return turned;
-            }
-
-            /// <summary>
-            /// Mirrored as 'imir' says: about a vertical axis - left and right swapped - of axis 0, about a horizontal one - top
-            /// and bottom - of 1.
-            /// </summary>
-            public Bgra Mirror(bool horizontalAxis)
-            {
-                var mirrored = new Bgra(Width, Height);
-                int rowBytes = Width * 4;
-                for (int y = 0; y < Height; y++)
-                {
-                    if (horizontalAxis)
-                    {
-                        Buffer.BlockCopy(Pixels, y * rowBytes, mirrored.Pixels, (Height - 1 - y) * rowBytes, rowBytes);
-                        continue;
-                    }
-                    for (int x = 0; x < Width; x++)
-                        Buffer.BlockCopy(Pixels, y * rowBytes + x * 4, mirrored.Pixels, y * rowBytes + (Width - 1 - x) * 4, 4);
-                }
-                return mirrored;
-            }
-
-            /// <summary>Cropped to the clean aperture of a 'clap': of its size, centred off the picture's centre by its offsets.</summary>
-            public Bgra Crop(CleanApertureBox clap)
-            {
-                static double Fraction(uint n, uint d) => d == 0 ? 0 : (int)n / (double)d;
-
-                int width = Math.Clamp((int)Math.Round(Fraction(clap.CleanApertureWidthN, clap.CleanApertureWidthD)), 1, Width);
-                int height = Math.Clamp((int)Math.Round(Fraction(clap.CleanApertureHeightN, clap.CleanApertureHeightD)), 1, Height);
-                double centreX = Fraction(clap.HorizOffN, clap.HorizOffD) + (Width - 1) / 2.0;
-                double centreY = Fraction(clap.VertOffN, clap.VertOffD) + (Height - 1) / 2.0;
-                int left = Math.Clamp((int)Math.Round(centreX - (width - 1) / 2.0), 0, Width - width);
-                int top = Math.Clamp((int)Math.Round(centreY - (height - 1) / 2.0), 0, Height - height);
-                if (left == 0 && top == 0 && width == Width && height == Height)
-                    return this;
-
-                var cropped = new Bgra(width, height);
-                for (int y = 0; y < height; y++)
-                    Buffer.BlockCopy(Pixels, ((top + y) * Width + left) * 4, cropped.Pixels, y * width * 4, width * 4);
-                return cropped;
-            }
         }
     }
 }

@@ -58,6 +58,13 @@ namespace SharpMediaFoundationInterop.WPF
             return valid ? new VideoOrientation(ua, ub, uc, ud) : Identity;
         }
 
+        /// <summary>
+        /// This, then another: of a picture turned, then turned or flipped again - as HEIF's 'irot' then 'imir' are.
+        /// </summary>
+        public VideoOrientation Then(VideoOrientation next) => new VideoOrientation(
+            next.A * A + next.C * B, next.B * A + next.D * B,
+            next.A * C + next.C * D, next.B * C + next.D * D);
+
         public bool IsIdentity => A == 1 && B == 0 && C == 0 && D == 1;
 
         /// <summary>Whether the picture's width is shown down, and its height across: turned 90 or 270 degrees.</summary>

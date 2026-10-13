@@ -482,8 +482,8 @@ namespace SharpMediaFoundationInterop.WPF
             // it is shown
             byte[] picture = ArrayPool<byte>.Shared.Rent(_imageBufferLen);
             _colour.Convert(decodedFrame, format, (int)VideoFrameFormats.Stride(format, videoInfo.Width), (int)videoInfo.Height,
-                (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight,
-                picture, (int)videoInfo.ShownWidth, (int)videoInfo.ShownHeight, _bytesPerPixel, orientation: videoInfo.Orientation);
+                (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight, picture, (int)videoInfo.ShownWidth, _bytesPerPixel,
+                FramePlacement.Whole((int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight, videoInfo.Orientation));
             _videoRenderQueue.Enqueue((picture, frameTime));
             Interlocked.Increment(ref _videoFrames);
         }
