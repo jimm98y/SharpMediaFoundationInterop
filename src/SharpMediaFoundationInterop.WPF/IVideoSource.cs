@@ -146,6 +146,12 @@ namespace SharpMediaFoundationInterop.WPF
         /// </summary>
         public uint SkipSamples { get; set; }
 
+        /// <summary>
+        /// The speakers the decoded channels are for, as WAVEFORMATEXTENSIBLE's dwChannelMask has them: of 0, those
+        /// <see cref="SharpMediaFoundationInterop.Output.SpeakerLayout.ChannelMask"/> says of their count. AAC's 4.0 is 0x107.
+        /// </summary>
+        public uint ChannelMask { get; set; }
+
         /// <summary>Of "PCM", the samples' format, as the container says it.</summary>
         public PcmFormat PcmFormat { get; set; }
 

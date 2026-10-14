@@ -626,6 +626,8 @@ namespace SharpMediaFoundationInterop.WPF
                         audioInfo.UserData = aacTrack.AudioSpecificConfig.ToBytes();
                         audioInfo.ChannelCount = AacChannels(aacTrack.ChannelConfiguration, aacTrack.ChannelCount);
                         audioInfo.ChannelConfiguration = aacTrack.ChannelConfiguration;
+                        // 4.0 is front left, right and centre and back centre, as Windows' decoder puts it out (ISO/IEC 14496-3 1.6.3.4)
+                        audioInfo.ChannelMask = aacTrack.ChannelConfiguration == 4 ? 0x107u : 0;
                         audioInfo.SampleRate = aacTrack.SamplingRate;
                     }
                     else if(_audioTrack is OpusTrack opusTrack)

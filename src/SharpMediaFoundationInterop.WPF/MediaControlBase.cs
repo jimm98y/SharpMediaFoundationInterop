@@ -2088,7 +2088,8 @@ namespace SharpMediaFoundationInterop.WPF
                     this._waveOut?.Dispose();
                     this._ambisonics = ambisonics;
                     this._monoToStereo = monoToStereo;
-                    this._waveOut = MediaDevices.CreateAudioOutput(audioInfo.SampleRate, channels, audioInfo.BitsPerSample);
+                    this._waveOut = MediaDevices.CreateAudioOutput(audioInfo.SampleRate, channels, audioInfo.BitsPerSample,
+                        channelMask: ambisonics == null && !monoToStereo ? audioInfo.ChannelMask : 0);
                     this._waveOut.Initialize();
                     this._audioClockStart = -1;
                     this._audioBytesQueued = 0;

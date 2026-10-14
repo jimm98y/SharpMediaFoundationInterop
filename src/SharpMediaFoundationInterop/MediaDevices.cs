@@ -170,11 +170,15 @@ namespace SharpMediaFoundationInterop
         /// </summary>
         public static bool AreHeadphones() => IsSupported && WaveOut.DefaultIsHeadphones();
 
-        /// <summary>Plays PCM of the format given, on the device given: the system's default where it is null.</summary>
-        public static IAudioOutput CreateAudioOutput(uint sampleRate, uint channels, uint bitsPerSample, MediaDevice device = null)
+        /// <summary>
+        /// Plays PCM of the format given, on the device given: the system's default where it is null. Its channels are for the
+        /// speakers of <paramref name="channelMask"/>, as WAVEFORMATEXTENSIBLE's dwChannelMask has them - on Windows; of 0,
+        /// those <see cref="SpeakerLayout.ChannelMask"/> says of their count.
+        /// </summary>
+        public static IAudioOutput CreateAudioOutput(uint sampleRate, uint channels, uint bitsPerSample, MediaDevice device = null, uint channelMask = 0)
         {
             if (IsSupported)
-                return new WaveOut(device == null ? WaveOut.WAVE_MAPPER : uint.Parse(device.Id), sampleRate, channels, bitsPerSample);
+                return new WaveOut(device == null ? WaveOut.WAVE_MAPPER : uint.Parse(device.Id), sampleRate, channels, bitsPerSample, channelMask);
             if (IsMacOS || IsIOS)
                 return new AudioQueueOutput(device?.Id, sampleRate, channels, bitsPerSample);
             if (IsAndroid)

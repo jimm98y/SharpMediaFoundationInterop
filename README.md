@@ -51,7 +51,7 @@ Linux decodes all of them, MPEG-4 Part 2's advanced simple profile included, wit
 VideoToolbox is told a stream's configuration before it decodes, so the decoder is made as that configuration comes in band: the parameter sets of H264 and H265, the headers before the first MPEG-4 picture, the first VP9 key frame, the AV1 sequence header. Whatever comes before it is dropped.
 
 Supported audio codecs (`AudioCodec`) are:
-- AAC (built-in Windows)
+- AAC (built-in Windows). Up to 6 channels; of 4.0 - channel configuration 4 - the channels are front left, right, centre and back centre, which `AudioInfo.ChannelMask` and `CreateAudioOutput`'s `channelMask` (0x107) carry to the speakers they are for.
 - MP3 (built-in Windows; the encoder at 32000, 44100 or 48000 Hz, or MPEG-2's lower rates, and its own list of bit rates)
 - FLAC, 16 and 24 bits (built-in Windows)
 - ALAC, 16 and 24 bits (built-in Windows; the encoder pads the last frame to 4096 samples with silence)

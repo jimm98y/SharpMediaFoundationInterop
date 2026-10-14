@@ -53,6 +53,18 @@ namespace SharpMediaFoundationInterop.Output
         { }
 
         /// <summary>Of the device and the format <see cref="Initialize()"/> opens it for.</summary>
+        public WaveOut(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample, uint channelMask)
+            : this(deviceID, samplesPerSecond, channels, bitsPerSample)
+        {
+            ChannelMaskOfChannels = channelMask;
+        }
+
+        /// <summary>
+        /// The speakers the channels are for, as dwChannelMask has them: of 0, those <see cref="ChannelMask"/> says of their
+        /// count. AAC's 4.0 - front left, right, centre and back centre - is 0x107, not quad's 0x33.
+        /// </summary>
+        public uint ChannelMaskOfChannels { get; private set; }
+
         public WaveOut(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample)
         {
             DeviceID = deviceID;
@@ -105,7 +117,7 @@ namespace SharpMediaFoundationInterop.Output
             {
                 format.cbSize = 22;
                 format.wValidBitsPerSample = (ushort)bitsPerSample;
-                format.dwChannelMask = ChannelMask(channels);
+                format.dwChannelMask = ChannelMaskOfChannels != 0 ? ChannelMaskOfChannels : ChannelMask(channels);
                 format.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
             }
 

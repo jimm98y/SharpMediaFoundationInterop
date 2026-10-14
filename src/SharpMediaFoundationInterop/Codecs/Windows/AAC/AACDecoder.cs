@@ -59,13 +59,19 @@ namespace SharpMediaFoundationInterop.Codecs
             mediaInput.SetBlob(PInvoke.MF_MT_USER_DATA, UserData);
             MediaUtils.Check(transform.SetInputType(streamId, mediaInput, 0));
 
-            IMFMediaType mediaOutput;
-            MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
-            mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
-            mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
+            // Of the types the decoder offers, the PCM of the channels asked for: of more than two, of the speakers it puts
+            // them out for - 4.0 as front left, right, centre and back centre - which a type of its own making without them
+            // would not be taken of (MF_E_INVALIDMEDIATYPE).
+            IMFMediaType mediaOutput = OfferedOutput(transform, streamId);
+            if (mediaOutput == null)
+            {
+                MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
+                mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
+                mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
+                mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
+                mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
+                mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
+            }
             MediaUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 
             transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
@@ -73,6 +79,26 @@ namespace SharpMediaFoundationInterop.Codecs
             transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_NOTIFY_START_OF_STREAM, default);
 
             return transform;
+        }
+
+        /// <summary>The output type the decoder offers of 16 bit PCM of <see cref="AudioTransformBase.Channels"/>; null where none is.</summary>
+        private IMFMediaType OfferedOutput(IMFTransform transform, uint streamId)
+        {
+            for (uint i = 0; ; i++)
+            {
+                try
+                {
+                    transform.GetOutputAvailableType(streamId, i, out IMFMediaType offered);
+                    offered.GetGUID(PInvoke.MF_MT_SUBTYPE, out Guid subtype);
+                    offered.GetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, out uint channels);
+                    if (subtype == OutputFormat && channels == Channels)
+                        return offered;
+                }
+                catch (Exception)
+                {
+                    return null; // no more offered
+                }
+            }
         }
 
         public static byte[] CreateUserData(byte[] audioSpecificConfig)
