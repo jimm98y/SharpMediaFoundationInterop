@@ -16,7 +16,27 @@
         Flac,
 
         /// <summary>Apple Lossless, of the stream's bits: 16 or 24 bit PCM on the other side.</summary>
-        Alac
+        Alac,
+
+        /// <summary>
+        /// Uncompressed PCM, of <see cref="AudioDecoderOptions.Pcm"/>'s format: 16 bit PCM on the other side, of 16 bits or
+        /// fewer, else 32. Of <see cref="PcmDecoder"/>, of every platform.
+        /// </summary>
+        Pcm
+    }
+
+    /// <summary>The samples of uncompressed PCM, as a container says them - QuickTime's 'lpcm', 'twos', 'sowt', ISO's 'ipcm'.</summary>
+    public sealed class PcmFormat
+    {
+        /// <summary>The bits of a sample of one channel: 8, 16, 24 or 32 of an integer, 32 or 64 of a float.</summary>
+        public uint BitsPerSample { get; set; } = 16;
+
+        public bool IsFloat { get; set; }
+
+        /// <summary>Whether integers are signed: all but QuickTime's 8 bit 'raw ', of offset binary.</summary>
+        public bool IsSigned { get; set; } = true;
+
+        public bool IsLittleEndian { get; set; } = true;
     }
 
     /// <summary>What a decoder of <see cref="MediaCodecs.CreateAudioDecoder"/> is made for.</summary>
@@ -38,6 +58,9 @@
         /// which the decoder takes to settle in. Dropped again after a flush - a seek - as the decoder settles in anew.
         /// </summary>
         public uint SkipSamples { get; set; }
+
+        /// <summary>Of <see cref="AudioCodec.Pcm"/>, the samples' format; 16 bit little-endian integers where null.</summary>
+        public PcmFormat Pcm { get; set; }
     }
 
     /// <summary>What an encoder of <see cref="MediaCodecs.CreateAudioEncoder"/> is made for.</summary>

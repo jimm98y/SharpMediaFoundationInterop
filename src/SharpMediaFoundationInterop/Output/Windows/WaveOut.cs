@@ -85,20 +85,81 @@ namespace SharpMediaFoundationInterop.Output
             }
 
             _callback = DoneCallback;
-            WAVEFORMATEX waveFormat = new WAVEFORMATEX();  
-            waveFormat.nAvgBytesPerSec = samplesPerSecond * (bitsPerSample / 8) * channels;
-            waveFormat.nBlockAlign = (ushort)(channels * (bitsPerSample / 8));
-            waveFormat.nChannels = (ushort)channels;
-            waveFormat.nSamplesPerSec = samplesPerSecond;
-            waveFormat.wBitsPerSample = (ushort)bitsPerSample;
-            waveFormat.cbSize = 0;
-            waveFormat.wFormatTag = 1; // pcm
 
-            HWAVEOUT device;
-            PInvoke.waveOutOpen(&device, deviceID, &waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION); 
+            // Of more than two channels, or more than 16 bits, WAVEFORMATEXTENSIBLE: which speaker each channel is for - the
+            // channels in WAVE's order, as Windows' decoders hand them out - and the bits that are of the samples. Without
+            // it the device takes no more than stereo of 16 bits; with it, Windows plays 5.1 on 5.1 speakers, and mixes
+            // it down to what the speakers are.
+            var format = new WaveFormatExtensible
+            {
+                wFormatTag = channels > 2 || bitsPerSample > 16 ? WAVE_FORMAT_EXTENSIBLE : WAVE_FORMAT_PCM,
+                nChannels = (ushort)channels,
+                nSamplesPerSec = samplesPerSecond,
+                nAvgBytesPerSec = samplesPerSecond * (bitsPerSample / 8) * channels,
+                nBlockAlign = (ushort)(channels * (bitsPerSample / 8)),
+                wBitsPerSample = (ushort)bitsPerSample,
+            };
+            if (format.wFormatTag == WAVE_FORMAT_EXTENSIBLE)
+            {
+                format.cbSize = 22;
+                format.wValidBitsPerSample = (ushort)bitsPerSample;
+                format.dwChannelMask = ChannelMask(channels);
+                format.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
+            }
+
+            // a device refused leaves no handle: none is kept, and nothing is played - not a handle of whatever was there
+            HWAVEOUT device = default;
+            uint result = PInvoke.waveOutOpen(&device, deviceID, (WAVEFORMATEX*)&format, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
+            if (result != MMSYSERR_NOERROR)
+            {
+                device = default;
+                if (Log.ErrorEnabled)
+                    Log.Error($"The sound device refused {channels} channels of {bitsPerSample} bits at {samplesPerSecond} Hz: MMRESULT {result}");
+            }
             this._hDevice = device;
             Reset();
         }
+
+        /// <summary>Whether a device is open: not where it refused the format.</summary>
+        public bool IsOpen => !_hDevice.Equals(default(HWAVEOUT));
+
+        private const ushort WAVE_FORMAT_PCM = 1;
+        private const ushort WAVE_FORMAT_EXTENSIBLE = 0xFFFE;
+        private static readonly Guid KSDATAFORMAT_SUBTYPE_PCM = new Guid("00000001-0000-0010-8000-00aa00389b71");
+
+        /// <summary>WAVEFORMATEX, then what WAVE_FORMAT_EXTENSIBLE adds: the valid bits, the speakers, the subformat.</summary>
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        private struct WaveFormatExtensible
+        {
+            public ushort wFormatTag;
+            public ushort nChannels;
+            public uint nSamplesPerSec;
+            public uint nAvgBytesPerSec;
+            public ushort nBlockAlign;
+            public ushort wBitsPerSample;
+            public ushort cbSize;
+            public ushort wValidBitsPerSample;
+            public uint dwChannelMask;
+            public Guid SubFormat;
+        }
+
+        /// <summary>
+        /// The speakers of so many channels in WAVE's order, as dwChannelMask has them: mono the front centre; stereo the
+        /// front left and right; 3.0, quad, 5.0, 5.1 and 6.1 of the back speakers, as Windows' 5.1 is; 7.1 with the side
+        /// ones too. More than 8, the first so many of the mask's bits.
+        /// </summary>
+        public static uint ChannelMask(uint channels) => channels switch
+        {
+            1 => 0x4,          // FC
+            2 => 0x3,          // FL FR
+            3 => 0x7,          // FL FR FC
+            4 => 0x33,         // FL FR BL BR
+            5 => 0x37,         // FL FR FC BL BR
+            6 => 0x3F,         // FL FR FC LFE BL BR
+            7 => 0x13F,        // FL FR FC LFE BL BR BC
+            8 => 0x63F,        // FL FR FC LFE BL BR SL SR
+            _ => channels >= 32 ? uint.MaxValue : (1u << (int)channels) - 1,
+        };
 
         private unsafe void DoneCallback(HWAVEOUT* dev, uint uMsg, uint* dwUser, uint dwParam1, uint dwParam2)
         {
@@ -111,6 +172,8 @@ namespace SharpMediaFoundationInterop.Output
 
         public unsafe uint GetPosition()
         {
+            if (!IsOpen)
+                return 0;
             MMTIME time = new MMTIME();
             time.wType = TIME_BYTES;
             PInvoke.waveOutGetPosition(_hDevice, &time, (uint)sizeof(MMTIME));
@@ -121,7 +184,8 @@ namespace SharpMediaFoundationInterop.Output
 
         public void Reset()
         {
-            PInvoke.waveOutReset(_hDevice);
+            if (IsOpen)
+                PInvoke.waveOutReset(_hDevice);
             Interlocked.Exchange(ref _queuedFrames, 0);
             _audioBufferIndex = 0; 
         }
@@ -129,24 +193,30 @@ namespace SharpMediaFoundationInterop.Output
         /// <summary>Stops playing where it is, keeping what is queued: <see cref="Resume"/> plays on from there.</summary>
         public void Pause()
         {
-            PInvoke.waveOutPause(_hDevice);
+            if (IsOpen)
+                PInvoke.waveOutPause(_hDevice);
         }
 
         public void Resume()
         {
-            PInvoke.waveOutRestart(_hDevice);
+            if (IsOpen)
+                PInvoke.waveOutRestart(_hDevice);
         }
 
         public void Close()
         {
             Reset(); // waveOutReset must be called before waveOutClose
-            PInvoke.waveOutClose(_hDevice);
+            if (IsOpen)
+                PInvoke.waveOutClose(_hDevice);
+            _hDevice = default;
         }
 
         public unsafe void Enqueue(byte[] data, uint length)
         {
             if (_audioBuffer == nint.Zero)
                 throw new InvalidOperationException("You must first call Initialize!");
+            if (!IsOpen)
+                return; // a device that refused the format: nothing plays
 
             uint waveHdrSize = (uint)sizeof(WAVEHDR);
             if ((length + _audioBufferIndex + waveHdrSize) > _audioBufferSize)

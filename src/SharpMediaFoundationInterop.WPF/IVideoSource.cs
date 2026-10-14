@@ -129,7 +129,7 @@ namespace SharpMediaFoundationInterop.WPF
 
     public class AudioInfo
     {
-        /// <summary>"AAC", "OPUS", "MP3", "FLAC" or "ALAC".</summary>
+        /// <summary>"AAC", "OPUS", "MP3", "FLAC", "ALAC" or "PCM".</summary>
         public string AudioCodec { get; set; }
         public uint ChannelCount { get; set; }
         public uint SampleRate { get; set; }
@@ -145,6 +145,9 @@ namespace SharpMediaFoundationInterop.WPF
         /// after a seek, as the decoder settles in anew.
         /// </summary>
         public uint SkipSamples { get; set; }
+
+        /// <summary>Of "PCM", the samples' format, as the container says it.</summary>
+        public PcmFormat PcmFormat { get; set; }
     }
 
     public interface IVideoSource : IDisposable

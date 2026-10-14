@@ -88,6 +88,7 @@ namespace SharpMediaFoundationInterop.Codecs
 
         /// <summary>Whether there is a decoder of the codec on this system; as of the video codecs.</summary>
         public static bool CanDecode(AudioCodec codec) =>
+            codec == AudioCodec.Pcm ? true :
             OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) ? MediaFoundationAudioDecoder.Supports(codec) :
             IsApple ? AudioToolboxDecoder.Supports(codec) :
             IsAndroid ? AndroidAudioDecoder.Supports(codec) :
@@ -101,11 +102,15 @@ namespace SharpMediaFoundationInterop.Codecs
             OperatingSystem.IsLinux() && GStreamerAudioEncoder.Supports(codec);
 
         /// <summary>
-        /// A decoder of the codec, to be initialized; on Windows a <see cref="MediaFoundationAudioDecoder"/>, on macOS an
+        /// A decoder of the codec, to be initialized; of PCM a <see cref="PcmDecoder"/>, of every platform; else on Windows a
+        /// <see cref="MediaFoundationAudioDecoder"/>, on macOS an
         /// <see cref="AudioToolboxDecoder"/>, on Android an <see cref="AndroidAudioDecoder"/>, on Linux a <see cref="GStreamerAudioDecoder"/>.
         /// </summary>
         public static IMediaAudioTransform CreateAudioDecoder(AudioCodec codec, AudioDecoderOptions options)
         {
+            // uncompressed PCM is converted here, of every platform: no decoder of its own is needed
+            if (codec == AudioCodec.Pcm)
+                return new PcmDecoder(options);
             if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
                 return new MediaFoundationAudioDecoder(codec, options);
             if (IsApple)

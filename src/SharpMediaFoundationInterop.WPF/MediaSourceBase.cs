@@ -97,14 +97,29 @@ namespace SharpMediaFoundationInterop.WPF
         {
             timestamp = -1;
             var audioInfo = AudioInfo;
-            if (audioInfo == null)
+            if (audioInfo == null || _audioUnavailable)
             {
                 return null;
             }
 
             if (_audioDecoder == null)
             {
-                CreateAudioDecoder(audioInfo);
+                try
+                {
+                    CreateAudioDecoder(audioInfo);
+                }
+                catch (Exception ex)
+                {
+                    // A sound no decoder here decodes - AAC of 4 channels, Opus of more than 2 - said once, not at every
+                    // frame asked for, and the source of no sound from then on: a player opens no output for it again and
+                    // again. The video plays on without it.
+                    _audioUnavailable = true;
+                    _audioDecoder?.Dispose();
+                    _audioDecoder = null;
+                    AudioInfo = null;
+                    if (Log.ErrorEnabled) Log.Error($"No sound: {audioInfo.AudioCodec} of {audioInfo.ChannelCount} channels is not decoded here: {ex.Message}", ex);
+                    return null;
+                }
             }
 
             ApplyPendingAudioSeek();
@@ -165,6 +180,9 @@ namespace SharpMediaFoundationInterop.WPF
                 }
             }
         }
+
+        /// <summary>Whether the sound has no decoder here: none is made again, and there is none to play.</summary>
+        private bool _audioUnavailable;
 
         /// <summary>Whether the audio has come to its end, with the video still going on: see <see cref="Seek"/>.</summary>
         private bool _audioEnded;
@@ -1010,6 +1028,7 @@ namespace SharpMediaFoundationInterop.WPF
                 "MP3" => AudioCodec.Mp3,
                 "FLAC" => AudioCodec.Flac,
                 "ALAC" => AudioCodec.Alac,
+                "PCM" => AudioCodec.Pcm,
                 _ => throw new NotSupportedException($"Audio codec {info.AudioCodec}")
             };
             _audioDecoder = MediaCodecs.CreateAudioDecoder(codec, new AudioDecoderOptions
@@ -1018,6 +1037,7 @@ namespace SharpMediaFoundationInterop.WPF
                 SampleRate = info.SampleRate,
                 Config = info.UserData,
                 SkipSamples = info.SkipSamples,
+                Pcm = info.PcmFormat,
             });
             _audioDecoder.Initialize();
             _audioConversion = _audioDecoder.OutputFormat == PInvoke.MFAudioFormat_Float ? AudioConversion.FloatToInt32

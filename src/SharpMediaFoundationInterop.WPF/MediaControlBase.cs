@@ -1679,8 +1679,10 @@ namespace SharpMediaFoundationInterop.WPF
         {
             InitializeSource(videoSource);
 
+            // a picture to draw: of a file of sound alone, there is none - its size 0 - and no surface is made for it, whose
+            // bitmap or texture of no size would be refused on every pass; the sound plays on its own thread all the same
             var videoInfo = videoSource.VideoInfo;
-            if (videoInfo != null)
+            if (videoInfo != null && videoInfo.OriginalWidth > 0 && videoInfo.OriginalHeight > 0)
             {
                 await Dispatcher.InvokeAsync(() =>
                 {
@@ -2058,10 +2060,14 @@ namespace SharpMediaFoundationInterop.WPF
 
                 StopThreads();
 
-                if (_waveOut != null)
+                // under the lock the sound's thread makes the output under: not let go of as it is being made
+                lock (_waveSync)
                 {
-                    _waveOut.Dispose();
-                    _waveOut = null;
+                    if (_waveOut != null)
+                    {
+                        _waveOut.Dispose();
+                        _waveOut = null;
+                    }
                 }
 
                 _disposedValue = true;

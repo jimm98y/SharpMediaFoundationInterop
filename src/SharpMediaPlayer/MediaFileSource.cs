@@ -69,7 +69,10 @@ namespace SharpMediaFoundationInterop.WPF
             timestamp = -1;
             if (_audioTrack != null)
             {
-                var sample = _reader.ReadSample(_audioTrack.TrackID);
+                // PCM's every frame a sample: a tenth of a second of them in one read, not a read of each
+                var sample = _audioTrack is PcmTrack pcm
+                    ? _reader.ReadSamples(_audioTrack.TrackID, (int)Math.Max(1, pcm.SampleRate / 10))
+                    : _reader.ReadSample(_audioTrack.TrackID);
                 if (sample != null)
                 {
                     // of the track's own timescale, on the clock of the video's samples: both count from the file's start
@@ -374,6 +377,14 @@ namespace SharpMediaFoundationInterop.WPF
 
         private void SeekAudioLocked(long time)
         {
+            if (_audioTrack is PcmTrack)
+            {
+                // a frame a sample, each as long as the next: the frame of a time is of the time alone
+                long duration = Math.Max(1, _audioTrack.DefaultSampleDuration);
+                long frame = Math.Max(0, time) * _audioTrack.Timescale / TimeSpan.TicksPerSecond / duration;
+                _reader.SeekSample(_audioTrack.TrackID, (uint)Math.Min(frame, uint.MaxValue));
+                return;
+            }
             if (_audioTimes == null)
                 return;
 
@@ -416,7 +427,8 @@ namespace SharpMediaFoundationInterop.WPF
             _startTime = start;
             _duration = end - start;
 
-            var audio = _audioTrack == null ? null : _reader.GetSampleTimings(_audioTrack.TrackID);
+            // not of PCM, a sample a frame - 48000 a second - which is sought of its time alone
+            var audio = _audioTrack == null || _audioTrack is PcmTrack ? null : _reader.GetSampleTimings(_audioTrack.TrackID);
             if (audio != null)
                 _audioTimes = audio.Select(a => MediaUtils.ToTicks(a.PTS, _audioTrack.Timescale)).ToArray();
         }
@@ -568,7 +580,7 @@ namespace SharpMediaFoundationInterop.WPF
                         audioInfo.AudioCodec = "AAC";
                         audioInfo.BitsPerSample = 16;
                         audioInfo.UserData = aacTrack.AudioSpecificConfig.ToBytes();
-                        audioInfo.ChannelCount = aacTrack.ChannelConfiguration == 1 ? 1u : aacTrack.ChannelCount; // ChannelConfiguration = 1 means mono even though ChannelCount = 2
+                        audioInfo.ChannelCount = AacChannels(aacTrack.ChannelConfiguration, aacTrack.ChannelCount);
                         audioInfo.ChannelConfiguration = aacTrack.ChannelConfiguration;
                         audioInfo.SampleRate = aacTrack.SamplingRate;
                     }
@@ -604,6 +616,21 @@ namespace SharpMediaFoundationInterop.WPF
                         audioInfo.SampleRate = alacTrack.SamplingRate;
                         audioInfo.UserData = alacTrack.Config;
                     }
+                    else if (_audioTrack is PcmTrack pcmTrack)
+                    {
+                        // uncompressed: of 16 bits or fewer played as 16, else as 32
+                        audioInfo.AudioCodec = "PCM";
+                        audioInfo.BitsPerSample = !pcmTrack.IsFloat && pcmTrack.BitsPerSample <= 16 ? 16u : 32u;
+                        audioInfo.ChannelCount = pcmTrack.ChannelCount;
+                        audioInfo.SampleRate = pcmTrack.SampleRate;
+                        audioInfo.PcmFormat = new PcmFormat
+                        {
+                            BitsPerSample = pcmTrack.BitsPerSample,
+                            IsFloat = pcmTrack.IsFloat,
+                            IsSigned = pcmTrack.IsSigned,
+                            IsLittleEndian = pcmTrack.IsLittleEndian,
+                        };
+                    }
                     else
                     {
                         // no audio: AC-3 and E-AC-3 too, whose decoders Windows no longer has
@@ -618,6 +645,19 @@ namespace SharpMediaFoundationInterop.WPF
 
             return Task.FromResult((videoInfo, audioInfo));
         }
+
+        /// <summary>
+        /// The channels of AAC, of its AudioSpecificConfig's channel configuration (ISO/IEC 14496-3 1.6.3.4) - which says
+        /// them where the sample entry's count need not: a file's 'mp4a' of 5.1 says 2, as a file of mono does - 1 to 6
+        /// as many, 7, 12 and 14 of 7.1, 11 of 6.1; of 0, whose layout is the config's own, the sample entry's.
+        /// </summary>
+        private static uint AacChannels(int configuration, uint sampleEntryChannels) => configuration switch
+        {
+            >= 1 and <= 6 => (uint)configuration,
+            7 or 12 or 14 => 8,
+            11 => 7,
+            _ => sampleEntryChannels,
+        };
 
         protected override void Dispose(bool disposing)
         {
