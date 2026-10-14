@@ -145,6 +145,11 @@ namespace SharpMediaFoundationInterop.WPF
                         ? (sequence._ColorPrimaries, sequence._TransferCharacteristics, sequence._MatrixCoefficients, sequence._ColorRange != 0)
                         : (2, 2, 2, sequence._ColorRange != 0);
 
+                case MjpegTrack:
+                    // JPEG's samples are JFIF's (ITU-T T.871 7): BT.601's matrix of the full range, of sRGB's primaries and
+                    // curve - as Windows' decoder hands them out, unscaled
+                    return (1, 13, 6, true);
+
                 default:
                     return null;
             }

@@ -76,7 +76,7 @@ namespace SharpMediaFoundationInterop.WPF
                 if (sample != null)
                 {
                     // of the track's own timescale, on the clock of the video's samples: both count from the file's start
-                    timestamp = MediaUtils.ToTicks(sample.PTS, _audioTrack.Timescale);
+                    timestamp = MediaUtils.ToTicks(sample.PTS, _audioTrack.Timescale) + _audioShift;
                     _audioUnits.Clear();
                     foreach (var unit in _reader.ParseSample(_audioTrack.TrackID, sample.Data))
                         _audioUnits.Add(unit);
@@ -110,7 +110,7 @@ namespace SharpMediaFoundationInterop.WPF
                 if (sample != null)
                 {
                     // when the sample is shown, of its decode time and composition offset
-                    timestamp = MediaUtils.ToTicks(sample.PTS, _videoTrack.Timescale);
+                    timestamp = MediaUtils.ToTicks(sample.PTS, _videoTrack.Timescale) + _videoShift;
                     if (_wholeSamples)
                     {
                         _videoUnits.Add(WithHeaders(sample.Data));
@@ -383,7 +383,7 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 // a frame a sample, each as long as the next: the frame of a time is of the time alone
                 long duration = Math.Max(1, _audioTrack.DefaultSampleDuration);
-                long frame = Math.Max(0, time) * _audioTrack.Timescale / TimeSpan.TicksPerSecond / duration;
+                long frame = Math.Max(0, time - _audioShift) * _audioTrack.Timescale / TimeSpan.TicksPerSecond / duration;
                 _reader.SeekSample(_audioTrack.TrackID, (uint)Math.Min(frame, uint.MaxValue));
                 return;
             }
@@ -394,6 +394,72 @@ namespace SharpMediaFoundationInterop.WPF
             i = i >= 0 ? i : Math.Max(0, ~i - 1);
             _reader.SeekSample(_audioTrack.TrackID, (uint)i);
         }
+
+        // Of each track, what is added to its samples' times, of its edit list: the tracks' edits made to start together, and
+        // no time below 0. And where the sound's edit starts - before which its decoder's output is its encoder's priming,
+        // not of the sound.
+        private long _videoShift, _audioShift;
+        private long _audioStart = long.MinValue;
+
+        /// <summary>
+        /// Of the tracks' edit lists (ISO/IEC 14496-12 8.6.6), how each is shown: from where its first edit of media starts,
+        /// after the empty edits before it. A video's starts at its first frame's composition offset, as B-frames delay it;
+        /// a sound's past its encoder's priming - of AAC 1024 samples or 2112, of MP2 481, Opus's pre-skip. Played as the
+        /// file says, they start together: each track's times shifted by the difference, and the sound before its edit not
+        /// played. A track of no edit list starts at its media's start. Edits after the first - of a cut - are not followed.
+        /// </summary>
+        private void ReadEditLists()
+        {
+            long videoStart = 0, videoDelay = 0, audioStart = 0, audioDelay = 0;
+            bool audioEdited = false;
+            if (_videoTrack != null)
+                EditOf(_videoTrack, out videoStart, out videoDelay, out _);
+            if (_audioTrack != null)
+                EditOf(_audioTrack, out audioStart, out audioDelay, out audioEdited);
+
+            // the offset of each into its media of the shared clock's start, and the clock moved on so that none is below 0
+            long videoOffset = videoStart - videoDelay, audioOffset = audioStart - audioDelay;
+            long origin = Math.Max(0, Math.Max(_videoTrack != null ? videoOffset : 0, _audioTrack != null ? audioOffset : 0));
+            _videoShift = origin - videoOffset;
+            _audioShift = origin - audioOffset;
+            _audioStart = audioEdited ? audioStart + _audioShift : long.MinValue;
+
+            // the subtitles - of the movie's clock, of no edit of their own - as the clock is moved on
+            if (origin != 0)
+                _subtitles = _subtitles.Select(cues => cues.Select(c => new Subtitle(c.Start + origin, c.End + origin, c.Text)).ToList()).ToList();
+        }
+
+        /// <summary>
+        /// Of a track's edit list, its first edit of media: where it starts in the media, in ticks, and the empty edits'
+        /// duration before it, of the movie's timescale. Zero both, of a track of none.
+        /// </summary>
+        private void EditOf(ITrack track, out long mediaStart, out long emptyBefore, out bool edited)
+        {
+            mediaStart = 0;
+            emptyBefore = 0;
+            edited = false;
+            var trak = _reader.Tracks[track.TrackID].Stbl?.GetParent()?.GetParent()?.GetParent() as Box;
+            var elst = trak?.Children?.OfType<EditBox>().FirstOrDefault()?.Children?.OfType<EditListBox>().FirstOrDefault();
+            if (elst?.MediaTime == null)
+                return;
+            uint movieTimescale = (trak.GetParent() as Box)?.Children?.OfType<MovieHeaderBox>().FirstOrDefault()?.Timescale ?? 0;
+            for (int i = 0; i < elst.MediaTime.Length; i++)
+            {
+                if (elst.MediaTime[i] == -1)
+                {
+                    // an empty edit: the track starts that much later
+                    if (movieTimescale > 0 && elst.EditDuration != null && i < elst.EditDuration.Length)
+                        emptyBefore += MediaUtils.ToTicks((long)elst.EditDuration[i], movieTimescale);
+                    continue;
+                }
+                mediaStart = MediaUtils.ToTicks(elst.MediaTime[i], track.Timescale);
+                edited = elst.MediaTime[i] > 0;
+                return;
+            }
+        }
+
+        /// <summary>Where the sound's edit starts: its decoded sound before it - its encoder's priming - not played.</summary>
+        protected override long AudioStart => _audioStart;
 
         /// <summary>The times of the samples, which seeking finds its way by.</summary>
         private void ReadSampleTimes()
@@ -417,10 +483,10 @@ namespace SharpMediaFoundationInterop.WPF
             long start = long.MaxValue, end = long.MinValue;
             for (int i = 0; i < video.Length; i++)
             {
-                long time = MediaUtils.ToTicks(video[i].PTS, _videoTrack.Timescale);
+                long time = MediaUtils.ToTicks(video[i].PTS, _videoTrack.Timescale) + _videoShift;
                 frames[i] = time;
                 start = Math.Min(start, time);
-                end = Math.Max(end, MediaUtils.ToTicks(video[i].PTS + video[i].Duration, _videoTrack.Timescale));
+                end = Math.Max(end, MediaUtils.ToTicks(video[i].PTS + video[i].Duration, _videoTrack.Timescale) + _videoShift);
                 if (video[i].IsSyncSample)
                     syncs.Add((time, (uint)i));
             }
@@ -435,7 +501,7 @@ namespace SharpMediaFoundationInterop.WPF
             // not of PCM, a sample a frame - 48000 a second - which is sought of its time alone
             var audio = _audioTrack == null || _audioTrack is PcmTrack ? null : _reader.GetSampleTimings(_audioTrack.TrackID);
             if (audio != null)
-                _audioTimes = audio.Select(a => MediaUtils.ToTicks(a.PTS, _audioTrack.Timescale)).ToArray();
+                _audioTimes = audio.Select(a => MediaUtils.ToTicks(a.PTS, _audioTrack.Timescale) + _audioShift).ToArray();
         }
 
         /// <summary>
@@ -468,10 +534,11 @@ namespace SharpMediaFoundationInterop.WPF
                 var audio = _reader.GetSampleTimings(_audioTrack.TrackID);
                 if (audio == null || audio.Length == 0)
                     return;
-                _audioTimes = audio.Select(a => MediaUtils.ToTicks(a.PTS, _audioTrack.Timescale)).ToArray();
+                _audioTimes = audio.Select(a => MediaUtils.ToTicks(a.PTS, _audioTrack.Timescale) + _audioShift).ToArray();
                 _syncTimes = _audioTimes;
-                start = _audioTimes.Min();
-                end = audio.Max(a => MediaUtils.ToTicks(a.PTS + a.Duration, _audioTrack.Timescale));
+                // of its edit: its sound from where the edit starts, not its encoder's priming before it
+                start = Math.Max(_audioTimes.Min(), _audioStart);
+                end = audio.Max(a => MediaUtils.ToTicks(a.PTS + a.Duration, _audioTrack.Timescale) + _audioShift);
             }
             _startTime = start;
             _duration = end - start;
@@ -505,11 +572,12 @@ namespace SharpMediaFoundationInterop.WPF
             if (_videoTrack != null || _audioTrack != null)
             {
                 _initial = true;
+                ReadEditLists();
                 ReadSampleTimes();
 
                 if (_videoTrack != null)
                 {
-                    _wholeSamples = _videoTrack is H262Track || _videoTrack is H263Track || _videoTrack is MPEG4Track;
+                    _wholeSamples = _videoTrack is H262Track || _videoTrack is H263Track || _videoTrack is MPEG4Track || _videoTrack is MjpegTrack;
                     if (_videoTrack is H264Track h264Track)
                     {
                         videoInfo.VideoCodec = "H264";
@@ -573,9 +641,21 @@ namespace SharpMediaFoundationInterop.WPF
                     else if (_wholeSamples)
                     {
                         // MPEG-1 as MPEG-2: the one decoder decodes both
-                        videoInfo.VideoCodec = _videoTrack is H262Track ? "H262" : _videoTrack is H263Track ? "H263" : "MPEG4";
-                        uint multiple = MediaCodecs.DecoderAlignment(
-                            _videoTrack is H262Track ? VideoCodec.H262 : _videoTrack is H263Track ? VideoCodec.H263 : VideoCodec.Mpeg4);
+                        var codec = _videoTrack switch
+                        {
+                            H262Track => VideoCodec.H262,
+                            H263Track => VideoCodec.H263,
+                            MjpegTrack => VideoCodec.Mjpeg,
+                            _ => VideoCodec.Mpeg4,
+                        };
+                        videoInfo.VideoCodec = codec switch
+                        {
+                            VideoCodec.H262 => "H262",
+                            VideoCodec.H263 => "H263",
+                            VideoCodec.Mjpeg => "MJPEG",
+                            _ => "MPEG4",
+                        };
+                        uint multiple = MediaCodecs.DecoderAlignment(codec);
 
                         // the sizes the sample entry gives, as for VP9
                         var entry = _reader.Tracks[_videoTrack.TrackID].Stbl
@@ -600,6 +680,10 @@ namespace SharpMediaFoundationInterop.WPF
                     var (bitDepth, chromaFormat) = TrackColor.SamplesOf(_videoTrack) ?? (8, 1);
                     TrackColor.ThrowIfNotDecoded(_videoTrack, bitDepth, chromaFormat);
                     videoInfo.FrameFormat = TrackColor.FrameFormatOf(chromaFormat, bitDepth);
+                    // Motion JPEG of 4:2:2, as cameras' is, of the first picture's frame header: YUY2, its chroma as it is
+                    if (_videoTrack is MjpegTrack && FirstSample(_videoTrack) is byte[] picture &&
+                        MjpegTrack.TryReadFrameHeader(picture, 0, picture.Length, out _, out _, out int jpegChroma) && jpegChroma == 2)
+                        videoInfo.FrameFormat = VideoFrameFormat.YUY2;
                     var entryColors = _reader.Tracks[_videoTrack.TrackID].Stbl
                         .Children.OfType<SampleDescriptionBox>().Single()
                         .Children.OfType<VisualSampleEntry>().First()
@@ -637,7 +721,8 @@ namespace SharpMediaFoundationInterop.WPF
                         audioInfo.ChannelCount = opusTrack.ChannelCount;
                         audioInfo.ChannelConfiguration = opusTrack.ChannelCount;
                         audioInfo.SampleRate = opusTrack.SamplingRate;
-                        audioInfo.SkipSamples = opusTrack.PreSkip;
+                        // of an edit list, the pre-skip is its: informative in 'dOps' (Opus in ISOBMFF 4.3.2), not dropped twice
+                        audioInfo.SkipSamples = _audioStart != long.MinValue ? 0u : opusTrack.PreSkip;
                         audioInfo.UserData = OpusConfig(opusTrack);
                         // of channel mapping family 2, a sound field (RFC 8486)
                         audioInfo.IsAmbisonic = opusTrack.ChannelMappingFamily == 2 &&
@@ -645,7 +730,10 @@ namespace SharpMediaFoundationInterop.WPF
                     }
                     else if (_audioTrack is Mp3Track mp3Track)
                     {
-                        audioInfo.AudioCodec = "MP3";
+                        // Layers I and II - MP2 - of a decoder of their own: of the first frame's header, as the entry
+                        // need not say
+                        var first = FirstSample(_audioTrack);
+                        audioInfo.AudioCodec = first != null && Mp3Track.LayerOf(first, 0) is 1 or 2 ? "MP2" : "MP3";
                         audioInfo.BitsPerSample = 16;
                         audioInfo.ChannelCount = mp3Track.ChannelCount;
                         audioInfo.SampleRate = mp3Track.SamplingRate;
@@ -666,6 +754,16 @@ namespace SharpMediaFoundationInterop.WPF
                         audioInfo.SampleRate = alacTrack.SamplingRate;
                         audioInfo.UserData = alacTrack.Config;
                     }
+                    else if (_audioTrack is AmrTrack amrTrack)
+                    {
+                        // Windows' AMR-NB decoder is of Media Foundation's own pipeline alone - made by its class factory or
+                        // asked of a source reader, it gives no IMFTransform - and it has none of AMR-WB: no sound, said so
+                        // once, as its decoder is not made
+                        audioInfo.AudioCodec = amrTrack.IsWideband ? "AMR-WB" : "AMR";
+                        audioInfo.BitsPerSample = 16;
+                        audioInfo.ChannelCount = amrTrack.ChannelCount;
+                        audioInfo.SampleRate = amrTrack.SampleRate;
+                    }
                     else if (_audioTrack is PcmTrack pcmTrack)
                     {
                         // uncompressed: of 16 bits or fewer played as 16, else as 32
@@ -679,6 +777,12 @@ namespace SharpMediaFoundationInterop.WPF
                             IsFloat = pcmTrack.IsFloat,
                             IsSigned = pcmTrack.IsSigned,
                             IsLittleEndian = pcmTrack.IsLittleEndian,
+                            Companding = pcmTrack.Companding switch
+                            {
+                                SharpMP4.Tracks.PcmCompanding.ALaw => SharpMediaFoundationInterop.Codecs.PcmCompanding.ALaw,
+                                SharpMP4.Tracks.PcmCompanding.MuLaw => SharpMediaFoundationInterop.Codecs.PcmCompanding.MuLaw,
+                                _ => SharpMediaFoundationInterop.Codecs.PcmCompanding.None,
+                            },
                         };
                     }
                     else
@@ -738,6 +842,17 @@ namespace SharpMediaFoundationInterop.WPF
                 if (box.ChannelMap[i] != i)
                     return false;
             return SharpMediaFoundationInterop.Output.AmbisonicRenderer.IsAmbisonic(channels, out int order, out _) && order == box.AmbisonicOrder;
+        }
+
+        /// <summary>
+        /// The track's first sample, read and the track sought back to it: what a codec says of itself in its frames alone -
+        /// MPEG audio its layer, JPEG its chroma. Null where it has none.
+        /// </summary>
+        private byte[] FirstSample(ITrack track)
+        {
+            var sample = _reader.ReadSample(track.TrackID);
+            _reader.SeekSample(track.TrackID, 0);
+            return sample?.Data.ToArray();
         }
 
         /// <summary>

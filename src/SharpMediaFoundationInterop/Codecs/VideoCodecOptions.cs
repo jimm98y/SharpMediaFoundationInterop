@@ -14,6 +14,12 @@
         AV1,
 
         /// <summary>
+        /// Motion JPEG: each sample a JPEG picture - QuickTime's 'jpeg' and 'mjpa', MP4's 'mp4v' of JPEG. Of Windows' MJPEG
+        /// decoder, NV12 out, or YUY2.
+        /// </summary>
+        Mjpeg,
+
+        /// <summary>
         /// Apple ProRes - 422, 422 HQ, LT, Proxy, 4444 and 4444 XQ - each sample a picture, of its 'icpf' header; of
         /// VideoToolbox on macOS and iOS, and of GStreamer's libav on Linux. Encoded of the
         /// <see cref="VideoEncoderOptions.ProResProfile"/>.

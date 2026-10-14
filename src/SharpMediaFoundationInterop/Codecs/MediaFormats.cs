@@ -33,6 +33,8 @@ namespace SharpMediaFoundationInterop.Codecs
         public static readonly Guid Opus = WaveFormat(0x704F);
         public static readonly Guid FLAC = WaveFormat(0xF1AC);
         public static readonly Guid ALAC = WaveFormat(0x6C61);
+        /// <summary>MPEG-1 audio of Layers I and II: WAVE_FORMAT_MPEG.</summary>
+        public static readonly Guid MPEGAudio = WaveFormat(0x0050);
 
         public static Guid Of(VideoCodec codec) => codec switch
         {
@@ -44,6 +46,7 @@ namespace SharpMediaFoundationInterop.Codecs
             VideoCodec.VP9 => VP90,
             VideoCodec.AV1 => AV1,
             VideoCodec.ProRes => ProRes,
+            VideoCodec.Mjpeg => MJPG,
             _ => Guid.Empty
         };
 
@@ -54,6 +57,7 @@ namespace SharpMediaFoundationInterop.Codecs
             AudioCodec.Mp3 => MP3,
             AudioCodec.Flac => FLAC,
             AudioCodec.Alac => ALAC,
+            AudioCodec.Mp2 => MPEGAudio,
             _ => Guid.Empty
         };
 

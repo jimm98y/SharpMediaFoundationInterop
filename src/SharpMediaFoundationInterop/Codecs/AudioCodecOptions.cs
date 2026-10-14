@@ -12,6 +12,10 @@
         /// <summary>MP3: MPEG-1 and MPEG-2 Layer III. 16 bit PCM on the other side.</summary>
         Mp3,
 
+        /// <summary>MPEG-1 and MPEG-2 audio of Layers I and II - MP2. 16 bit PCM on the other side.</summary>
+        Mp2,
+
+
         /// <summary>FLAC, of the stream's bits: 16 or 24 bit PCM on the other side.</summary>
         Flac,
 
@@ -25,7 +29,23 @@
         Pcm
     }
 
-    /// <summary>The samples of uncompressed PCM, as a container says them - QuickTime's 'lpcm', 'twos', 'sowt', ISO's 'ipcm'.</summary>
+    /// <summary>How PCM's samples are coded: linearly, or companded as G.711 has them.</summary>
+    public enum PcmCompanding
+    {
+        /// <summary>Linear: each sample its value.</summary>
+        None,
+
+        /// <summary>G.711 A-law: a byte of a 13 bit sample, QuickTime's 'alaw'.</summary>
+        ALaw,
+
+        /// <summary>G.711 mu-law: a byte of a 14 bit sample, QuickTime's 'ulaw'.</summary>
+        MuLaw,
+    }
+
+    /// <summary>
+    /// The samples of uncompressed PCM, as a container says them - QuickTime's 'lpcm', 'twos', 'sowt', ISO's 'ipcm' - and of
+    /// G.711's 'alaw' and 'ulaw', of 8 bits companded.
+    /// </summary>
     public sealed class PcmFormat
     {
         /// <summary>The bits of a sample of one channel: 8, 16, 24 or 32 of an integer, 32 or 64 of a float.</summary>
@@ -37,6 +57,9 @@
         public bool IsSigned { get; set; } = true;
 
         public bool IsLittleEndian { get; set; } = true;
+
+        /// <summary>Of G.711, how the samples - of 8 bits - are companded: expanded to 16 bit PCM.</summary>
+        public PcmCompanding Companding { get; set; }
     }
 
     /// <summary>What a decoder of <see cref="MediaCodecs.CreateAudioDecoder"/> is made for.</summary>

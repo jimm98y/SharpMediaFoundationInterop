@@ -202,6 +202,15 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>Whether the decoder has been drained at the end of the sound: once, until a seek.</summary>
         private bool _audioDrained;
 
+        /// <summary>
+        /// Where the source's sound starts, on the clock of the video's frames: what the decoder hands out before it is not
+        /// played - of a file's edit list, its encoder's priming. long.MinValue, of the base, where the source says none.
+        /// </summary>
+        protected virtual long AudioStart => long.MinValue;
+
+        /// <summary>The time before which decoded sound is let go of: <see cref="AudioStart"/>, or the time sought; long.MinValue of none.</summary>
+        private long _audioTrimBefore = long.MinValue;
+
         /// <summary>Each frame the audio decoder hands out, as it is to be played, into the queue, timed as it goes.</summary>
         private void TakeDecodedAudio()
         {
@@ -211,6 +220,27 @@ namespace SharpMediaFoundationInterop.WPF
                 long pcmTime = _audioOutTime;
                 if (_audioOutTime >= 0 && _decodedBytesPerSecond > 0)
                     _audioOutTime += pcmSize * TimeSpan.TicksPerSecond / _decodedBytesPerSecond;
+
+                // what is before the sound's start, or the time sought, let go of, to the frame: of a frame partly before it,
+                // its samples before it
+                if (_audioTrimBefore != long.MinValue && pcmTime >= 0 && _decodedBytesPerSecond > 0)
+                {
+                    if (_audioOutTime <= _audioTrimBefore)
+                        continue;
+                    if (pcmTime < _audioTrimBefore)
+                    {
+                        int block = (int)Math.Max(1, _audioDecoder.Channels * _audioDecoder.BitsPerSample / 8);
+                        // of the samples nearest the time: a time of ticks is of no whole sample - of AAC's 1024 at 44.1 kHz
+                        long skip = (long)Math.Round((double)(_audioTrimBefore - pcmTime) * _decodedBytesPerSecond / TimeSpan.TicksPerSecond / block) * block;
+                        skip = Math.Min(skip, pcmSize);
+                        Buffer.BlockCopy(_pcmBuffer, (int)skip, _pcmBuffer, 0, (int)(pcmSize - skip));
+                        pcmSize -= (uint)skip;
+                        pcmTime += skip * TimeSpan.TicksPerSecond / _decodedBytesPerSecond;
+                    }
+                    _audioTrimBefore = long.MinValue;
+                    if (pcmSize == 0)
+                        continue;
+                }
 
                 if (_audioConversion == AudioConversion.Int24ToInt32)
                 {
@@ -286,6 +316,8 @@ namespace SharpMediaFoundationInterop.WPF
             while (_audioRenderQueue.TryDequeue(out var audio))
                 ReturnAudioSample(audio.Pcm);
             _audioOutTime = -1;
+            // played from the time sought, to the sample: not from the frame before it, nor before the sound starts
+            _audioTrimBefore = Math.Max(seek, AudioStart);
             _audioEnded = false;
             _audioDrained = false;
             if (Rate == 1)
@@ -1026,6 +1058,7 @@ namespace SharpMediaFoundationInterop.WPF
             "H262" => VideoCodec.H262, // MPEG-1 as well: MPEG-2's decoder decodes both
             "H263" => VideoCodec.H263,
             "MPEG4" => VideoCodec.Mpeg4,
+            "MJPEG" => VideoCodec.Mjpeg,
             // H266 is as of 8/3/2025 not supported by Media Foundation
             _ => throw new NotSupportedException($"Video codec {codec}")
         };
@@ -1038,6 +1071,7 @@ namespace SharpMediaFoundationInterop.WPF
                 "AAC" => AudioCodec.AAC,
                 "OPUS" => AudioCodec.Opus,
                 "MP3" => AudioCodec.Mp3,
+                "MP2" => AudioCodec.Mp2,
                 "FLAC" => AudioCodec.Flac,
                 "ALAC" => AudioCodec.Alac,
                 "PCM" => AudioCodec.Pcm,
@@ -1055,6 +1089,7 @@ namespace SharpMediaFoundationInterop.WPF
             _audioConversion = _audioDecoder.OutputFormat == PInvoke.MFAudioFormat_Float ? AudioConversion.FloatToInt32
                 : _audioDecoder.BitsPerSample == 24 ? AudioConversion.Int24ToInt32 : AudioConversion.None;
             _decodedBytesPerSecond = (long)_audioDecoder.SampleRate * _audioDecoder.Channels * _audioDecoder.BitsPerSample / 8;
+            _audioTrimBefore = AudioStart;
 
             _pcmBuffer = new byte[_audioDecoder.OutputSize];
         }

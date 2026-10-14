@@ -129,7 +129,7 @@ namespace SharpMediaFoundationInterop.WPF
 
     public class AudioInfo
     {
-        /// <summary>"AAC", "OPUS", "MP3", "FLAC", "ALAC" or "PCM".</summary>
+        /// <summary>"AAC", "OPUS", "MP3", "MP2", "FLAC", "ALAC", "AMR", "AMR-WB" or "PCM" - of PCM G.711's too, of its <see cref="PcmFormat"/>.</summary>
         public string AudioCodec { get; set; }
         public uint ChannelCount { get; set; }
         public uint SampleRate { get; set; }

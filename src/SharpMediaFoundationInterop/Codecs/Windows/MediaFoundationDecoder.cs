@@ -26,7 +26,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// </summary>
         public static bool Supports(VideoCodec codec) => codec switch
         {
-            VideoCodec.H262 or VideoCodec.H263 or VideoCodec.Mpeg4 or VideoCodec.H264 or VideoCodec.H265 or VideoCodec.VP9 or VideoCodec.AV1 => true,
+            VideoCodec.H262 or VideoCodec.H263 or VideoCodec.Mpeg4 or VideoCodec.H264 or VideoCodec.H265 or VideoCodec.VP9 or VideoCodec.AV1 or VideoCodec.Mjpeg => true,
             _ => false
         };
 
@@ -42,6 +42,7 @@ namespace SharpMediaFoundationInterop.Codecs
             VideoCodec.H265 => H265Decoder.H265_RES_MULTIPLE,
             VideoCodec.VP9 => VP9Decoder.VP9_RES_MULTIPLE,
             VideoCodec.AV1 => AV1Decoder.AV1_RES_MULTIPLE,
+            VideoCodec.Mjpeg => MjpegDecoder.MJPEG_RES_MULTIPLE,
             _ => 1
         };
 
@@ -65,7 +66,7 @@ namespace SharpMediaFoundationInterop.Codecs
         private static VideoTransformBase Create(VideoCodec codec, VideoDecoderOptions o) => codec switch
         {
             // other than NV12 of HEVC's and AV1's alone: the others' decoders hand out no more than 8 bits of 4:2:0
-            _ when o.OutputFormat != VideoFrameFormat.NV12 && codec != VideoCodec.H265 && codec != VideoCodec.AV1
+            _ when o.OutputFormat != VideoFrameFormat.NV12 && codec != VideoCodec.H265 && codec != VideoCodec.AV1 && codec != VideoCodec.Mjpeg
                 => throw new NotSupportedException($"No Media Foundation decoder of {codec} in {o.OutputFormat}"),
             VideoCodec.H262 => new H262Decoder(o.Width, o.Height, o.FpsNom, o.FpsDenom, o.LowLatency),
             VideoCodec.H263 => new H263Decoder(o.Width, o.Height, o.FpsNom, o.FpsDenom, o.LowLatency),
@@ -74,6 +75,7 @@ namespace SharpMediaFoundationInterop.Codecs
             VideoCodec.H265 => new H265Decoder(o.Width, o.Height, o.FpsNom, o.FpsDenom, o.LowLatency, o.OutputFormat),
             VideoCodec.VP9 => new VP9Decoder(o.Width, o.Height, o.FpsNom, o.FpsDenom, o.LowLatency),
             VideoCodec.AV1 => new AV1Decoder(o.Width, o.Height, o.FpsNom, o.FpsDenom, o.LowLatency, o.OutputFormat),
+            VideoCodec.Mjpeg => new MjpegDecoder(o.Width, o.Height, o.FpsNom, o.FpsDenom, o.OutputFormat),
             _ => throw new NotSupportedException($"No Media Foundation decoder of {codec}")
         };
     }

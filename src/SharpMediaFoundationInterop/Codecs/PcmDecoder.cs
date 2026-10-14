@@ -23,7 +23,7 @@ namespace SharpMediaFoundationInterop.Codecs
             if (options == null)
                 throw new ArgumentNullException(nameof(options));
             _format = options.Pcm ?? new PcmFormat();
-            bool supported = _format.IsFloat
+            bool supported = _format.Companding != PcmCompanding.None ? _format.BitsPerSample == 8 : _format.IsFloat
                 ? _format.BitsPerSample is 32 or 64
                 : _format.BitsPerSample is 8 or 16 or 24 or 32;
             if (!supported)
@@ -34,6 +34,32 @@ namespace SharpMediaFoundationInterop.Codecs
             _inputBytes = (int)_format.BitsPerSample / 8;
             _outputBytes = !_format.IsFloat && _format.BitsPerSample <= 16 ? 2 : 4;
             BitsPerSample = (uint)_outputBytes * 8;
+        }
+
+        /// <summary>
+        /// A-law's byte expanded (ITU-T G.711 Table 1a): its even bits inverted, then its segment - bits 6 to 4 - and its
+        /// step - bits 3 to 0 - of a 13 bit value, scaled to 16 bits; its sign bit 7, of 1 positive.
+        /// </summary>
+        public static short ExpandALaw(byte a)
+        {
+            a ^= 0x55;
+            int value = (a & 0x0F) << 4;
+            int segment = (a & 0x70) >> 4;
+            value += segment == 0 ? 8 : 0x108;
+            if (segment > 1)
+                value <<= segment - 1;
+            return (short)((a & 0x80) != 0 ? value : -value);
+        }
+
+        /// <summary>
+        /// Mu-law's byte expanded (ITU-T G.711 Table 2a): its bits inverted, then its segment and step of a 14 bit value
+        /// biased by 33, scaled to 16 bits; its sign bit 7, of 1 negative.
+        /// </summary>
+        public static short ExpandMuLaw(byte u)
+        {
+            u = (byte)~u;
+            int value = (((u & 0x0F) << 3) + 0x84) << ((u & 0x70) >> 4);
+            return (short)((u & 0x80) != 0 ? 0x84 - value : value - 0x84);
         }
 
         public uint Channels { get; }
@@ -68,6 +94,12 @@ namespace SharpMediaFoundationInterop.Codecs
             for (int i = 0; i < samples; i++)
             {
                 var sample = data.Slice(i * _inputBytes, _inputBytes);
+                if (_format.Companding != PcmCompanding.None)
+                {
+                    short expanded = _format.Companding == PcmCompanding.ALaw ? ExpandALaw(sample[0]) : ExpandMuLaw(sample[0]);
+                    BinaryPrimitives.WriteInt16LittleEndian(output.Slice(i * 2), expanded);
+                    continue;
+                }
                 if (_outputBytes == 2)
                 {
                     short value = _format.BitsPerSample == 8

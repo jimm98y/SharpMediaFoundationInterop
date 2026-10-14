@@ -61,7 +61,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// <summary>Whether there is a decoder of the codec here; whether it is installed shows as it is initialized.</summary>
         public static bool Supports(AudioCodec codec) => codec switch
         {
-            AudioCodec.AAC or AudioCodec.Opus or AudioCodec.Mp3 or AudioCodec.Flac or AudioCodec.Alac => true,
+            AudioCodec.AAC or AudioCodec.Opus or AudioCodec.Mp3 or AudioCodec.Flac or AudioCodec.Alac or AudioCodec.Mp2 => true,
             _ => false
         };
 
@@ -72,6 +72,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 ChannelConfiguration(o.Config, o.Channels)),
             AudioCodec.Opus => new OpusDecoder(960, o.Channels, o.SampleRate, 32),
             AudioCodec.Mp3 => new Mp3Decoder(o.Channels, o.SampleRate),
+            AudioCodec.Mp2 => new Mp2Decoder(o.Channels, o.SampleRate),
             AudioCodec.Flac => CreateFlac(o.Config ?? throw new ArgumentException("FLAC needs its metadata blocks", nameof(o))),
             AudioCodec.Alac => CreateAlac(o.Config ?? throw new ArgumentException("ALAC needs its ALACSpecificConfig", nameof(o))),
             _ => throw new NotSupportedException($"No Media Foundation decoder of {codec}")
