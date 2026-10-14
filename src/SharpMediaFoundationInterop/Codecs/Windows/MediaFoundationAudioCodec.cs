@@ -15,7 +15,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// <summary>The codec asked for.</summary>
         public AudioCodec Codec { get; }
 
-        /// <summary>The transform of the codec: an AACDecoder, an OpusEncoder and so on.</summary>
+        /// <summary>The transform of the codec: an AACDecoder, a FlacEncoder and so on.</summary>
         public AudioTransformBase Transform { get; }
 
         protected MediaFoundationAudioCodec(AudioCodec codec, AudioTransformBase transform)

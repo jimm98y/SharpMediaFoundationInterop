@@ -36,15 +36,14 @@ namespace SharpMediaFoundationInterop.Codecs
             if (transform == null) transform = CreateTransform(PInvoke.MFT_CATEGORY_AUDIO_ENCODER, MFT_ENUM_FLAG.MFT_ENUM_FLAG_SYNCMFT, input, output);
             if (transform == null) throw new NotSupportedException($"Unsupported transform! Input: {InputFormat}, Output: {OutputFormat}");
 
-            IMFMediaType mediaOutput;
-            MediaUtils.Check(PInvoke.MFCreateMediaType(out mediaOutput));
-            mediaOutput.SetGUID(PInvoke.MF_MT_MAJOR_TYPE, PInvoke.MFMediaType_Audio);
-            mediaOutput.SetGUID(PInvoke.MF_MT_SUBTYPE, OutputFormat);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_BITS_PER_SAMPLE, BitsPerSample);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_SAMPLES_PER_SECOND, SampleRate);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_NUM_CHANNELS, Channels);
-            //mediaOutput.SetUINT32(PInvoke.MF_MT_AAC_AUDIO_PROFILE_LEVEL_INDICATION, 0x2A);
-            mediaOutput.SetUINT32(PInvoke.MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 16000 * Channels);
+            // Of the types the encoder offers, of the channels and rate, the bit rate offered nearest 128 kbit/s a channel,
+            // not above - AAC-LC's, whose rates are above HE-AAC's: its rates are its own of each count of channels. Of 3, 4
+            // or 5 channels it offers none, nor takes a type of one's own making. Of 8 it encodes channel configuration 7,
+            // ISO's 7.1 of front centre left and right, not of side ones: what players play as 7.1 has its front pair on the
+            // sides, and Windows' decoder decodes no more than 6 - so not 8 either.
+            if (Channels is not (1 or 2 or 6))
+                throw new NotSupportedException($"Windows' AAC encoder encodes 1, 2 or 6 (5.1) channels, not {Channels}");
+            IMFMediaType mediaOutput = AudioEncoding.OutputType(transform, OutputFormat, Channels, SampleRate, BitsPerSample, 16000 * Channels);
             mediaOutput.SetUINT32(PInvoke.MF_MT_AAC_PAYLOAD_TYPE, 0); // 0 = Raw, 1 = ADTS
             MediaUtils.Check(transform.SetOutputType(streamId, mediaOutput, 0));
 

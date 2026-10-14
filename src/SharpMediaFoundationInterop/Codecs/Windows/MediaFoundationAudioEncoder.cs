@@ -4,7 +4,7 @@ using System.Runtime.Versioning;
 namespace SharpMediaFoundationInterop.Codecs
 {
     /// <summary>
-    /// An encoder of Media Foundation's, of any <see cref="AudioCodec"/>: the AACEncoder or OpusEncoder of the codec, made
+    /// An encoder of Media Foundation's, of any <see cref="AudioCodec"/>: the AACEncoder or FlacEncoder of the codec, made
     /// for the <see cref="AudioEncoderOptions"/>.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
@@ -21,7 +21,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// <summary>
         /// Of AAC the AudioSpecificConfig, known once initialized; of FLAC the metadata blocks, each with its header - what
         /// the 'dfLa' box holds - known once the first frame is read out and complete once drained; of ALAC the
-        /// ALACSpecificConfig. Opus and MP3 have none.
+        /// ALACSpecificConfig. MP3 has none.
         /// </summary>
         public byte[] Config => Transform switch
         {
@@ -35,10 +35,13 @@ namespace SharpMediaFoundationInterop.Codecs
             : base(codec, Create(codec, options ?? throw new ArgumentNullException(nameof(options))))
         { }
 
-        /// <summary>Whether there is an encoder of the codec here; whether it is installed shows as it is initialized.</summary>
+        /// <summary>
+        /// Whether there is an encoder of the codec here; whether it is installed shows as it is initialized. Not Opus: Windows
+        /// has a decoder of it, but no encoder - not Web Media Extensions' either.
+        /// </summary>
         public static bool Supports(AudioCodec codec) => codec switch
         {
-            AudioCodec.AAC or AudioCodec.Opus or AudioCodec.Mp3 or AudioCodec.Flac or AudioCodec.Alac => true,
+            AudioCodec.AAC or AudioCodec.Mp3 or AudioCodec.Flac or AudioCodec.Alac => true,
             _ => false
         };
 
@@ -53,7 +56,6 @@ namespace SharpMediaFoundationInterop.Codecs
         private static AudioTransformBase Create(AudioCodec codec, AudioEncoderOptions o) => codec switch
         {
             AudioCodec.AAC => new AACEncoder(o.Channels, o.SampleRate),
-            AudioCodec.Opus => new OpusEncoder(960, o.Channels, o.SampleRate, 32),
             AudioCodec.Mp3 => new Mp3Encoder(o.Channels, o.SampleRate, o.Bitrate),
             AudioCodec.Flac => new FlacEncoder(o.Channels, o.SampleRate, o.BitsPerSample),
             AudioCodec.Alac => new AlacEncoder(o.Channels, o.SampleRate, o.BitsPerSample),
