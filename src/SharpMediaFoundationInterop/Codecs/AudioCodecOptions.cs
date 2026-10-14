@@ -49,7 +49,8 @@
         /// <summary>
         /// The codec's configuration, as the container carries it, which the channels, rate and bits of a lossless stream
         /// are read of: of AAC the AudioSpecificConfig; of FLAC the metadata blocks, each with its header, STREAMINFO first -
-        /// what the 'dfLa' box holds; of ALAC the ALACSpecificConfig. Opus and MP3 need none.
+        /// what the 'dfLa' box holds; of ALAC the ALACSpecificConfig; of Opus the 'dOps' box's payload, of its channel mapping -
+        /// needed of more than two channels, which <see cref="OpusMultistreamDecoder"/> decodes. MP3 needs none.
         /// </summary>
         public byte[] Config { get; set; }
 

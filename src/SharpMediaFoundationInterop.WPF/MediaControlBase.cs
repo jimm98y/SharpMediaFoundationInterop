@@ -47,7 +47,8 @@ namespace SharpMediaFoundationInterop.WPF
     /// the host's to do, of the control's methods - <see cref="Play"/>, <see cref="Pause"/>, <see cref="TogglePlayPause"/>,
     /// <see cref="Rewind"/>, <see cref="FastForward"/>, <see cref="SetRate"/>, <see cref="Seek"/>, <see cref="SeekBy"/>,
     /// <see cref="StepBackward"/>, <see cref="StepForward"/>, <see cref="TogglePositionFormat"/>, <see cref="ToggleRepeat"/>,
-    /// <see cref="NextEyeView"/>, <see cref="NextSubtitleTrack"/>, <see cref="ResetView"/> - and properties.</para>
+    /// <see cref="ToggleBinaural"/>, <see cref="NextEyeView"/>, <see cref="NextSubtitleTrack"/>, <see cref="ResetView"/> - and
+    /// properties.</para>
     /// <para>Parts of the template, each optional: <c>PART_Image</c>, the image frames are drawn on; <c>PART_Seek</c>, a
     /// slider of the position, which seeks; <c>PART_ControlsBar</c>, the bar, kept shown while the mouse is over it.</para>
     /// <para>Subtitles are the template's too: the text shown now is <see cref="SubtitleText"/>, shown twice - over each
@@ -63,6 +64,24 @@ namespace SharpMediaFoundationInterop.WPF
     {
         private object _waveSync = new object();
         private IAudioOutput _waveOut;
+
+        /// <summary>Of a sound field, what plays it on the speakers, turned as the view is; null of other sound.</summary>
+        private AmbisonicRenderer _ambisonics;
+
+        /// <summary>Of <see cref="Binaural"/>, for the sound's thread: -1 of null, 0 of false, 1 of true.</summary>
+        private int _binaural = -1;
+
+        /// <summary>Whether the sound's device is to be made anew, of <see cref="Binaural"/> changed: 1 where it is.</summary>
+        private int _audioOutputChanged;
+
+        /// <summary>Whether the sound is mono, played on two channels: the front left and right.</summary>
+        private bool _monoToStereo;
+
+        /// <summary>What the sound field, or mono made stereo, is played into, for the device to copy.</summary>
+        private byte[] _speakerBuffer;
+
+        // where the listener looks, of a spherical video's view, for the sound's thread: degrees right and up
+        private double _listenerYaw, _listenerPitch;
 
         private const string ControlsStates = "ControlsStates";
         private const string ControlsVisibleState = "ControlsVisible";
@@ -161,6 +180,31 @@ namespace SharpMediaFoundationInterop.WPF
 
         public static readonly DependencyProperty AutoPlayProperty =
             DependencyProperty.Register("AutoPlay", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(true));
+
+        /// <summary>
+        /// Whether a sound field - ambisonics, see <see cref="AudioInfo.IsAmbisonic"/> - is heard binaurally, on headphones,
+        /// rather than played on speakers: null, the default, as Windows says the default sound output is - headphones or a
+        /// headset. Either way it is turned as a spherical video's view is. Other sound is played as it is.
+        /// </summary>
+        public bool? Binaural
+        {
+            get { return (bool?)GetValue(BinauralProperty); }
+            set { SetValue(BinauralProperty, value); }
+        }
+
+        public static readonly DependencyProperty BinauralProperty =
+            DependencyProperty.Register("Binaural", typeof(bool?), typeof(MediaControlBase), new PropertyMetadata(null, OnBinauralChanged));
+
+        private static void OnBinauralChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is MediaControlBase sender)
+            {
+                var binaural = (bool?)e.NewValue;
+                Volatile.Write(ref sender._binaural, binaural == null ? -1 : binaural.Value ? 1 : 0);
+                Interlocked.Exchange(ref sender._audioOutputChanged, 1);
+                sender._audioWake.Set();
+            }
+        }
 
         public bool Mute
         {
@@ -489,6 +533,38 @@ namespace SharpMediaFoundationInterop.WPF
         public static RoutedUICommand ToggleRepeatCommand { get; } =
             new RoutedUICommand("Repeat", "ToggleRepeat", typeof(MediaControlBase));
 
+        /// <summary>
+        /// Hears a sound field on headphones, or plays it on speakers again: see <see cref="Binaural"/>. The H key, over the
+        /// video.
+        /// </summary>
+        public static RoutedUICommand ToggleBinauralCommand { get; } =
+            new RoutedUICommand("Headphones", "ToggleBinaural", typeof(MediaControlBase));
+
+        /// <summary>Whether the sound is a sound field - ambisonics - which can be heard on headphones or played on speakers.</summary>
+        public bool HasSoundField
+        {
+            get { return (bool)GetValue(HasSoundFieldProperty); }
+            private set { SetValue(HasSoundFieldPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey HasSoundFieldPropertyKey =
+            DependencyProperty.RegisterReadOnly("HasSoundField", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
+        public static readonly DependencyProperty HasSoundFieldProperty = HasSoundFieldPropertyKey.DependencyProperty;
+
+        /// <summary>
+        /// Whether the sound field is heard on headphones now, binaurally: as <see cref="Binaural"/> says, or, where it is
+        /// null, as Windows says the default output is.
+        /// </summary>
+        public bool IsBinaural
+        {
+            get { return (bool)GetValue(IsBinauralProperty); }
+            private set { SetValue(IsBinauralPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey IsBinauralPropertyKey =
+            DependencyProperty.RegisterReadOnly("IsBinaural", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
+        public static readonly DependencyProperty IsBinauralProperty = IsBinauralPropertyKey.DependencyProperty;
+
         /// <summary>Shows the next eye's view: both, then the left, then the right. The E key, over the video.</summary>
         public static RoutedUICommand NextEyeViewCommand { get; } =
             new RoutedUICommand("Next eye", "NextEyeView", typeof(MediaControlBase));
@@ -593,6 +669,8 @@ namespace SharpMediaFoundationInterop.WPF
             CompositionTarget.Rendering += CompositionTarget_Rendering;
 
             _hideTimer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher);
+            _soundClock = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Normal, SoundClock_Tick, Dispatcher);
+            _soundClock.Stop();
             _hideTimer.Tick += HideTimer_Tick;
 
             // the buttons of any template, or of none: WPF's media commands, routed to the control
@@ -603,6 +681,7 @@ namespace SharpMediaFoundationInterop.WPF
             CommandBindings.Add(new CommandBinding(MediaCommands.FastForward, (s, e) => FastForward(), CanSeekCommand));
             CommandBindings.Add(new CommandBinding(MediaCommands.MuteVolume, (s, e) => Mute = !Mute));
             CommandBindings.Add(new CommandBinding(ToggleRepeatCommand, (s, e) => ToggleRepeat(), CanSeekCommand));
+            CommandBindings.Add(new CommandBinding(ToggleBinauralCommand, (s, e) => ToggleBinaural(), (s, e) => e.CanExecute = HasSoundField));
             CommandBindings.Add(new CommandBinding(StepBackwardCommand, (s, e) => StepBackward(), CanSeekCommand));
             CommandBindings.Add(new CommandBinding(StepForwardCommand, (s, e) => StepForward(), CanSeekCommand));
             CommandBindings.Add(new CommandBinding(TogglePositionFormatCommand, (s, e) => TogglePositionFormat(), CanSeekCommand));
@@ -855,6 +934,15 @@ namespace SharpMediaFoundationInterop.WPF
             Looping = !Looping;
         }
 
+        /// <summary>
+        /// Hears a sound field on headphones, or plays it on speakers again: <see cref="Binaural"/> set the other way of what
+        /// it is heard on now, <see cref="IsBinaural"/>.
+        /// </summary>
+        public void ToggleBinaural()
+        {
+            Binaural = !IsBinaural;
+        }
+
         /// <summary>Shows the next eye's view, of a stereo video: both, then the left, then the right - see <see cref="EyeView"/>.</summary>
         public void NextEyeView()
         {
@@ -1028,6 +1116,9 @@ namespace SharpMediaFoundationInterop.WPF
                 case Key.R when !IsStill && SeekableSource != null:
                     ToggleRepeat();
                     break;
+                case Key.H when HasSoundField:
+                    ToggleBinaural();
+                    break;
                 case Key.E when IsStereo:
                     NextEyeView();
                     break;
@@ -1046,6 +1137,27 @@ namespace SharpMediaFoundationInterop.WPF
         #region Showing and hiding the controls
 
         private readonly DispatcherTimer _hideTimer;
+
+        /// <summary>Of a source of sound alone - which draws no frame - the source, and what shows the position of its sound.</summary>
+        private volatile object _soundOnlySource;
+        private readonly DispatcherTimer _soundClock;
+
+        /// <summary>The position of sound alone: where the device is in it, as a video's is of the frame shown.</summary>
+        private void SoundClock_Tick(object sender, EventArgs e)
+        {
+            if (!ReferenceEquals(_soundOnlySource, _source))
+            {
+                _soundClock.Stop();
+                return;
+            }
+            long time = AudioClock();
+            if (time >= 0)
+            {
+                Interlocked.Exchange(ref _lastShownTime, time);
+                _shownRequest = Interlocked.Read(ref _request);
+            }
+            UpdatePosition();
+        }
 
         /// <summary>Whether the mouse moved over the video, or a key was pressed, less than <see cref="ControlsHideDelay"/> ago.</summary>
         private bool _recentActivity;
@@ -1280,6 +1392,8 @@ namespace SharpMediaFoundationInterop.WPF
             var view = GetView(_source?.VideoInfo);
             bool stereo = view.Layout != WPF.StereoLayout.Mono;
             bool spherical = view.Projection == VideoProjection.Equirectangular;
+            Volatile.Write(ref _listenerYaw, spherical ? view.Yaw : 0);
+            Volatile.Write(ref _listenerPitch, spherical ? view.Pitch : 0);
             ShowsSideBySide = view.IsBothSpherical ||
                 (view.Projection == VideoProjection.Flat && view.Layout == WPF.StereoLayout.SideBySide && view.Eye == EyeView.Both);
             if (IsStereo != stereo || IsSpherical != spherical)
@@ -1682,25 +1796,30 @@ namespace SharpMediaFoundationInterop.WPF
             // a picture to draw: of a file of sound alone, there is none - its size 0 - and no surface is made for it, whose
             // bitmap or texture of no size would be refused on every pass; the sound plays on its own thread all the same
             var videoInfo = videoSource.VideoInfo;
-            if (videoInfo != null && videoInfo.OriginalWidth > 0 && videoInfo.OriginalHeight > 0)
+            bool picture = videoInfo != null && videoInfo.OriginalWidth > 0 && videoInfo.OriginalHeight > 0;
+            await Dispatcher.InvokeAsync(() =>
             {
-                await Dispatcher.InvokeAsync(() =>
+                var image = this._image;
+                if (picture && (image == null || !CreateSurface(image, videoInfo)))
+                    return;
+                if (!picture)
                 {
-                    var image = this._image;
-                    if (image != null && CreateSurface(image, videoInfo))
-                    {
-                        if (IsHalted)
-                            this._stopwatch.Reset();
-                        else
-                            this._stopwatch.Restart();
+                    // of sound alone: not made again at every pass, and the position is the sound's
+                    _soundOnlySource = videoSource;
+                    _soundClock.Start();
+                }
 
-                        var seekable = SeekableSource;
-                        Duration = seekable != null && seekable.Duration > 0 ? TimeSpan.FromTicks(seekable.Duration) : TimeSpan.Zero;
-                        UpdateSubtitleTracks();
-                        UpdateControls();
-                    }
-                });
-            }
+                // of sound alone, the bar as of a video: its time, and seeking in it
+                if (IsHalted)
+                    this._stopwatch.Reset();
+                else
+                    this._stopwatch.Restart();
+
+                var seekable = SeekableSource;
+                Duration = seekable != null && seekable.Duration > 0 ? TimeSpan.FromTicks(seekable.Duration) : TimeSpan.Zero;
+                UpdateSubtitleTracks();
+                UpdateControls();
+            });
         }
 
         private Task UninitializeVideo(IVideoSource videoSource)
@@ -1830,6 +1949,8 @@ namespace SharpMediaFoundationInterop.WPF
             var seekable = SeekableSource;
             if (!HasSurface)
             {
+                if (ReferenceEquals(_soundOnlySource, videoSource))
+                    return false; // sound alone: nothing to draw
                 InitializeVideo(videoSource).GetAwaiter().GetResult();
                 if (!HasSurface)
                     return false;
@@ -1883,11 +2004,16 @@ namespace SharpMediaFoundationInterop.WPF
                     return false;
             }
 
+            // of headphones or speakers anew: what is queued is let go of, and the sound goes on from what comes next
+            if (Interlocked.Exchange(ref _audioOutputChanged, 0) != 0)
+                CreateAudioOutput(audioSource.AudioInfo);
+
             if (_audioReset)
             {
                 _audioReset = false;
                 lock (_waveSync)
                 {
+                    _ambisonics?.Reset();
                     if (_waveOut != null)
                     {
                         _waveOut.Reset();
@@ -1903,7 +2029,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             // A source of no video has no frame for the sound to wait for; a live one keeps sending while it would wait, and
             // what it sent would be played that late - the video follows the sound's clock instead, where it has one.
-            if (_audioHold && ((_source as IVideoSource)?.VideoInfo == null || SeekableSource == null))
+            if (_audioHold && ((_source as IVideoSource)?.VideoInfo == null || SeekableSource == null || ReferenceEquals(_soundOnlySource, _source)))
                 _audioHold = false;
 
             // as much sound as the queue is short of, or, live and paused, whatever comes, to let go of
@@ -1920,6 +2046,12 @@ namespace SharpMediaFoundationInterop.WPF
                     break; // none ready yet
                 worked = true;
             }
+
+            // Of sound alone, its end is the end, as a video's last frame is: once all of it has played.
+            if (ReferenceEquals(_soundOnlySource, _source) && SeekableSource is { } seekable && _source is MediaSourceBase source &&
+                source.IsAudioEnded && _waveOut != null && _waveOut.QueuedFrames == 0 &&
+                Interlocked.Read(ref _endedRequest) != seekable.Request && seekable.Request == Interlocked.Read(ref _request))
+                OnEnded(seekable.Request);
             return worked;
         }
 
@@ -1928,25 +2060,57 @@ namespace SharpMediaFoundationInterop.WPF
         private Task InitializeAudio(IAudioSource audioSource)
         {
             InitializeSource(audioSource);
+            CreateAudioOutput(audioSource.AudioInfo);
+            return Task.CompletedTask;
+        }
 
-            var audioInfo = audioSource.AudioInfo;
+        /// <summary>
+        /// The device the sound plays on, of the format of the sound: of a sound field, of the speakers there are - no more
+        /// than 7.1's - or of headphones' two ears, as <see cref="Binaural"/> says. Where there is one, it is let go of first.
+        /// </summary>
+        private void CreateAudioOutput(AudioInfo audioInfo)
+        {
             if (audioInfo != null)
             {
+                int binaural = Volatile.Read(ref _binaural);
+                var ambisonics = !audioInfo.IsAmbisonic ? null
+                    : (binaural < 0 ? MediaDevices.AreHeadphones() : binaural > 0)
+                    ? AmbisonicRenderer.Binaural(audioInfo.ChannelCount, audioInfo.SampleRate, audioInfo.BitsPerSample)
+                    : new AmbisonicRenderer(audioInfo.ChannelCount, Math.Min(MediaDevices.GetSpeakerChannels(), 8), audioInfo.BitsPerSample);
+                // Mono is played on the front left and right alike, as players do, not on the centre alone, which is all
+                // its speaker mask says: of 5.1, headphones in the sound card's jack - of the front pair - would hear nothing.
+                bool monoToStereo = ambisonics == null && audioInfo.ChannelCount == 1;
+                uint channels = ambisonics?.Channels ?? (monoToStereo ? 2 : audioInfo.ChannelCount);
+                ShowSoundField(ambisonics);
+
                 lock (_waveSync)
                 {
-                    this._waveOut = MediaDevices.CreateAudioOutput(audioInfo.SampleRate, audioInfo.ChannelCount, audioInfo.BitsPerSample);
+                    this._waveOut?.Dispose();
+                    this._ambisonics = ambisonics;
+                    this._monoToStereo = monoToStereo;
+                    this._waveOut = MediaDevices.CreateAudioOutput(audioInfo.SampleRate, channels, audioInfo.BitsPerSample);
                     this._waveOut.Initialize();
                     this._audioClockStart = -1;
                     this._audioBytesQueued = 0;
-                    this._audioBytesPerSecond = (long)audioInfo.SampleRate * audioInfo.ChannelCount * audioInfo.BitsPerSample / 8;
+                    this._audioBytesPerSecond = (long)audioInfo.SampleRate * channels * audioInfo.BitsPerSample / 8;
                     // a buffer played is room for the next
                     this._waveOut.OnPlaybackCompleted += (s, e) => _audioWake.Set();
                     if (IsHalted)
                         this._waveOut.Pause();
                }
             }
+        }
 
-            return Task.CompletedTask;
+        /// <summary>Of the sound's thread, whether there is a sound field, and what it is heard on, for the overlay.</summary>
+        private void ShowSoundField(AmbisonicRenderer ambisonics)
+        {
+            bool field = ambisonics != null, binaural = ambisonics?.IsBinaural == true;
+            Dispatcher.BeginInvoke(() =>
+            {
+                HasSoundField = field;
+                IsBinaural = binaural;
+                CommandManager.InvalidateRequerySuggested();
+            });
         }
 
         private Task UninitializeAudio(IAudioSource audioSource)
@@ -1955,7 +2119,9 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 this._waveOut.Dispose();
                 this._waveOut = null;
+                this._ambisonics = null;
                 this._audioClockStart = -1;
+                ShowSoundField(null);
             }
 
             return Task.CompletedTask;
@@ -2000,6 +2166,35 @@ namespace SharpMediaFoundationInterop.WPF
                             Array.Fill<byte>(sample, 0);
                         }
 
+                        byte[] played = sample;
+                        int playedLength = sample.Length;
+                        var ambisonics = _ambisonics;
+                        if (ambisonics != null)
+                        {
+                            // the sound field as the listener looks now: the device copies it, so the one buffer does
+                            int length = ambisonics.OutputLength(sample.Length);
+                            if (_speakerBuffer == null || _speakerBuffer.Length < length)
+                                _speakerBuffer = new byte[length];
+                            ambisonics.Turn(Volatile.Read(ref _listenerYaw), Volatile.Read(ref _listenerPitch));
+                            playedLength = ambisonics.Render(sample, _speakerBuffer);
+                            played = _speakerBuffer;
+                        }
+                        else if (_monoToStereo)
+                        {
+                            // each sample twice: the left's and the right's
+                            int bytes = (int)(audioInfo?.BitsPerSample ?? 16) / 8;
+                            int length = sample.Length * 2;
+                            if (_speakerBuffer == null || _speakerBuffer.Length < length)
+                                _speakerBuffer = new byte[length];
+                            for (int i = 0, j = 0; i + bytes <= sample.Length; i += bytes, j += 2 * bytes)
+                            {
+                                Buffer.BlockCopy(sample, i, _speakerBuffer, j, bytes);
+                                Buffer.BlockCopy(sample, i, _speakerBuffer, j + bytes, bytes);
+                            }
+                            playedLength = length;
+                            played = _speakerBuffer;
+                        }
+
                         lock (_waveSync)
                         {
                             if (_waveOut != null)
@@ -2007,8 +2202,8 @@ namespace SharpMediaFoundationInterop.WPF
                                 // the first frame of a time since the device was reset, after what was queued before it
                                 if (_audioClockStart < 0 && timestamp >= 0 && _audioBytesPerSecond > 0)
                                     _audioClockStart = timestamp - _audioBytesQueued * TimeSpan.TicksPerSecond / _audioBytesPerSecond;
-                                _waveOut.Enqueue(sample, (uint)sample.Length);
-                                _audioBytesQueued += sample.Length;
+                                _waveOut.Enqueue(played, (uint)playedLength);
+                                _audioBytesQueued += playedLength;
                             }
                         }
                         Interlocked.Increment(ref _audioFrames);

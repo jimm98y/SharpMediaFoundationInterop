@@ -78,3 +78,11 @@ ID3D11RenderTargetView
 D3D11_SAMPLER_DESC
 D3D11_BUFFER_DESC
 D3D11_VIEWPORT
+IMMDeviceEnumerator
+MMDeviceEnumerator
+IAudioClient
+CoTaskMemFree
+IPropertyStore
+PKEY_AudioEndpoint_FormFactor
+PropVariantToUInt32
+EndpointFormFactor

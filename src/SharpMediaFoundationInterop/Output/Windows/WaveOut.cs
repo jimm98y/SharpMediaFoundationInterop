@@ -7,6 +7,8 @@ using System.Threading;
 using Windows.Win32;
 using Windows.Win32.Media;
 using Windows.Win32.Media.Audio;
+using Windows.Win32.System.Com;
+using Windows.Win32.UI.Shell.PropertiesSystem;
 
 namespace SharpMediaFoundationInterop.Output
 {   
@@ -143,23 +145,54 @@ namespace SharpMediaFoundationInterop.Output
             public Guid SubFormat;
         }
 
+        /// <summary>The speakers of so many channels in WAVE's order, as dwChannelMask has them: <see cref="SpeakerLayout.ChannelMask"/>.</summary>
+        public static uint ChannelMask(uint channels) => SpeakerLayout.ChannelMask(channels);
+
         /// <summary>
-        /// The speakers of so many channels in WAVE's order, as dwChannelMask has them: mono the front centre; stereo the
-        /// front left and right; 3.0, quad, 5.0, 5.1 and 6.1 of the back speakers, as Windows' 5.1 is; 7.1 with the side
-        /// ones too. More than 8, the first so many of the mask's bits.
+        /// The channels the system's default sound output mixes for - its speakers, as Windows' speaker configuration says -
+        /// of WASAPI's mix format: what <see cref="WAVE_MAPPER"/> plays on. 2 where it cannot be told.
         /// </summary>
-        public static uint ChannelMask(uint channels) => channels switch
+        public static unsafe uint DefaultChannels()
         {
-            1 => 0x4,          // FC
-            2 => 0x3,          // FL FR
-            3 => 0x7,          // FL FR FC
-            4 => 0x33,         // FL FR BL BR
-            5 => 0x37,         // FL FR FC BL BR
-            6 => 0x3F,         // FL FR FC LFE BL BR
-            7 => 0x13F,        // FL FR FC LFE BL BR BC
-            8 => 0x63F,        // FL FR FC LFE BL BR SL SR
-            _ => channels >= 32 ? uint.MaxValue : (1u << (int)channels) - 1,
-        };
+            try
+            {
+                var enumerator = (IMMDeviceEnumerator)Activator.CreateInstance(Type.GetTypeFromCLSID(typeof(MMDeviceEnumerator).GUID, true));
+                enumerator.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eConsole, out IMMDevice device);
+                device.Activate(typeof(IAudioClient).GUID, CLSCTX.CLSCTX_ALL, null, out object activated);
+                var client = (IAudioClient)activated;
+                client.GetMixFormat(out WAVEFORMATEX* format);
+                uint channels = format->nChannels;
+                PInvoke.CoTaskMemFree(format);
+                return channels > 0 ? channels : 2;
+            }
+            catch (Exception ex)
+            {
+                if (Log.ErrorEnabled) Log.Error($"The speakers of the default sound output are not known: {ex.Message}", ex);
+                return 2;
+            }
+        }
+
+        /// <summary>
+        /// Whether the system's default sound output is headphones - or a headset - as its form factor says: what a sound
+        /// field is heard binaurally on. False where it cannot be told.
+        /// </summary>
+        public static unsafe bool DefaultIsHeadphones()
+        {
+            try
+            {
+                var enumerator = (IMMDeviceEnumerator)Activator.CreateInstance(Type.GetTypeFromCLSID(typeof(MMDeviceEnumerator).GUID, true));
+                enumerator.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eConsole, out IMMDevice device);
+                device.OpenPropertyStore(STGM.STGM_READ, out IPropertyStore store);
+                store.GetValue(PInvoke.PKEY_AudioEndpoint_FormFactor, out var value);
+                PInvoke.PropVariantToUInt32(value, out uint formFactor);
+                return formFactor == (uint)EndpointFormFactor.Headphones || formFactor == (uint)EndpointFormFactor.Headset;
+            }
+            catch (Exception ex)
+            {
+                if (Log.ErrorEnabled) Log.Error($"Whether the default sound output is headphones is not known: {ex.Message}", ex);
+                return false;
+            }
+        }
 
         private unsafe void DoneCallback(HWAVEOUT* dev, uint uMsg, uint* dwUser, uint dwParam1, uint dwParam2)
         {

@@ -111,6 +111,9 @@ namespace SharpMediaFoundationInterop.Codecs
             // uncompressed PCM is converted here, of every platform: no decoder of its own is needed
             if (codec == AudioCodec.Pcm)
                 return new PcmDecoder(options);
+            // Opus of more than two channels, or streams, is split here into its streams, each a platform decoder's
+            if (codec == AudioCodec.Opus && OpusMultistreamDecoder.IsMultistream(options))
+                return new OpusMultistreamDecoder(options);
             if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
                 return new MediaFoundationAudioDecoder(codec, options);
             if (IsApple)

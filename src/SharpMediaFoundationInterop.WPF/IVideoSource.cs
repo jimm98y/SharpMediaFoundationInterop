@@ -133,7 +133,7 @@ namespace SharpMediaFoundationInterop.WPF
         public string AudioCodec { get; set; }
         public uint ChannelCount { get; set; }
         public uint SampleRate { get; set; }
-        /// <summary>The codec's configuration: of AAC the AudioSpecificConfig, of FLAC its metadata blocks, of ALAC its ALACSpecificConfig.</summary>
+        /// <summary>The codec's configuration: of AAC the AudioSpecificConfig, of FLAC its metadata blocks, of ALAC its ALACSpecificConfig, of Opus its 'dOps' payload.</summary>
         public byte[] UserData { get; set; }
 
         /// <summary>The bits of the PCM played: of a stream of 24 bits, or of Opus, 32 - the decoded sound widened.</summary>
@@ -148,6 +148,13 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>Of "PCM", the samples' format, as the container says it.</summary>
         public PcmFormat PcmFormat { get; set; }
+
+        /// <summary>
+        /// Whether the channels are a sound field - ambisonics, of ACN order and SN3D, with or without two of head-locked
+        /// stereo after it - as Opus' channel mapping family 2 and Google's 'SA3D' say: played on the speakers there are,
+        /// turned as a spherical video's view is.
+        /// </summary>
+        public bool IsAmbisonic { get; set; }
     }
 
     public interface IVideoSource : IDisposable

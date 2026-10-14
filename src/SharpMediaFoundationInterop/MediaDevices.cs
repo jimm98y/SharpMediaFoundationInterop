@@ -158,6 +158,18 @@ namespace SharpMediaFoundationInterop
             return result;
         }
 
+        /// <summary>
+        /// The channels of the system's default sound output's speakers, as <see cref="SpeakerLayout.ChannelMask"/> orders
+        /// them: on Windows of its mix format, as its speaker configuration says; elsewhere 2.
+        /// </summary>
+        public static uint GetSpeakerChannels() => IsSupported ? WaveOut.DefaultChannels() : 2;
+
+        /// <summary>
+        /// Whether the system's default sound output is headphones: on Windows of its form factor, headphones or a headset;
+        /// elsewhere not known, false.
+        /// </summary>
+        public static bool AreHeadphones() => IsSupported && WaveOut.DefaultIsHeadphones();
+
         /// <summary>Plays PCM of the format given, on the device given: the system's default where it is null.</summary>
         public static IAudioOutput CreateAudioOutput(uint sampleRate, uint channels, uint bitsPerSample, MediaDevice device = null)
         {

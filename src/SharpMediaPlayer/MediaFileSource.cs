@@ -362,6 +362,8 @@ namespace SharpMediaFoundationInterop.WPF
                 i = i >= 0 ? i : ~i - 1;          // the last at or before it
             if (i < 0 || i >= _syncTimes.Length)
                 return -1;
+            if (_videoTrack == null)
+                return _syncTimes[i]; // of sound alone: the sound is sought on its own, by SeekAudio
 
             // the parameter sets go in again, with the key frame
             _initial = true;
@@ -405,7 +407,10 @@ namespace SharpMediaFoundationInterop.WPF
 
             var video = _videoTrack == null ? null : _reader.GetSampleTimings(_videoTrack.TrackID);
             if (video == null || video.Length == 0)
+            {
+                ReadSoundTimes();
                 return;
+            }
 
             var syncs = new List<(long Time, uint Sample)>();
             var frames = new long[video.Length];
@@ -431,6 +436,45 @@ namespace SharpMediaFoundationInterop.WPF
             var audio = _audioTrack == null || _audioTrack is PcmTrack ? null : _reader.GetSampleTimings(_audioTrack.TrackID);
             if (audio != null)
                 _audioTimes = audio.Select(a => MediaUtils.ToTicks(a.PTS, _audioTrack.Timescale)).ToArray();
+        }
+
+        /// <summary>
+        /// Of a file of sound alone, the sound's times, which seeking finds its way by, as it does by a video's key frames:
+        /// each frame's - every one a frame to start at - or of PCM, of a frame a sample, a tenth of a second's, of the
+        /// track's duration.
+        /// </summary>
+        private void ReadSoundTimes()
+        {
+            if (_audioTrack == null)
+                return;
+
+            long start, end;
+            if (_audioTrack is PcmTrack)
+            {
+                var media = _reader.Tracks[_audioTrack.TrackID].Stbl?.GetParent()?.GetParent() as Box;
+                var header = media?.Children?.OfType<MediaHeaderBox>().FirstOrDefault();
+                if (header == null || header.Timescale == 0 || header.Duration == 0)
+                    return;
+                start = 0;
+                end = MediaUtils.ToTicks((long)header.Duration, header.Timescale);
+                long step = TimeSpan.TicksPerSecond / 10;
+                _audioTimes = null;
+                _syncTimes = new long[(end + step - 1) / step];
+                for (int i = 0; i < _syncTimes.Length; i++)
+                    _syncTimes[i] = i * step;
+            }
+            else
+            {
+                var audio = _reader.GetSampleTimings(_audioTrack.TrackID);
+                if (audio == null || audio.Length == 0)
+                    return;
+                _audioTimes = audio.Select(a => MediaUtils.ToTicks(a.PTS, _audioTrack.Timescale)).ToArray();
+                _syncTimes = _audioTimes;
+                start = _audioTimes.Min();
+                end = audio.Max(a => MediaUtils.ToTicks(a.PTS + a.Duration, _audioTrack.Timescale));
+            }
+            _startTime = start;
+            _duration = end - start;
         }
 
         #endregion
@@ -592,6 +636,10 @@ namespace SharpMediaFoundationInterop.WPF
                         audioInfo.ChannelConfiguration = opusTrack.ChannelCount;
                         audioInfo.SampleRate = opusTrack.SamplingRate;
                         audioInfo.SkipSamples = opusTrack.PreSkip;
+                        audioInfo.UserData = OpusConfig(opusTrack);
+                        // of channel mapping family 2, a sound field (RFC 8486)
+                        audioInfo.IsAmbisonic = opusTrack.ChannelMappingFamily == 2 &&
+                            SharpMediaFoundationInterop.Output.AmbisonicRenderer.IsAmbisonic(opusTrack.ChannelCount, out _, out _);
                     }
                     else if (_audioTrack is Mp3Track mp3Track)
                     {
@@ -636,6 +684,9 @@ namespace SharpMediaFoundationInterop.WPF
                         // no audio: AC-3 and E-AC-3 too, whose decoders Windows no longer has
                         audioInfo = null;
                     }
+
+                    if (audioInfo != null && !audioInfo.IsAmbisonic)
+                        audioInfo.IsAmbisonic = HasSoundField(_audioTrack.TrackID, audioInfo.ChannelCount);
                 }
             }
             else
@@ -644,6 +695,47 @@ namespace SharpMediaFoundationInterop.WPF
             }
 
             return Task.FromResult((videoInfo, audioInfo));
+        }
+
+        /// <summary>
+        /// The 'dOps' box's payload (Opus in ISOBMFF 4.3.2), as <see cref="AudioDecoderOptions.Config"/> has it of Opus: of
+        /// its channel mapping, which a decoder of more than two channels needs.
+        /// </summary>
+        private static byte[] OpusConfig(OpusTrack track)
+        {
+            var mapping = track.ChannelMappingFamily != 0 ? track.ChannelMapping ?? Array.Empty<byte>() : Array.Empty<byte>();
+            var config = new byte[11 + (track.ChannelMappingFamily != 0 ? 2 + mapping.Length : 0)];
+            config[0] = 0;
+            config[1] = track.ChannelCount;
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(config.AsSpan(2), track.PreSkip);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(config.AsSpan(4), track.InputSampleRate);
+            System.Buffers.Binary.BinaryPrimitives.WriteInt16BigEndian(config.AsSpan(8), track.OutputGain);
+            config[10] = track.ChannelMappingFamily;
+            if (track.ChannelMappingFamily != 0)
+            {
+                config[11] = track.StreamCount;
+                config[12] = track.CoupledCount;
+                mapping.CopyTo(config, 13);
+            }
+            return config;
+        }
+
+        /// <summary>
+        /// Whether the track's sample entry says its channels are a sound field, of Google's 'SA3D' (Spatial Audio RFC):
+        /// periphonic, of ACN order and SN3D, each channel where it is - with or without head-locked stereo after it.
+        /// </summary>
+        private bool HasSoundField(uint trackID, uint channels)
+        {
+            var box = _reader.Tracks[trackID].Stbl
+                .Children.OfType<SampleDescriptionBox>().SingleOrDefault()?
+                .Children.FirstOrDefault()?
+                .Children?.OfType<SpatialAudioBox>().FirstOrDefault();
+            if (box == null || box.AmbisonicType != 0 || box.AmbisonicChannelOrdering != 0 || box.AmbisonicNormalization != 0 || box.NumChannels != channels)
+                return false;
+            for (int i = 0; i < (box.ChannelMap?.Length ?? 0); i++)
+                if (box.ChannelMap[i] != i)
+                    return false;
+            return SharpMediaFoundationInterop.Output.AmbisonicRenderer.IsAmbisonic(channels, out int order, out _) && order == box.AmbisonicOrder;
         }
 
         /// <summary>

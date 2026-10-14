@@ -16,7 +16,7 @@ namespace SharpMediaFoundationInterop
         public IVideoSource HeicSource { get { return new ImageFileSource("test.heic"); } } // heic
         public IVideoSource RtspSource { get { return new RtspSource("rtsp://127.0.0.1:8554", "admin", "password"); } }
 
-        private const string VideoFilter = "Videos and images|*.mp4;*.mov;*.m4v;*.3gp;*.heic;*.heif;*.hif;*.avif|Videos|*.mp4;*.mov;*.m4v;*.3gp|Images|*.heic;*.heif;*.hif;*.avif|All files|*.*";
+        private const string VideoFilter = "Videos, sound and images|*.mp4;*.mov;*.m4v;*.m4a;*.3gp;*.heic;*.heif;*.hif;*.avif|Videos and sound|*.mp4;*.mov;*.m4v;*.m4a;*.3gp|Images|*.heic;*.heif;*.hif;*.avif|All files|*.*";
 
         // what the File tab plays: one video, or a stereo pair's two
         private string[] _files;

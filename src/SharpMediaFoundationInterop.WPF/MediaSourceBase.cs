@@ -122,6 +122,9 @@ namespace SharpMediaFoundationInterop.WPF
                 }
             }
 
+            // of sound alone there is no video's thread to do a seek: the sound's does it
+            if (IsSoundOnly)
+                ApplyPendingSeek();
             ApplyPendingAudioSeek();
 
             // no sound in trick play: faster or backwards, it is noise; at 1x again, the seek to where the video is brings
@@ -183,6 +186,15 @@ namespace SharpMediaFoundationInterop.WPF
 
         /// <summary>Whether the sound has no decoder here: none is made again, and there is none to play.</summary>
         private bool _audioUnavailable;
+
+        /// <summary>Whether it is sound alone: of no picture, a file of audio.</summary>
+        public bool IsSoundOnly => VideoInfo is not { OriginalWidth: > 0, OriginalHeight: > 0 } && AudioInfo != null;
+
+        /// <summary>
+        /// Whether all the sound has been handed out, of a source that can seek - which then hands out none, until a seek
+        /// brings it back. On the thread that reads the sound.
+        /// </summary>
+        public bool IsAudioEnded => _audioEnded;
 
         /// <summary>Whether the audio has come to its end, with the video still going on: see <see cref="Seek"/>.</summary>
         private bool _audioEnded;
@@ -660,7 +672,7 @@ namespace SharpMediaFoundationInterop.WPF
             while (_videoRenderQueue.TryDequeue(out var queued))
                 ReleaseFrame(queued.Frame);
             ClearReverseWindow();
-            _videoDecoder.Flush();
+            _videoDecoder?.Flush();
             _videoDrained = false;
 
             // the sound's part of it is done by the thread that reads the sound, before the next frame of it

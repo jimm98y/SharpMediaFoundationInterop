@@ -209,6 +209,9 @@
                                 <Button x:Name="RepeatButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                         Command="{x:Static local:MediaControlBase.ToggleRepeatCommand}" Content="&#xE8EE;"
                                         ToolTip="Repeat the video (R)" />
+                                <Button x:Name="HeadphonesButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
+                                        Command="{x:Static local:MediaControlBase.ToggleBinauralCommand}" Content="&#xE7F6;"
+                                        ToolTip="Hear the sound field on headphones, or on speakers (H)" Visibility="Collapsed" />
                                 <Button x:Name="SubtitleButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                         Width="40" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
                                         Command="{x:Static local:MediaControlBase.NextSubtitleTrackCommand}" Content="CC"
@@ -267,6 +270,13 @@
                         <Trigger Property="ShowsSideBySide" Value="True">
                             <Setter TargetName="SubtitleLayer" Property="Columns" Value="2" />
                             <Setter TargetName="SecondSubtitle" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <!-- a sound field: heard on headphones, or played on speakers - the button dimmed -->
+                        <Trigger Property="HasSoundField" Value="True">
+                            <Setter TargetName="HeadphonesButton" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsBinaural" Value="False">
+                            <Setter TargetName="HeadphonesButton" Property="Opacity" Value="0.5" />
                         </Trigger>
                         <Trigger Property="HasSubtitles" Value="True">
                             <Setter TargetName="SubtitleButton" Property="Visibility" Value="Visible" />

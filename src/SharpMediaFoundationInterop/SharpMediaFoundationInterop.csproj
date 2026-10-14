@@ -13,4 +13,10 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Google VR's HRIRs of ambisonics, of SADIE's measurements, for AmbisonicRenderer's binaural sound: see NOTICE.txt -->
+    <EmbeddedResource Include="Output/Resources/sh_hrir_order_*.wav" LogicalName="SharpMediaFoundationInterop.%(Filename)%(Extension)" />
+    <None Include="Output/Resources/NOTICE.txt" Pack="true" PackagePath="" />
+  </ItemGroup>
+
 </Project>
