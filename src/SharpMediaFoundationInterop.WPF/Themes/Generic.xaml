@@ -181,16 +181,11 @@
                                 </UniformGrid>
                             </Grid>
                         </Viewbox>
+                        <!-- a flat dark band, half see-through: the white buttons, seek bar and time readable over any picture, a white one too -->
                         <Border x:Name="PART_ControlsBar"
                                 VerticalAlignment="Bottom"
-                                Padding="6,14,6,4">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                    <GradientStop Offset="0" Color="#00000000" />
-                                    <GradientStop Offset="0.45" Color="#90000000" />
-                                    <GradientStop Offset="1" Color="#C0000000" />
-                                </LinearGradientBrush>
-                            </Border.Background>
+                                Padding="6,4"
+                                Background="#A6000000">
                             <DockPanel LastChildFill="True">
                                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
                                     <Button x:Name="StepBackwardButton" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
@@ -206,6 +201,10 @@
                                             Command="{x:Static local:MediaControlBase.StepForwardCommand}" Content="&#xE893;"
                                             ToolTip="Forward a second, or a frame (Right)" />
                                 </StackPanel>
+                                <!-- the last of the bar, at its right: the whole of the screen, or back -->
+                                <Button x:Name="FullScreenButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
+                                        Command="{x:Static local:MediaControlBase.ToggleFullScreenCommand}" Content="&#xE740;"
+                                        ToolTip="Full screen (F, or a double click)" />
                                 <Button x:Name="RepeatButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                         Command="{x:Static local:MediaControlBase.ToggleRepeatCommand}" Content="&#xE8EE;"
                                         ToolTip="Repeat the video (R)" />
@@ -236,6 +235,10 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsPlaying" Value="True">
                             <Setter TargetName="PlayPauseButton" Property="Content" Value="&#xE769;" />
+                        </Trigger>
+                        <Trigger Property="IsFullScreen" Value="True">
+                            <Setter TargetName="FullScreenButton" Property="Content" Value="&#xE73F;" />
+                            <Setter TargetName="FullScreenButton" Property="ToolTip" Value="Back to the window (Esc, F, or a double click)" />
                         </Trigger>
                         <!-- a live source: pausing is all there is to do -->
                         <Trigger Property="CanSeek" Value="False">
