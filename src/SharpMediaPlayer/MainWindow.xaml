@@ -36,6 +36,9 @@
             <!--<TabItem Header="RTSP">
                 <ctrl:MediaControl Source="{Binding RtspSource}" Looping="True" />
             </TabItem>-->
+            <TabItem Header="WebRTC">
+                <ctrl:MediaControl Source="{Binding WebRtcSource}" Looping="True" />
+            </TabItem>
         </TabControl>        
     </Grid>
 

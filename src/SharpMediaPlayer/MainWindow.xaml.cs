@@ -15,6 +15,8 @@ namespace SharpMediaFoundationInterop
         public IVideoSource MP4Source { get { return new MediaFileSource("frag_bunny.mp4"); } } // H264
         public IVideoSource HeicSource { get { return new ImageFileSource("test.heic"); } } // heic
         public IVideoSource RtspSource { get { return new RtspSource("rtsp://127.0.0.1:8554", "admin", "password"); } }
+        // a camera of an RTSPtoWebRTC gateway (https://github.com/jimm98y/SharpRTSPtoWebRTC) of its sample's settings
+        public IVideoSource WebRtcSource { get { return new WebRtcSource("http://localhost:5218/api/webrtc", "Strbske Pleso"); } }
 
         private const string VideoFilter = "Videos, sound and images|*.mp4;*.mov;*.m4v;*.m4a;*.3gp;*.heic;*.heif;*.hif;*.avif|Videos and sound|*.mp4;*.mov;*.m4v;*.m4a;*.3gp|Images|*.heic;*.heif;*.hif;*.avif|All files|*.*";
 

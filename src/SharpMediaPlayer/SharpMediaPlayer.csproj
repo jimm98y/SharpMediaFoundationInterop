@@ -82,6 +82,7 @@
 	<ItemGroup>
 	  <ProjectReference Include="..\..\..\SharpMP4\src\SharpMP4\SharpMP4.csproj" />
 	  <ProjectReference Include="..\..\..\SharpRealTimeStreaming\src\SharpRTSPClient\SharpRTSPClient.csproj" />
+	  <ProjectReference Include="..\..\..\SharpWebRTC\src\SharpWebRTC\SharpWebRTC.csproj" />
 	</ItemGroup>
 
 </Project>
