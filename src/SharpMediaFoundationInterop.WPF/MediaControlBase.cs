@@ -60,7 +60,7 @@ namespace SharpMediaFoundationInterop.WPF
     [TemplatePart(Name = "PART_ControlsBar", Type = typeof(FrameworkElement))]
     [TemplateVisualState(GroupName = ControlsStates, Name = ControlsVisibleState)]
     [TemplateVisualState(GroupName = ControlsStates, Name = ControlsHiddenState)]
-    public abstract class MediaControlBase : Control, IDisposable
+    public abstract partial class MediaControlBase : Control, IDisposable
     {
         private object _waveSync = new object();
         private IAudioOutput _waveOut;
@@ -688,6 +688,7 @@ namespace SharpMediaFoundationInterop.WPF
             CommandBindings.Add(new CommandBinding(NextEyeViewCommand, (s, e) => NextEyeView(), (s, e) => e.CanExecute = IsStereo));
             CommandBindings.Add(new CommandBinding(ResetViewCommand, (s, e) => ResetView(), (s, e) => e.CanExecute = IsSpherical));
             CommandBindings.Add(new CommandBinding(NextSubtitleTrackCommand, (s, e) => NextSubtitleTrack(), (s, e) => e.CanExecute = HasSubtitles));
+            CommandBindings.Add(new CommandBinding(ToggleFullScreenCommand, (s, e) => ToggleFullScreen()));
         }
 
         private void CanSeekCommand(object sender, CanExecuteRoutedEventArgs e)
@@ -724,15 +725,24 @@ namespace SharpMediaFoundationInterop.WPF
             ApplyRunning();
             StartThreads();
 
+            // the window it is in, closing, ends it: once of each window - it is loaded again of each tab shown - and of the
+            //  one it is in as that closes alone, as it moves to a window over the screen and back
             var window = Window.GetWindow(this);
-            if (window != null)
-            {
-                window.Closing += (s1, e1) =>
-                {
-                    CompositionTarget.Rendering -= CompositionTarget_Rendering;
-                    StopThreads();
-                };
-            }
+            if (window != null && _closingWindows.Add(window))
+                window.Closing += Window_Closing;
+        }
+
+        private readonly HashSet<Window> _closingWindows = new HashSet<Window>();
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            var window = (Window)sender;
+            window.Closing -= Window_Closing;
+            _closingWindows.Remove(window);
+            if (e.Cancel || Window.GetWindow(this) != window)
+                return;
+            CompositionTarget.Rendering -= CompositionTarget_Rendering;
+            StopThreads();
         }
 
         public override void OnApplyTemplate()
@@ -1081,6 +1091,13 @@ namespace SharpMediaFoundationInterop.WPF
         protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
+            // over the screen, Escape goes back, overlay or none: there is nothing else to leave it of
+            if (!e.Handled && e.Key == Key.Escape && IsFullScreen)
+            {
+                IsFullScreen = false;
+                e.Handled = true;
+                return;
+            }
             // the keys are the overlay's: without it, the host's
             if (e.Handled || !IsOverlayEnabled)
                 return;
@@ -1124,6 +1141,10 @@ namespace SharpMediaFoundationInterop.WPF
                     break;
                 case Key.C when HasSubtitles:
                     NextSubtitleTrack();
+                    break;
+                case Key.F:
+                case Key.F11:
+                    ToggleFullScreen();
                     break;
                 default:
                     return;
@@ -1259,6 +1280,11 @@ namespace SharpMediaFoundationInterop.WPF
                 shown = _seekTime;
             if (seekable != null && shown >= 0)
                 Position = TimeSpan.FromTicks(Math.Max(0, shown - seekable.StartTime));
+            // at the end - its frames run out, played forwards - the end itself: the last frame's time is a frame short of
+            //  it, and the bar would stop short of its end, which a video of seconds shows
+            if (seekable != null && !IsSeekPending && _rate > 0 && Duration > TimeSpan.Zero
+                && Interlocked.Read(ref _endedRequest) == Interlocked.Read(ref _request))
+                Position = Duration;
 
             if (_seekSlider != null && !_dragging)
             {
@@ -1431,6 +1457,14 @@ namespace SharpMediaFoundationInterop.WPF
         protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
         {
             base.OnMouseLeftButtonDown(e);
+            // a double click of the video - not of the bar - to the whole of the screen and back, as a player's; of a
+            //  spherical video, which a double click looks straight ahead in, the F key
+            if (!e.Handled && !IsSpherical && e.ClickCount == 2 && IsOverlayEnabled && !(_controlsBar?.IsMouseOver ?? false))
+            {
+                ToggleFullScreen();
+                e.Handled = true;
+                return;
+            }
             if (e.Handled || !IsSpherical || (_controlsBar?.IsMouseOver ?? false))
                 return;
             if (e.ClickCount == 2)
@@ -2251,7 +2285,9 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 if (disposing)
                 {
-                    // TODO: dispose managed state (managed objects)
+                    // back where it was before it goes: the window over the screen closed with it
+                    if (IsFullScreen && Dispatcher.CheckAccess())
+                        IsFullScreen = false;
                 }
 
                 StopThreads();
