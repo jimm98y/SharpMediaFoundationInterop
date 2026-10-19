@@ -67,8 +67,6 @@ IMFDXGIBuffer
 MFCreateDXGIDeviceManager
 _MFT_OUTPUT_STREAM_INFO_FLAGS
 MF_SA_D3D11_AWARE
-D3DCompile
-ID3DBlob
 ID3D11VertexShader
 ID3D11PixelShader
 ID3D11SamplerState

@@ -19,6 +19,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- the renderer's shaders, compiled ahead of time by Shaders/build-shaders.ps1: no compiler is needed where it runs (not of a
+		     culture: "ps" of "YuvShader.ps.cso" would be taken for Pashto, and the file put in a satellite assembly) -->
+		<EmbeddedResource Include="Shaders\*.cso" LogicalName="SharpMediaFoundationInterop.WPF.Shaders.%(Filename)%(Extension)" WithCulture="false" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <ProjectReference Include="..\SharpMediaFoundationInterop\SharpMediaFoundationInterop.csproj" />
 	</ItemGroup>
 </Project>
