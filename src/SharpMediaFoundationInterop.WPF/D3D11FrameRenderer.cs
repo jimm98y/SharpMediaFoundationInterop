@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using System.Text;
 using SharpMediaFoundationInterop.Codecs;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -305,63 +304,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         // A triangle over the whole output, and a pixel of the view at each pixel of it: where it looks on the sphere, by the
         // yaw and the pitch, and where that is in the eye's equirectangular picture.
-        private const string SphereShader = @"
-cbuffer View : register(b0)
-{
-    float4 LeftEye;   // x, y, width, height of the left eye's picture, as fractions of the frame
-    float4 RightEye;
-    float4 Bounds;    // left, top, right, bottom of the whole sphere's picture cropped
-    float4 Angles;    // yaw, pitch, tan of half the field of view, 1 for both eyes' views side by side
-    float4 Output;    // the eye of a view of one, 1 the right; the output's width and height
-    float4 Texel;     // the size of a pixel of the frame, as fractions of it
-};
-Texture2D Frame : register(t0);
-SamplerState Linear : register(s0);
-
-struct Vertex { float4 Position : SV_Position; float2 Uv : TEXCOORD0; };
-
-Vertex VS(uint id : SV_VertexID)
-{
-    Vertex v;
-    v.Uv = float2((id << 1) & 2, id & 2);
-    v.Position = float4(v.Uv * float2(2, -2) + float2(-1, 1), 0, 1);
-    return v;
-}
-
-float4 PS(Vertex input) : SV_Target
-{
-    float2 uv = input.Uv;
-    float right = Output.x;
-    float width = Output.y;
-    if (Angles.w > 0.5)
-    {
-        right = uv.x >= 0.5 ? 1 : 0;
-        uv.x = frac(uv.x * 2);
-        width *= 0.5;
-    }
-    float x = (uv.x * 2 - 1) * Angles.z;
-    float y = (1 - uv.y * 2) * Angles.z * Output.z / width;
-
-    // looking up by the pitch, then turned right by the yaw
-    float cp = cos(Angles.y), sp = sin(Angles.y), cy = cos(Angles.x), sy = sin(Angles.x);
-    float y1 = y * cp + sp;
-    float z1 = -y * sp + cp;
-    float x2 = x * cy + z1 * sy;
-    float z2 = -x * sy + z1 * cy;
-    float longitude = atan2(x2, z2);
-    float latitude = atan2(y1, sqrt(x2 * x2 + z2 * z2));
-
-    // of the whole sphere's picture, then of the part the eye's picture is of
-    float u = (longitude / 6.28318530718 + 0.5 - Bounds.x) / (1 - Bounds.x - Bounds.z);
-    float v = (0.5 - latitude / 3.14159265359 - Bounds.y) / (1 - Bounds.y - Bounds.w);
-    if (u < 0 || u > 1 || v < 0 || v > 1)
-        return float4(0, 0, 0, 1);
-
-    // not across into the other eye's picture
-    float4 eye = right > 0.5 ? RightEye : LeftEye;
-    float2 p = clamp(eye.xy + float2(u, v) * eye.zw, eye.xy + Texel.xy * 0.5, eye.xy + eye.zw - Texel.xy * 0.5);
-    return float4(Frame.SampleLevel(Linear, p, 0).rgb, 1);
-}";
+        // the shader: Shaders/SphereShader.hlsl, compiled by Shaders/build-shaders.ps1 into the embedded SphereShader.vs.cso and .ps.cso
 
         [StructLayout(LayoutKind.Sequential)]
         private struct SphereConstants
@@ -374,7 +317,7 @@ float4 PS(Vertex input) : SV_Target
             public float TexelX, TexelY, Unused2, Unused3;
         }
 
-        // compiled once, for every renderer
+        // read once, for every renderer
         private static byte[] _vertexShaderCode;
         private static byte[] _pixelShaderCode;
         private static readonly object _compileLock = new object();
@@ -439,8 +382,8 @@ float4 PS(Vertex input) : SV_Target
         {
             lock (_compileLock)
             {
-                _vertexShaderCode ??= Compile(SphereShader, "SphereShader", "VS", "vs_4_0");
-                _pixelShaderCode ??= Compile(SphereShader, "SphereShader", "PS", "ps_4_0");
+                _vertexShaderCode ??= Bytecode("SphereShader.vs.cso");
+                _pixelShaderCode ??= Bytecode("SphereShader.ps.cso");
             }
 
             fixed (byte* code = _vertexShaderCode)
@@ -491,18 +434,16 @@ float4 PS(Vertex input) : SV_Target
             return wrapper;
         }
 
-        private static byte[] Compile(string shader, string name, string entryPoint, string target)
+        /// <summary>
+        /// A shader's bytecode, compiled ahead of time (Shaders/build-shaders.ps1) and embedded: no compiler is needed where
+        /// the renderer runs.
+        /// </summary>
+        private static byte[] Bytecode(string name)
         {
-            var source = Encoding.ASCII.GetBytes(shader);
-            var hr = PInvoke.D3DCompile(source, name, null, null, entryPoint, target, 0, 0, out ID3DBlob code, out ID3DBlob errors);
-            if (hr.Failed)
-            {
-                string message = errors == null ? hr.ToString() : Marshal.PtrToStringAnsi((nint)errors.GetBufferPointer(), (int)errors.GetBufferSize());
-                throw new InvalidOperationException($"The {name}'s {target} shader did not compile: {message}");
-            }
-            var bytes = new byte[(int)code.GetBufferSize()];
-            new ReadOnlySpan<byte>(code.GetBufferPointer(), bytes.Length).CopyTo(bytes);
-            Marshal.ReleaseComObject(code);
+            using var stream = typeof(D3D11FrameRenderer).Assembly.GetManifestResourceStream("SharpMediaFoundationInterop.WPF.Shaders." + name)
+                ?? throw new InvalidOperationException($"The shader {name} is not embedded.");
+            var bytes = new byte[stream.Length];
+            stream.ReadExactly(bytes);
             return bytes;
         }
 
@@ -579,84 +520,7 @@ float4 PS(Vertex input) : SV_Target
         // Of each pixel of the picture, its samples read of the frame's planes, as its format lays them out - each plane a
         // texture of the frame's bytes as they are - made into the three values of the stream's matrix and range, and those
         // shown through the table of the stream's color: see VideoColor.
-        private const string YuvShader = @"
-cbuffer Color : register(b0)
-{
-    float4 Coded;    // the layout: 0 4:2:0, 1 4:2:2 packed, 2 AYUV, 3 Y410 and Y416, 4 monochrome; the codes of a texture's 1, of the
-                     // luma and of the chroma; 1 to look the values up in the table
-    float4 Range;    // the luma's offset and scale, the chroma's
-    float4 OfY;      // the three values' parts of the luma, of Cb below 0 and above, of Cr below 0 and above
-    float4 CbBelow;
-    float4 CbAbove;
-    float4 CrBelow;
-    float4 CrAbove;
-    float4 Table;    // its steps each way
-    float4 Turn;     // the matrix the picture is shown of, undone: of a pixel shown, where it is in the picture, A x + B y and C x + D y
-    float4 TurnOffset;
-};
-Texture2D<float4> Plane0 : register(t0);
-Texture2D<float4> Plane1 : register(t1);
-Texture3D<float4> Lut : register(t2);
-SamplerState Linear : register(s0);
-
-struct Vertex { float4 Position : SV_Position; float2 Uv : TEXCOORD0; };
-
-Vertex VS(uint id : SV_VertexID)
-{
-    Vertex v;
-    v.Uv = float2((id << 1) & 2, id & 2);
-    v.Position = float4(v.Uv * float2(2, -2) + float2(-1, 1), 0, 1);
-    return v;
-}
-
-float4 PS(Vertex input) : SV_Target
-{
-    int2 shown = int2(input.Position.xy);
-    int2 p = int2((int)Turn.x * shown.x + (int)Turn.y * shown.y + (int)TurnOffset.x, (int)Turn.z * shown.x + (int)Turn.w * shown.y + (int)TurnOffset.y);
-    int layout = (int)Coded.x;
-    float3 c;    // Y, Cb and Cr, each of a texture's 0 to 1
-    bool monochrome = false;
-    if (layout == 0)
-    {
-        c.x = Plane0.Load(int3(p, 0)).r;
-        c.yz = Plane1.Load(int3(p / 2, 0)).rg;
-    }
-    else if (layout == 1)
-    {
-        // of each two pixels Y0, Cb, Y1 and Cr
-        float4 q = Plane0.Load(int3(p.x / 2, p.y, 0));
-        c = float3((p.x & 1) != 0 ? q.b : q.r, q.g, q.a);
-    }
-    else if (layout == 2)
-    {
-        // Cr, Cb, Y, alpha
-        float4 q = Plane0.Load(int3(p, 0));
-        c = float3(q.b, q.g, q.r);
-    }
-    else if (layout == 3)
-    {
-        // Cb, Y, Cr, alpha
-        float4 q = Plane0.Load(int3(p, 0));
-        c = float3(q.g, q.r, q.b);
-    }
-    else
-    {
-        c = float3(Plane0.Load(int3(p, 0)).r, 0, 0);
-        monochrome = true;
-    }
-
-    float y = (c.x * Coded.y - Range.x) * Range.y;
-    float cb = monochrome ? 0 : (c.y * Coded.z - Range.z) * Range.w;
-    float cr = monochrome ? 0 : (c.z * Coded.z - Range.z) * Range.w;
-    float3 t = OfY.xyz * y + (cb < 0 ? CbBelow.xyz : CbAbove.xyz) * cb + (cr < 0 ? CrBelow.xyz : CrAbove.xyz) * cr;
-    if (Coded.w > 0.5)
-    {
-        // between the steps, of the steps' centres
-        float n = Table.x;
-        return float4(Lut.SampleLevel(Linear, saturate(t) * ((n - 1) / n) + 0.5 / n, 0).rgb, 1);
-    }
-    return float4(saturate(t), 1);
-}";
+        // the shader: Shaders/YuvShader.hlsl, compiled by Shaders/build-shaders.ps1 into the embedded YuvShader.vs.cso and .ps.cso
 
         [StructLayout(LayoutKind.Sequential)]
         private struct YuvConstants
@@ -673,7 +537,7 @@ float4 PS(Vertex input) : SV_Target
             public float TurnOffsetX, TurnOffsetY, Unused8, Unused9;
         }
 
-        // compiled once, for every renderer
+        // read once, for every renderer
         private static byte[] _yuvVertexShaderCode;
         private static byte[] _yuvPixelShaderCode;
 
@@ -758,8 +622,8 @@ float4 PS(Vertex input) : SV_Target
 
             lock (_compileLock)
             {
-                _yuvVertexShaderCode ??= Compile(YuvShader, "YuvShader", "VS", "vs_4_0");
-                _yuvPixelShaderCode ??= Compile(YuvShader, "YuvShader", "PS", "ps_4_0");
+                _yuvVertexShaderCode ??= Bytecode("YuvShader.vs.cso");
+                _yuvPixelShaderCode ??= Bytecode("YuvShader.ps.cso");
             }
             fixed (byte* code = _yuvVertexShaderCode)
             {
