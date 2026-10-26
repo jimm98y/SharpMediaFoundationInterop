@@ -308,54 +308,8 @@ audioOutput.Enqueue(pcmSample, (uint)pcmSample.Length);
 ```
 More than two channels are played on the speakers they are for, in WAVE's order (`SpeakerLayout.ChannelMask`); Windows mixes them down to fewer speakers. `MediaDevices.GetSpeakerChannels()` is how many speakers the default output has, as Windows' speaker configuration says.
 
-`AmbisonicRenderer` plays a sound field - first-order ambisonics or higher, ACN and SN3D, with or without two channels of head-locked stereo after it - on so many speakers, turned as the listener looks (`Turn(yaw, pitch)`). The controls do this for a track that is a sound field (`AudioInfo.IsAmbisonic`: Opus of channel mapping family 2, or a track with Google's `SA3D` box), turning the sound as a 360° video's view is turned in `GpuMediaControl`. Of a higher order, its first order is played on speakers.
-
-`AmbisonicRenderer.Binaural(channels, sampleRate, bitsPerSample)` hears the sound field on headphones instead: turned as the listener looks, up to its third order, then convolved with Google VR's HRIRs of the SADIE measurements (Apache 2.0, as Omnitone carries them; see `Output/Resources/NOTICE.txt`) into the left and right ears. The controls do this where `Binaural` is true, or, where it is null - the default - where Windows says the default output is headphones or a headset (`MediaDevices.AreHeadphones()`); changed while playing, the sound goes on through the other. The overlay shows a Headphones button (or H) for a sound field, lit while it is heard binaurally: Windows cannot always tell headphones - in a virtual machine, or headphones in a jack the driver does not report - so the listener can switch.
 ## Video control
-`MediaControl` (drawn into a bitmap) and `GpuMediaControl` (drawn with Direct3D) play a video source, with a bar of controls over the bottom of the video. The bar shows as the mouse moves over the video and fades out after `ControlsHideDelay`, or as the mouse leaves; it stays while the video is paused. Set `AutoHideControls="False"` to always show it, or `ShowControls="False"` to never show it.
-
-Set `IsOverlayEnabled="False"` to remove the overlay completely: no bar, and none of its keyboard shortcuts, for an application that draws its own controls. Everything the overlay does is also a public method on the control: `Play()`, `Pause()`, `TogglePlayPause()`, `Rewind()`, `FastForward()`, `SetRate(rate)`, `Seek(position)`, `SeekBy(offset)`, `StepBackward()`, `StepForward()`, `TogglePositionFormat()`, `ToggleRepeat()`, `ToggleBinaural()`, `NextEyeView()`, `NextSubtitleTrack()` and `ResetView()`, with `PositionFormat`, `Looping`, `Mute`, `EyeView` and `SubtitleTrack` as properties. The bar's Repeat button (or R) turns `Looping` on and off; it is off by default, and a video then stops at its end.
-
-The position is shown as a time or, with `PositionFormat="Frames"`, as the frame shown of how many; click it (or press T) to switch. The bar's step buttons (or Left and Right) go back or forward by a second in time mode, and by exactly one frame in frame mode, pausing there. A source gives its frames' times through `ISeekableVideoSource.FrameCount`, `FrameAt` and `TimeOfFrame`, as `MediaFileSource` does from the file's sample table; for one that does not, a frame is taken from the frame rate. Subtitles still show without the overlay; set `SubtitleTrack="-1"` to hide them.
-
-The bar is part of the control's template, and can be restyled or replaced from XAML. Its buttons send WPF's `MediaCommands` (`TogglePlayPause`, `Play`, `Pause`, `Rewind`, `FastForward`, `MuteVolume`), and the control's read-only properties say what to show: `IsPlaying`, `CanSeek`, `PlaybackRate`, `Position`, `Duration`, `TimeText` and `AreControlsVisible`. The template is also put in the visual state `ControlsVisible` or `ControlsHidden`. Template parts, all optional: `PART_Image` (the frames are drawn on it), `PART_Seek` (a `Slider` that seeks) and `PART_ControlsBar` (kept shown while the mouse is over it).
-```xml
-<ctrl:MediaControl Source="{Binding Source}">
-    <ctrl:MediaControl.Template>
-        <ControlTemplate TargetType="ctrl:MediaControl">
-            <Grid Background="Transparent">
-                <Image x:Name="PART_Image" />
-                <StackPanel x:Name="Bar" Orientation="Horizontal" VerticalAlignment="Bottom" Background="#80000000">
-                    <Button x:Name="PlayPause" Command="MediaCommands.TogglePlayPause" Content="Play" Focusable="False" />
-                    <TextBlock Foreground="White" Margin="8,0" Text="{TemplateBinding TimeText}" />
-                </StackPanel>
-            </Grid>
-            <ControlTemplate.Triggers>
-                <Trigger Property="IsPlaying" Value="True">
-                    <Setter TargetName="PlayPause" Property="Content" Value="Pause" />
-                </Trigger>
-                <Trigger Property="AreControlsVisible" Value="False">
-                    <Setter TargetName="Bar" Property="Visibility" Value="Hidden" />
-                </Trigger>
-            </ControlTemplate.Triggers>
-        </ControlTemplate>
-    </ctrl:MediaControl.Template>
-</ctrl:MediaControl>
-```
-To restyle only the default template's buttons, base a style on `{StaticResource {x:Static ctrl:MediaControlBase.ButtonStyleKey}}`. The seek bar - a thin track and a round thumb with a dot, as Windows 11's Media Player draws it - is `MediaControlBase.SeekSliderStyleKey`; its `Foreground` is the accent color of the part played and the dot, and its `Background` the rest of the track.
-
-### Subtitles
-Both controls show subtitles: of a file, its subtitle tracks (3GPP timed text, WebVTT, TTML), and SubRip or WebVTT files beside it named after it (`movie.srt`, `movie.en.srt`, `movie.de.forced.vtt`). `SubtitleTracks` lists them, and `SubtitleTrack` chooses one, -1 (the default) for none; the bar's CC button (or C) goes through them. A forced track is shown even with subtitles off. Where both eyes of a stereo video are shown side by side, the subtitle is shown over each. A source of its own gives subtitles by implementing `ISubtitleSource`, and a data template of the key `MediaControlBase.SubtitleTemplateKey` draws them otherwise.
-
-### Stereo and VR video
-A stereo video's frame holds both eyes, side by side or top and bottom. `EyeView` shows both as the frame has them, or the left or right eye alone; the bar gets an eye button for it (or press E). `MediaFileSource` reads the layout from the file's `st3d` box, and `StereoLayout` overrides it for a file that does not say.
-
-Two separate videos, one per eye, play as one stereo video side by side through `StereoMediaSource`, which decodes each eye on its own thread and pairs the frames by their times:
-```cs
-var source = new StereoMediaSource(new MediaFileSource("left.mp4"), new MediaFileSource("right.mp4"));
-```
-
-A 180 or 360 degree video (equirectangular, as a VR180 camera writes it, read from the file's `sv3d` box, or forced with `Projection`) is shown by `GpuMediaControl` as a view into the sphere, drawn on the GPU: drag to look around, use the wheel to zoom, and double-click to look straight ahead again. `Yaw`, `Pitch` and `FieldOfView` hold the view and can be bound to. Of a stereo VR video, `EyeView` shows one eye's view, or both side by side. `MediaControl` shows such a video flat.
+`MediaControl` (drawn into a bitmap) and `GpuMediaControl` (drawn with Direct3D) play a video source, with a bar of controls over the bottom of the video.
 
 ## Samples
 The console samples run on Windows, macOS and Linux alike; the WPF player is Windows' alone. The recorders take how long to record, in seconds, as their first argument - `dotnet run -- 10` - or record until a key is pressed.
