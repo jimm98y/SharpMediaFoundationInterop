@@ -3,66 +3,39 @@ Simple Windows Media Foundation interop written in C#. No native dependencies, o
 
 [![NuGet version](https://img.shields.io/nuget/v/SharpMediaFoundationInterop.svg?style=flat-square)](https://www.nuget.org/packages/SharpMediaFoundationInterop)
 
-## Platforms
-The library is one plain `net8.0`/`net10.0` DLL. Its codecs and devices are reached through interfaces that belong to no platform - `IMediaVideoTransform`, `IMediaAudioTransform`, `IMediaVideoSource`, `IAudioOutput`, `IAudioInput` - made by two factories, `MediaCodecs` and `MediaDevices`, which pick what the system has:
-- Windows 10 1809 or later: Media Foundation's codecs, waveOut/waveIn, Media Foundation's camera capture and DXGI's desktop duplication. Everything Windows-specific is marked `[SupportedOSPlatform("windows10.0.17763.0")]` and only called there.
-- macOS 11 or later: VideoToolbox's and AudioToolbox's codecs, AudioQueue for sound out and in, AVFoundation for the camera, and ScreenCaptureKit (macOS 12.3 or later) for the screen. These are reached through P/Invoke as well - the system's C frameworks directly, AVFoundation and ScreenCaptureKit through the Objective-C runtime - so there is still no native dependency. Everything macOS-specific is marked `[SupportedOSPlatform("macos11.0")]` (`"macos12.3"` for screen capture).
-- iOS 14 or later: the same VideoToolbox, AudioToolbox, AudioQueue and AVFoundation code as macOS, the app's AVAudioSession moved to Playback, or to PlayAndRecord to record, as it plays and records; ReplayKit (iOS 16 or later) for the app's own screen, which is all iOS lets an app record.
-- Android 8 or later: the NDK's C libraries, as the WPF fork's Android head uses them, with no JNI - MediaCodec (`libmediandk`) for the codecs, AAudio for sound out and in, and Camera2 (`libcamera2ndk`) for the camera. Android has no screen capture but Java's MediaProjection, whose consent only the app's activity can ask for, so `GetScreens()` is empty there and `CreateScreenCapture` throws `PlatformNotSupportedException`.
-- Linux: GStreamer for the codecs, sound out and in, and the camera - the codecs and devices of whatever plugins are installed, a GPU's VA-API or V4L2 ones before the software ones - and, under Wayland, xdg-desktop-portal's ScreenCast for the screen, over libdbus-1, read through PipeWire. These are the libraries the WPF fork's Linux head uses, reached the same way: P/Invoke, no variadic calls. Everything Linux-specific is marked `[SupportedOSPlatform("linux")]`.
+## Platforms and codecs
+The library is a single `net8.0`/`net10.0` DLL with no native dependencies. `MediaCodecs` and `MediaDevices` pick whatever the current system has. On an unsupported system, `CanDecode`/`CanEncode` return false, the device lists are empty, and creating a codec or device throws `PlatformNotSupportedException`.
 
-The source follows the same split: `Codecs`, `Input`, `Output` and `Utils` each hold the interfaces and shared code, with the implementations of each platform in their `Windows`, `MacOS`, `iOS`, `Android` and `Linux` folders - and what macOS and iOS share in `Apple`. The namespaces are those four - `SharpMediaFoundationInterop.Codecs`, `.Input`, `.Output`, `.Utils` - whatever the platform, and `MediaDevices` is in `SharpMediaFoundationInterop` itself.
+D = decode, E = encode, — = not available.
 
-Elsewhere the factories report nothing: `MediaCodecs.CanDecode`/`CanEncode` return false, the device lists are empty, and creating one throws `PlatformNotSupportedException`. Code written against the factories needs no change from one platform to another.
+| | Windows | macOS | iOS | Android | Linux |
+|---|---|---|---|---|---|
+| Minimum version | 10 1809 | 11 | 14 | 8 | any with GStreamer |
+| Backend | Media Foundation, waveOut/waveIn, DXGI | VideoToolbox, AudioToolbox, AudioQueue, AVFoundation, ScreenCaptureKit | VideoToolbox, AudioToolbox, AudioQueue, AVFoundation, ReplayKit | MediaCodec, AAudio, Camera2 (NDK) | GStreamer, PipeWire portal |
+| **Video** | | | | | | 
+| H264 | D E | D E | D E | D E | D E |
+| H265 | D E ¹ | D E | D E | D E | D E |
+| AV1 | D E ¹ | D ² | D ² | D E | D E |
+| VP9 | D E ¹ | D ² | — | D E | D E |
+| MPEG-1/2 | D ¹ | D | — | D ² | D |
+| H263 | D | D | — | D ² | D |
+| MPEG-4 Part 2 | D | D | D | D ² | D |
+| Motion JPEG | D | — | — | — | — |
+| ProRes | — | D E | D E ² | — | D E |
+| **Audio** | | | | | |
+| AAC | D E | D E | D E | D E | D E |
+| MP3 | D E | D | D | D | D E |
+| MP2 | D | — | — | — | — |
+| FLAC | D E | D E | D E | D E | D E |
+| ALAC | D E | D E | D E | D ² | D E |
+| Opus | D | D E | D E | D E | D E |
+| PCM, G.711 | D | D | D | D | D |
+| **Devices** | | | | | |
+| Screen capture | ✓ | ✓ (12.3) | own app only (16) | — | ✓ (Wayland portal) |
+| Camera, audio in/out | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-The Windows classes behind the factories (`H265Decoder`, `AACEncoder`, `WaveOut`, `ScreenCapture`, ...) stay public for what only Media Foundation has: decoding on the GPU through `IMediaFoundationVideoTransform`, or ICodecAPI properties through `CodecProperties`. So do the macOS ones: `VideoToolboxDecoder`, `VideoToolboxEncoder`, `AudioToolboxDecoder`, `AudioToolboxEncoder`, `AudioQueueOutput`, `AudioQueueInput`, `AVFoundationCapture` and `ScreenCaptureKitCapture`; the iOS one: `ReplayKitScreenCapture`; the Android ones: `AndroidVideoDecoder`, `AndroidVideoEncoder`, `AndroidAudioDecoder`, `AndroidAudioEncoder`, `AAudioOutput`, `AAudioInput` and `AndroidCameraCapture`; and the Linux ones: `GStreamerVideoDecoder`, `GStreamerVideoEncoder` (whose `Element` names the encoder it chose), `GStreamerAudioDecoder`, `GStreamerAudioEncoder`, `GStreamerAudioOutput`, `GStreamerAudioInput`, `GStreamerCameraCapture` and `PortalScreenCapture`.
-
-On macOS the user is asked, the first time, whether the app may use the microphone, the camera or the screen; the permission belongs to the app the process runs in (for a console app, the terminal). Until it is given, the camera capture throws `UnauthorizedAccessException`, as the screen capture does - which asks macOS to show the request - and the microphone records silence. macOS applies a new screen recording permission only once the app is started again.
-
-On iOS, the app's Info.plist must have NSCameraUsageDescription and NSMicrophoneUsageDescription, or iOS ends the app as the camera or microphone is asked for; the user is asked the first time, and `Initialize` throws `UnauthorizedAccessException` where they say no. ReplayKit asks the user each time a screen capture starts. On Android, the app must hold the CAMERA and RECORD_AUDIO permissions, which only its Java side can ask the user for; Android lists its sound devices to Java alone, so the lists have the default output and input.
-
-On Linux, install GStreamer and its plugins - on Ubuntu or Debian `libgstreamer1.0-0`, `gstreamer1.0-plugins-base` and `-good` for the devices, and `-bad`, `-ugly` and `gstreamer1.0-libav` for the codecs - and, for the screen, `gstreamer1.0-pipewire` and an `xdg-desktop-portal` backend (`-gnome`, `-kde` or `-wlr`). What is not installed shows in `CanDecode`/`CanEncode` and the device lists. Under Wayland no app may list or read the screens itself: `GetScreens()` returns one device, and the user picks a screen in the desktop's dialog each time a capture is initialized, which throws `UnauthorizedAccessException` where they cancel. A codec of GStreamer's works on threads of its own, so a frame or packet comes out a little after its input went in: `ProcessOutput` returns what is ready, and draining returns the rest.
-
-## Codecs
-Supported video codecs (`VideoCodec`) are:
-- H264 (built-in Windows)
-- H265 (requires paid HEVC Video Extensions from the Microsoft Store)
-- AV1 (requires free AV1 Video Extensions from the Microsoft Store)
-- VP9 (requires free VP9 Video Extensions from the Microsoft Store)
-- MPEG-2 and MPEG-1, decoding only (requires MPEG-2 Video Extension from the Microsoft Store)
-- H263, decoding only (built-in Windows)
-- MPEG-4 Part 2, decoding only (built-in Windows; B-frames are skipped, Windows decodes them blank)
-- Motion JPEG, decoding only (built-in Windows): QuickTime's `jpeg` and `mjpa`, MP4's `mp4v` of JPEG. NV12 out, or YUY2 of a 4:2:2 picture, as cameras' are; of JPEG's full range and BT.601's matrix, as JFIF has them, which `MediaFileSource` says. Windows' decoder upsamples 4:2:2 chroma otherwise than libjpeg does, its colours within a few levels of ffmpeg's.
-- ProRes - 422, 422 HQ, LT, Proxy, 4444 and 4444 XQ - on Apple devices (every Mac; the iPhones and iPads of ProRes) and on Linux of gstreamer1.0-libav; encoded of `VideoEncoderOptions.ProResProfile` (Proxy, LT, Standard, HQ - the default -, 4444 or 4444 XQ), whose fixed quality sets the data rate, so a rate control asked for is reported in `UnappliedSettings`. Windows and Android have no ProRes codec.
-
-Windows has no usable encoder for MPEG-1/2, H263 or MPEG-4 Part 2, and no H261 decoder. Nor has it AC-3 or E-AC-3 decoders: those it once had are gone, and what is left passes the stream on to a receiver over S/PDIF. Whether an extension is installed shows only when the codec is initialized, which then throws `NotSupportedException`.
-
-macOS decodes every one of these video codecs with VideoToolbox, needing no extensions, with these limits:
-- VP9 and AV1 are decoded on the GPU alone: VP9 on Apple silicon and some Intel Macs, AV1 on the M3 and later. `MediaCodecs.CanDecode` says which.
-- MPEG-4 Part 2 of the simple profile alone. A stream of the advanced simple profile - B-VOPs, as XviD and DivX often have - throws `NotSupportedException` as its headers come in.
-
-macOS encodes H264 and H265 (H265 on Apple silicon, and Intel Macs whose GPU encodes it); it has no VP9 or AV1 encoder, which `MediaCodecs.CanEncode` reports.
-
-iOS decodes what its VideoToolbox has: H264, H265 and MPEG-4 Part 2's simple profile on every device, and AV1 in hardware on the A17 Pro and later; it has no VP9, MPEG-2 or H263 decoder. It encodes H264 and H265, as macOS does.
-
-Android decodes and encodes what the device's MediaCodec has - H264, H265, VP9 and AV1 on most, often in hardware; MPEG-2 on some - each in whole access units, the NAL units and OBUs gathered as for VideoToolbox. Its software MPEG-4 Part 2 decoder takes B-frames, which are put in order here.
-
-Linux decodes all of them, MPEG-4 Part 2's advanced simple profile included, with GStreamer's decoders, and encodes H264, H265, VP9 and AV1 with the first installed of VA-API's, V4L2's, x264, x265, libvpx, SVT-AV1 and libaom - each of its own properties for the rate control, what it has none of reported in `UnappliedSettings`.
-
-VideoToolbox is told a stream's configuration before it decodes, so the decoder is made as that configuration comes in band: the parameter sets of H264 and H265, the headers before the first MPEG-4 picture, the first VP9 key frame, the AV1 sequence header. Whatever comes before it is dropped.
-
-Supported audio codecs (`AudioCodec`) are:
-- AAC (built-in Windows). Up to 6 channels; of 4.0 - channel configuration 4 - the channels are front left, right, centre and back centre, which `AudioInfo.ChannelMask` and `CreateAudioOutput`'s `channelMask` (0x107) carry to the speakers they are for.
-- MP3 (built-in Windows; the encoder at 32000, 44100 or 48000 Hz, or MPEG-2's lower rates, and its own list of bit rates)
-- MP2, MPEG-1 and MPEG-2 audio of Layers I and II, decoding only (built-in Windows: `Mp2Decoder`). `MediaFileSource` tells it from MP3 by the first frame's header, as an `mp4a` of MPEG audio does not say its layer.
-- FLAC, 16 and 24 bits (built-in Windows)
-- ALAC, 16 and 24 bits (built-in Windows; the encoder pads the last frame to 4096 samples with silence)
-- Opus (decode only on Windows: built-in, might require a newer version - works in Windows 11 25H2; Windows has no Opus encoder). Windows' decoder takes mono and stereo alone; Opus of more channels - of channel mapping family 1 (5.1, 7.1), 2 (ambisonics) or 255 - is split into its streams by `OpusMultistreamDecoder`, each decoded as mono or stereo, given the `dOps` box's payload as `Config`. Family 1 comes out in WAVE's order, ambisonics in ACN order.
-- PCM, uncompressed (decode only, managed: `PcmDecoder`, the same on every platform). It takes the samples as `AudioDecoderOptions.Pcm` describes them - 8, 16, 24 or 32 bit integers, 32 or 64 bit floats, either byte order, 8 bit signed or offset binary, as QuickTime's `lpcm`, `twos`, `sowt`, `raw `, `in24`, `in32`, `fl32`, `fl64` and ISO's `ipcm` and `fpcm` hold them - and gives little-endian 16 bit PCM of 16 bits or fewer, else 32 bit. `MediaFileSource` plays such a track, reading a tenth of a second of its frames at a time. G.711 - QuickTime's `alaw` and `ulaw` - is decoded by it too, of `PcmFormat.Companding`, expanded to 16 bit as ITU-T G.711 has it, sample for sample as ffmpeg does.
-
-Windows has decoders of AMR-NB and MPEG-H 3D Audio that cannot be used here: its AMR-NB decoder is of Media Foundation's own pipeline alone - made by its class factory, or asked of a source reader that has made it, it gives no `IMFTransform` - and its MPEG-H decoder hands out IEC 61937, for a receiver to decode, not PCM. AC-3 and E-AC-3 it has no decoder of either, only their IEC 61937 converters. SharpMP4 reads all of them: their samples pass through.
-
-On macOS, AudioToolbox decodes all five compressed codecs, to the same PCM formats as on Windows; more than two channels come out in WAVE's order, as Windows' decoders give them. It encodes all but MP3, of which macOS has no encoder, taking the same PCM as Windows' encoders. iOS decodes and encodes as macOS does. Android decodes AAC, MP3, Opus and FLAC with MediaCodec - ALAC where the device has a decoder - and encodes AAC, Opus and FLAC; Opus decodes to 48 kHz there, whatever was asked. Linux decodes and encodes all five with GStreamer, of the same formats. PCM is decoded by `PcmDecoder` everywhere.
+¹ Requires the matching Microsoft Store extension (HEVC is paid).
+² Not on every device; `MediaCodecs.CanDecode`/`CanEncode` report it.
 
 ## Video decoding
 Create and initialize the decoder; every codec has the same API. The size is the coded one, as the stream's parameter sets give it:
