@@ -1,6 +1,6 @@
 using System;
 
-namespace SharpMediaFoundationInterop.WPF
+namespace SharpMediaFoundationInterop.Codecs
 {
     /// <summary>
     /// How a picture is turned and flipped to be shown, of the eight a track's matrix can say ('tkhd', ISO/IEC 14496-12

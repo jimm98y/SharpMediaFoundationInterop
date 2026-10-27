@@ -5,7 +5,6 @@ using System.IO;
 using System.Threading.Tasks;
 using SharpMediaFoundationInterop;
 using SharpMediaFoundationInterop.Codecs;
-using SharpMediaFoundationInterop.Utils;
 using SharpMP4.Builders;
 using SharpMP4.Tracks;
 
@@ -38,14 +37,15 @@ using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMod
         {
             videoEncoder.Initialize();
 
-            // to NV12, of what the camera hands out: as it is where it is NV12 already, as a Mac's camera's frames are; of
-            // Media Foundation's color converter on Windows; and of BitmapUtils elsewhere, which converts BGRA
+            // to NV12, of what the camera hands out: as it is where it is NV12 already, as a Mac's camera's frames are, and
+            // else of the system's color converter - RGB bottom-up, as a screen capture hands it out by default
             bool converts = camera.OutputFormat != videoEncoder.InputFormat;
-            IMediaVideoTransform colorConverter = converts && OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)
-                ? new ColorConverter(camera.OutputFormat, videoEncoder.InputFormat, camera.Width, camera.Height)
-                : null;
-            if (converts && colorConverter == null && camera.OutputFormat != MediaFormats.ARGB32)
+            var converterOptions = new ColorConverterOptions { Width = camera.Width, Height = camera.Height };
+            if (converts && !MediaCodecs.CanConvert(camera.OutputFormat, videoEncoder.InputFormat, converterOptions))
                 throw new NotSupportedException($"No conversion of {camera.OutputFormat} to NV12 here");
+            IMediaVideoTransform colorConverter = converts
+                ? MediaCodecs.CreateColorConverter(camera.OutputFormat, videoEncoder.InputFormat, converterOptions)
+                : null;
 
             using (colorConverter)
             {
@@ -87,16 +87,11 @@ using (Stream output = new BufferedStream(new FileStream(targetFileName, FileMod
                     {
                         nv12 = frameBuffer;
                     }
-                    else if (colorConverter != null)
+                    else
                     {
                         if (!colorConverter.ProcessInput(frameBuffer, timestamp) || !colorConverter.ProcessOutput(ref nv12Buffer, out _))
                             continue;
                         nv12 = nv12Buffer;
-                    }
-                    else
-                    {
-                        // BGRA, bottom-up, as a screen capture hands it out by default
-                        BitmapUtils.ConvertBgraToNV12(frameBuffer, (int)camera.Width, (int)camera.Height, bottomUp: true, nv12Buffer);
                     }
 
                     if (videoEncoder.ProcessInput(nv12, timestamp))

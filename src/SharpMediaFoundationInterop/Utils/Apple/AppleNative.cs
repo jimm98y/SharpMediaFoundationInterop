@@ -276,6 +276,19 @@ namespace SharpMediaFoundationInterop.Utils
         public static readonly uint kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange = FourCC("420v");
         public static readonly uint kCVPixelFormatType_420YpCbCr8BiPlanarFullRange = FourCC("420f");
         public static readonly uint kCVPixelFormatType_32BGRA = FourCC("BGRA");
+        /// <summary>4:2:2 packed as YUY2 is - Y0, Cb, Y1, Cr - of the limited range, and of the full.</summary>
+        public static readonly uint kCVPixelFormatType_422YpCbCr8_yuvs = FourCC("yuvs");
+        public static readonly uint kCVPixelFormatType_422YpCbCr8FullRange = FourCC("yuvf");
+        /// <summary>4:2:2 packed as UYVY is - Cb, Y0, Cr, Y1 - of the limited range.</summary>
+        public static readonly uint kCVPixelFormatType_422YpCbCr8 = FourCC("2vuy");
+
+        public const uint kCVAttachmentMode_ShouldPropagate = 1;
+
+        /// <summary>A key or value of Core Video's: a CFStringRef it exports, of the name its header gives it.</summary>
+        public static IntPtr CoreVideoConstant(string name) => Constant(CoreVideo, name);
+
+        [DllImport(CoreVideoLib)]
+        public static extern void CVBufferSetAttachment(IntPtr buffer, IntPtr key, IntPtr value, uint attachmentMode);
 
         [DllImport(CoreVideoLib)]
         public static extern int CVPixelBufferCreate(IntPtr allocator, nuint width, nuint height, uint pixelFormatType, IntPtr pixelBufferAttributes, out IntPtr pixelBuffer);

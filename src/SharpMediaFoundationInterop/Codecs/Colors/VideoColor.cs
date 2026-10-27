@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using SharpMediaFoundationInterop.Codecs;
 
-namespace SharpMediaFoundationInterop.WPF
+namespace SharpMediaFoundationInterop.Codecs
 {
     /// <summary>
     /// How a picture's decoded samples - Y, Cb and Cr of 8, 10 or 12 bits - become the sRGB it is shown as, of the codes of
@@ -72,16 +71,27 @@ namespace SharpMediaFoundationInterop.WPF
         public bool IsVideoProcessorColor { get; }
 
         /// <summary>Of the video processor's, whether the matrix is BT.709's, not BT.601's.</summary>
-        internal bool IsBt709Matrix { get; }
+        public bool IsBt709Matrix { get; }
 
         // of each code, its part of each of the three values: of the luma, of Cb and of Cr - what a value is of the codes is
         // their sum
         private readonly float[][] _ofY, _ofCb, _ofCr;
 
-        // the coefficients of the same, of a shader: of the luma, and of Cb and Cr below 0 and above - of constant luminance
-        // they differ - and what a code is of the range, its offset and its scale, of the luma and of the chroma
-        internal readonly float[] YCoefficients, CbBelow, CbAbove, CrBelow, CrAbove;
-        internal readonly float LumaOffset, LumaScale, ChromaOffset, ChromaScale;
+        /// <summary>
+        /// The coefficients of the three values, of a shader: of the luma, and of Cb and Cr below 0 and above - of constant
+        /// luminance they differ. A value is the sum of each coefficient times its sample, of the range.
+        /// </summary>
+        public IReadOnlyList<float> YCoefficients { get; }
+        public IReadOnlyList<float> CbBelow { get; }
+        public IReadOnlyList<float> CbAbove { get; }
+        public IReadOnlyList<float> CrBelow { get; }
+        public IReadOnlyList<float> CrAbove { get; }
+
+        /// <summary>What a code is of the range: less its offset, times its scale; of the luma and of the chroma.</summary>
+        public float LumaOffset { get; }
+        public float LumaScale { get; }
+        public float ChromaOffset { get; }
+        public float ChromaScale { get; }
 
         // the three values made linear, each of its own curve - an ICC profile has one of each - from LinearFrom to
         // LinearTo; the curves themselves of a value outside them
