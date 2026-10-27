@@ -144,6 +144,47 @@ namespace SharpMediaFoundationInterop.Codecs
             throw new PlatformNotSupportedException($"No {codec} encoder on this system: {Systems}");
         }
 
-        private const string Systems = "there are codecs on Windows 10 1809 or later, on macOS 11 and iOS 14 or later, on Android 8 or later, and on Linux of GStreamer";
+        /// <summary>iOS 16 or later, or macOS 11 or later: of VideoToolbox's pixel transfer.</summary>
+        [SupportedOSPlatformGuard("macos11.0")]
+        [SupportedOSPlatformGuard("ios16.0")]
+        private static bool HasPixelTransfer => OperatingSystem.IsMacOSVersionAtLeast(11) || OperatingSystem.IsIOSVersionAtLeast(16);
+
+        /// <summary>
+        /// Whether there is a color converter of the one format to the other here: of the system's, or of managed code
+        /// where the system has none. Of NV12, YUY2, UYVY, RGB24, RGB32 and ARGB32 - <see cref="MediaFormats"/>.
+        /// </summary>
+        public static bool CanConvert(Guid inputFormat, Guid outputFormat, ColorConverterOptions options = null) =>
+            ColorFormats.IsKnown(inputFormat) && ColorFormats.IsKnown(outputFormat) &&
+            (HasNativeConverter(inputFormat, outputFormat, options ?? new ColorConverterOptions()) || ManagedColorConverter.Supports(inputFormat, outputFormat));
+
+        private static bool HasNativeConverter(Guid inputFormat, Guid outputFormat, ColorConverterOptions options) =>
+            OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) && ColorConverter.Supports(inputFormat, outputFormat, options) ||
+            HasPixelTransfer && VideoToolboxColorConverter.Supports(inputFormat, outputFormat, options) ||
+            !IsAndroid && OperatingSystem.IsLinux() && GStreamerColorConverter.Supports(inputFormat, outputFormat);
+
+        /// <summary>
+        /// A color converter of the one format to the other, to be initialized: on Windows a <see cref="ColorConverter"/>, of
+        /// Media Foundation's video processor; on macOS and iOS 16 or later a <see cref="VideoToolboxColorConverter"/>; on
+        /// Linux a <see cref="GStreamerColorConverter"/>. Where the system has none - Android, iOS before 16, Linux without
+        /// GStreamer - or none of the options' color - Windows' of a matrix other than its own of the height - a
+        /// <see cref="ManagedColorConverter"/>, of YUV to RGB and RGB to NV12. Each converts a frame as it goes in: read it out
+        /// before the next.
+        /// </summary>
+        public static IMediaVideoTransform CreateColorConverter(Guid inputFormat, Guid outputFormat, ColorConverterOptions options)
+        {
+            ColorFormats.Validate(inputFormat, outputFormat, options);
+            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) && ColorConverter.Supports(inputFormat, outputFormat, options))
+                return new ColorConverter(inputFormat, outputFormat, options);
+            if (HasPixelTransfer && VideoToolboxColorConverter.Supports(inputFormat, outputFormat, options))
+                return new VideoToolboxColorConverter(inputFormat, outputFormat, options);
+            if (!IsAndroid && OperatingSystem.IsLinux() && GStreamerColorConverter.Supports(inputFormat, outputFormat))
+                return new GStreamerColorConverter(inputFormat, outputFormat, options);
+            if (ManagedColorConverter.Supports(inputFormat, outputFormat))
+                return new ManagedColorConverter(inputFormat, outputFormat, options);
+
+            throw new NotSupportedException($"No conversion of {inputFormat} to {outputFormat} on this system");
+        }
+
+        private const string Systems ="there are codecs on Windows 10 1809 or later, on macOS 11 and iOS 14 or later, on Android 8 or later, and on Linux of GStreamer";
     }
 }

@@ -10,6 +10,7 @@ namespace SharpMediaFoundationInterop.Codecs
     public static class MediaFormats
     {
         public static readonly Guid NV12 = FourCC("NV12");
+        public static readonly Guid RGB24 = new Guid("00000014-0000-0010-8000-00aa00389b71");
         public static readonly Guid RGB32 = new Guid("00000016-0000-0010-8000-00aa00389b71");
         public static readonly Guid ARGB32 = new Guid("00000015-0000-0010-8000-00aa00389b71");
         public static readonly Guid YUY2 = FourCC("YUY2");

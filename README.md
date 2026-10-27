@@ -81,21 +81,29 @@ while (videoDecoder.ProcessOutput(ref nv12Buffer, out _, out long frameTime))
 }
 videoDecoder.EndDrain();
 ```
-On Windows, convert NV12 to RGB for display with Media Foundation's color converter:
+## Color conversion
+`MediaCodecs.CreateColorConverter` converts between NV12, YUY2, UYVY, RGB24, RGB32 and ARGB32. It uses the system's converter where there is one: Media Foundation's video processor on Windows, VideoToolbox on macOS and iOS 16 or later, GStreamer's `videoconvert` on Linux. Otherwise it uses `ManagedColorConverter`, which converts YUV to RGB and RGB to NV12: on Android, on iOS before 16, on Linux without GStreamer, and on Windows for a matrix other than the one Media Foundation picks for that height (BT.601 below 720 lines, BT.709 from 720), which it does not let you change. `MediaCodecs.CanConvert` says whether a conversion is available.
+
+RGB rows are bottom-up by default, as in Media Foundation; set `TopDown` for a bitmap's order. Convert a decoded frame to RGB for display:
 ```cs
-using(var nv12Decoder = new ColorConverter(PInvoke.MFVideoFormat_NV12, PInvoke.MFVideoFormat_RGB24, width, height))
+var options = new ColorConverterOptions
 {
-    nv12Decoder.Initialize();
-    
-    byte[] rgbBuffer = new byte[nv12Decoder.OutputSize];
-    if(nv12Decoder.ProcessInput(nv12Buffer, 0))
-    {
-       if (nv12Decoder.ProcessOutput(ref rgbBuffer, out _))
-       {
-          // rgbBuffer holds the decoded RGB frame
-          ...
-       }
-    }
+   Width = width,
+   Height = height,
+   Matrix = ColorMatrix.Default, // BT.709 from 720 lines, else BT.601; or Bt601, Bt709, Bt2020
+   FullRange = false,
+   TopDown = true,
+};
+using (var converter = MediaCodecs.CreateColorConverter(MediaFormats.NV12, MediaFormats.RGB32, options))
+{
+   converter.Initialize();
+
+   var rgbBuffer = new byte[converter.OutputSize];
+   if (converter.ProcessInput(nv12Buffer, frameTime) && converter.ProcessOutput(ref rgbBuffer, out _))
+   {
+      // rgbBuffer holds the frame as B, G, R and alpha
+      ...
+   }
 }
 ```
 ## Video encoding
@@ -122,23 +130,8 @@ using (var videoEncoder = MediaCodecs.CreateVideoEncoder(VideoCodec.H265, option
    ...
 }
 ```
-Optionally, on Windows, convert RGB to nv12:
-```cs
-using(var nv12Encoder = new ColorConverter(PInvoke.MFVideoFormat_RGB24, PInvoke.MFVideoFormat_NV12, width, height))
-{
-    nv12Encoder.Initialize();
-    
-    byte[] nv12Buffer = new byte[nv12Encoder.OutputSize];
-    if(nv12Encoder.ProcessInput(rgbBuffer, 0))
-    {
-       if (nv12Encoder.ProcessOutput(ref nv12Buffer, out _))
-       {
-          // nv12Buffer holds the encoded nv12 frame
-          ...
-       }
-    }
-}
-```
+The encoder takes NV12. Convert RGB to it with a color converter, as in [Color conversion](#color-conversion), from `MediaFormats.RGB32` to `MediaFormats.NV12`.
+
 Each access unit comes out in Annex B, with its start codes; a key frame has the parameter sets in front of it. On macOS the encoder takes NV12 of exactly `Width` by `Height`, encodes no B-frames, and reports a setting it has no equivalent of - `Threads` - in `UnappliedSettings`.
 
 Create a buffer to hold the encoded NALU/OBU:
