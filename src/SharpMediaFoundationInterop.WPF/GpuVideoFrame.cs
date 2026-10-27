@@ -151,4 +151,144 @@ namespace SharpMediaFoundationInterop.WPF
             while (_spare.TryTake(out _)) { }
         }
     }
+
+    /// <summary>
+    /// Two eyes' frames decoded on the GPU put side by side there, into frames of a pool of its own: each eye's picture copied
+    /// into its half over black, as <see cref="StereoMediaSource"/> composes frames on the CPU. Of the thread frames are
+    /// asked for on: the eyes' textures, made on their sources' threads, are wrapped for it.
+    /// </summary>
+    internal sealed unsafe class GpuSideBySide : IDisposable
+    {
+        private readonly Direct3DDevice _device;
+        private readonly GpuFramePool _pool;
+        private readonly ID3D11Texture2D _black;
+        private readonly System.Collections.Generic.Dictionary<IntPtr, ID3D11Texture2D> _eyes = new System.Collections.Generic.Dictionary<IntPtr, ID3D11Texture2D>();
+        private ID3D11Texture2D _staging;
+        private uint _stagingWidth, _stagingHeight;
+
+        /// <param name="black">The black of the luma, of the stream's range: 16 of the limited, 0 of the full.</param>
+        public GpuSideBySide(Direct3DDevice device, uint width, uint height, byte black)
+        {
+            _device = device;
+            _pool = new GpuFramePool(device, width, height);
+
+            // a frame of black, which each frame is made of before the eyes go in: the luma, then the neutral chroma
+            var pixels = new byte[width * height * 3 / 2];
+            pixels.AsSpan(0, (int)(width * height)).Fill(black);
+            pixels.AsSpan((int)(width * height)).Fill(128);
+            var desc = new D3D11_TEXTURE2D_DESC
+            {
+                Width = width,
+                Height = height,
+                MipLevels = 1,
+                ArraySize = 1,
+                Format = DXGI_FORMAT.DXGI_FORMAT_NV12,
+                SampleDesc = new DXGI_SAMPLE_DESC { Count = 1 },
+                Usage = D3D11_USAGE.D3D11_USAGE_DEFAULT,
+            };
+            fixed (byte* data = pixels)
+            {
+                // of NV12, the chroma's rows after the luma's, of the same pitch
+                var initial = new D3D11_SUBRESOURCE_DATA { pSysMem = data, SysMemPitch = width };
+                device.Device.CreateTexture2D(desc, initial, out _black);
+            }
+        }
+
+        /// <summary>
+        /// The two eyes side by side: the left's picture at the left, the right's from <paramref name="rightX"/>, each of its
+        /// size; a missing right eye black. Each picture's size is rounded up to even, within its frame: NV12 is copied in
+        /// pairs of pixels.
+        /// </summary>
+        public GpuVideoFrame Compose(GpuVideoFrame left, VideoInfo leftInfo, uint leftWidth, uint leftHeight,
+            GpuVideoFrame right, VideoInfo rightInfo, uint rightX, uint rightWidth, uint rightHeight)
+        {
+            var frame = _pool.Rent();
+            var context = _device.Context;
+            context.CopyResource(frame.Texture, _black);
+            Copy(context, frame, left, leftInfo, 0, leftWidth, leftHeight);
+            if (right != null)
+                Copy(context, frame, right, rightInfo, rightX, rightWidth, rightHeight);
+            return frame;
+        }
+
+        private void Copy(ID3D11DeviceContext context, GpuVideoFrame target, GpuVideoFrame eye, VideoInfo info, uint x, uint width, uint height)
+        {
+            var box = new D3D11_BOX
+            {
+                left = 0,
+                top = 0,
+                front = 0,
+                right = Math.Min((width + 1) & ~1u, info.Width),
+                bottom = Math.Min((height + 1) & ~1u, info.Height),
+                back = 1,
+            };
+            context.CopySubresourceRegion(target.Texture, 0, x, 0, 0, Wrapped(eye), 0, &box);
+        }
+
+        /// <summary>
+        /// An eye's frame read back into the CPU's memory, as its source hands frames out there: NV12 of its coded size, of
+        /// rows of no padding, in an array of the shared pool. Where only one eye is decoded on the GPU, the pair is composed
+        /// on the CPU.
+        /// </summary>
+        public byte[] Download(GpuVideoFrame eye, VideoInfo info)
+        {
+            uint width = info.Width, height = info.Height;
+            if (_staging == null || _stagingWidth != width || _stagingHeight != height)
+            {
+                if (_staging != null)
+                    Marshal.ReleaseComObject(_staging);
+                var desc = new D3D11_TEXTURE2D_DESC
+                {
+                    Width = width,
+                    Height = height,
+                    MipLevels = 1,
+                    ArraySize = 1,
+                    Format = DXGI_FORMAT.DXGI_FORMAT_NV12,
+                    SampleDesc = new DXGI_SAMPLE_DESC { Count = 1 },
+                    Usage = D3D11_USAGE.D3D11_USAGE_STAGING,
+                    CPUAccessFlags = D3D11_CPU_ACCESS_FLAG.D3D11_CPU_ACCESS_READ,
+                };
+                _device.Device.CreateTexture2D(desc, null, out _staging);
+                (_stagingWidth, _stagingHeight) = (width, height);
+            }
+
+            var context = _device.Context;
+            context.CopyResource(_staging, Wrapped(eye));
+            byte[] frame = System.Buffers.ArrayPool<byte>.Shared.Rent((int)(width * height * 3 / 2));
+            D3D11_MAPPED_SUBRESOURCE mapped;
+            context.Map(_staging, 0, D3D11_MAP.D3D11_MAP_READ, 0, &mapped);
+            try
+            {
+                // the luma's rows, then the chroma's, which start after the luma's of the mapped pitch
+                byte* source = (byte*)mapped.pData;
+                for (uint row = 0; row < height * 3 / 2; row++)
+                    new ReadOnlySpan<byte>(source + row * mapped.RowPitch, (int)width).CopyTo(frame.AsSpan((int)(row * width)));
+            }
+            finally
+            {
+                context.Unmap(_staging, 0);
+            }
+            return frame;
+        }
+
+        /// <summary>An eye's texture wrapped for this thread, once: its pool's textures are used again and again.</summary>
+        private ID3D11Texture2D Wrapped(GpuVideoFrame eye)
+        {
+            if (!_eyes.TryGetValue(eye.TexturePointer, out var texture))
+            {
+                texture = (ID3D11Texture2D)Direct3DDevice.ForThisThread(eye.TexturePointer);
+                _eyes.Add(eye.TexturePointer, texture);
+            }
+            return texture;
+        }
+
+        public void Dispose()
+        {
+            _pool.Dispose();
+            Marshal.ReleaseComObject(_black);
+            if (_staging != null)
+                Marshal.ReleaseComObject(_staging);
+            _eyes.Clear();
+        }
+    }
 }

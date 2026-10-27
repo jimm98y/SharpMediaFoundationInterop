@@ -18,6 +18,10 @@ namespace SharpMediaFoundationInterop.WPF
     /// The sound and the subtitles are the left source's, where it has any. Frames are paired by their times, within half a
     /// frame of each other; a left frame with no right one of its time is shown with the right frame shown last, and where
     /// the right eye runs out first, its last frame stays.
+    /// <para>
+    /// Given a device - <see cref="TryUseDirect3D"/>, as <see cref="GpuMediaControl"/> gives it - each eye decodes on the GPU
+    /// where it can, and a pair of frames decoded there is composed there, never leaving the GPU.
+    /// </para>
     /// </remarks>
     public sealed class StereoMediaSource : ISeekableVideoSource, IAudioSource, ISubtitleSource
     {
@@ -52,8 +56,23 @@ namespace SharpMediaFoundationInterop.WPF
             return Left.TrySetOutputFormat(format) & Right.TrySetOutputFormat(format);
         }
 
-        /// <summary>Not on the GPU: the eyes are put side by side on the CPU.</summary>
-        public bool TryUseDirect3D(Direct3DDevice device) => false;
+        // The device the eyes decode on, where either can; and the eyes' frames side by side on it, made as the first pair
+        // decoded there comes.
+        private Direct3DDevice _direct3D;
+        private GpuSideBySide _gpu;
+
+        /// <summary>
+        /// Asks both eyes for frames decoded on the device. Where both are, the pair is composed on the GPU too, and handed
+        /// out as a <see cref="GpuVideoFrame"/>; where one alone is, its frame is read back and the pair composed on the CPU.
+        /// </summary>
+        public bool TryUseDirect3D(Direct3DDevice device)
+        {
+            // each asked, whatever the other says
+            bool left = Left.TryUseDirect3D(device);
+            bool right = Right.TryUseDirect3D(device);
+            _direct3D = left || right ? device : null;
+            return left || right;
+        }
 
         /// <summary>Initializes both sources, once: a player's sound and video threads both ask.</summary>
         public Task InitializeAsync()
@@ -207,6 +226,44 @@ namespace SharpMediaFoundationInterop.WPF
                 Projection = left.Projection,
                 ProjectionBounds = left.ProjectionBounds,
             };
+        }
+
+        /// <summary>
+        /// The two eyes' frames side by side: on the GPU where each is a frame decoded there - or the right one missing - and
+        /// else on the CPU, a frame decoded on the GPU read back for it.
+        /// </summary>
+        private object Compose(object left, object right)
+        {
+            if (left is not GpuVideoFrame && right is not GpuVideoFrame)
+                return Compose(left as byte[], right as byte[]);
+
+            var leftInfo = Left.VideoInfo;
+            var rightInfo = Right.VideoInfo;
+            if (_gpu == null)
+            {
+                // the black of the luma, of the stream's range: the first byte of the luma plane's
+                _gpu = new GpuSideBySide(_direct3D, VideoInfo.Width, VideoInfo.Height, _planes[0].Blank[0]);
+            }
+            if (left is GpuVideoFrame leftGpu && right is GpuVideoFrame or null)
+            {
+                return _gpu.Compose(leftGpu, leftInfo, (uint)_leftWidth, (uint)_leftHeight,
+                    right as GpuVideoFrame, rightInfo, (uint)_rightX, (uint)_rightWidth, (uint)_rightHeight);
+            }
+
+            // one eye on the GPU and the other not: the GPU's read back
+            byte[] leftBytes = left is GpuVideoFrame l ? _gpu.Download(l, leftInfo) : null;
+            byte[] rightBytes = right is GpuVideoFrame r ? _gpu.Download(r, rightInfo) : null;
+            try
+            {
+                return Compose(leftBytes ?? left as byte[], rightBytes ?? right as byte[]);
+            }
+            finally
+            {
+                if (leftBytes != null)
+                    ArrayPool<byte>.Shared.Return(leftBytes);
+                if (rightBytes != null)
+                    ArrayPool<byte>.Shared.Return(rightBytes);
+            }
         }
 
         /// <summary>The two eyes' frames side by side, in an array of the pool; a missing right eye black.</summary>
@@ -369,7 +426,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
             _rightWake.Set();
 
-            var pair = Compose(_left as byte[], _lastRight as byte[]);
+            var pair = Compose(_left, _lastRight);
             timestamp = _leftTime;
             if (_leftRequest >= leftTarget)
                 Interlocked.Exchange(ref _request, Interlocked.Read(ref _requested));
@@ -432,7 +489,9 @@ namespace SharpMediaFoundationInterop.WPF
 
         public void ReturnVideoFrame(object frame)
         {
-            if (frame is byte[] bytes && bytes.Length > 0)
+            if (frame is GpuVideoFrame gpu)
+                gpu.Release();
+            else if (frame is byte[] bytes && bytes.Length > 0)
                 ArrayPool<byte>.Shared.Return(bytes);
         }
 
@@ -517,6 +576,7 @@ namespace SharpMediaFoundationInterop.WPF
             _disposed = true;
             _rightWake.Set();
             _rightThread?.Join(1000);
+            _gpu?.Dispose();
             if (_ownsSources)
             {
                 Left.Dispose();
