@@ -53,7 +53,7 @@ using (var videoDecoder = MediaCodecs.CreateVideoDecoder(VideoCodec.AV1, options
    ...
 }
 ```
-Frames come out as NV12, padded to the size the decoder works in: `videoDecoder.Width` by `videoDecoder.Height`, or `MediaCodecs.DecoderAlignment(codec)` before there is a decoder. On macOS that alignment is 2 for every codec; the picture is in the top left of each frame. Create a buffer to hold the decoded frame:
+Frames come out as NV12, padded to the size the decoder works in: `videoDecoder.Width` by `videoDecoder.Height`, or `MediaCodecs.DecoderAlignment(codec)` before there is a decoder. Create a buffer to hold the decoded frame:
 ```cs
 var nv12Buffer = new byte[videoDecoder.OutputSize];
 ```
@@ -82,7 +82,7 @@ while (videoDecoder.ProcessOutput(ref nv12Buffer, out _, out long frameTime))
 videoDecoder.EndDrain();
 ```
 ## Color conversion
-`MediaCodecs.CreateColorConverter` converts between NV12, YUY2, UYVY, RGB24, RGB32 and ARGB32. It uses the system's converter where there is one: Media Foundation's video processor on Windows, VideoToolbox on macOS and iOS 16 or later, GStreamer's `videoconvert` on Linux. Otherwise it uses `ManagedColorConverter`, which converts YUV to RGB and RGB to NV12: on Android, on iOS before 16, on Linux without GStreamer, and on Windows for a matrix other than the one Media Foundation picks for that height (BT.601 below 720 lines, BT.709 from 720), which it does not let you change. `MediaCodecs.CanConvert` says whether a conversion is available.
+`MediaCodecs.CreateColorConverter` converts between NV12, YUY2, UYVY, RGB24, RGB32 and ARGB32. It uses the system's converter where there is one. Otherwise it uses `ManagedColorConverter`, which converts YUV to RGB and RGB to NV12.
 
 RGB rows are bottom-up by default, as in Media Foundation; set `TopDown` for a bitmap's order. Convert a decoded frame to RGB for display:
 ```cs
@@ -132,7 +132,7 @@ using (var videoEncoder = MediaCodecs.CreateVideoEncoder(VideoCodec.H265, option
 ```
 The encoder takes NV12. Convert RGB to it with a color converter, as in [Color conversion](#color-conversion), from `MediaFormats.RGB32` to `MediaFormats.NV12`.
 
-Each access unit comes out in Annex B, with its start codes; a key frame has the parameter sets in front of it. On macOS the encoder takes NV12 of exactly `Width` by `Height`, encodes no B-frames, and reports a setting it has no equivalent of - `Threads` - in `UnappliedSettings`.
+Each access unit comes out in Annex B, with its start codes; a key frame has the parameter sets in front of it. 
 
 Create a buffer to hold the encoded NALU/OBU:
 ```cs
@@ -154,7 +154,7 @@ if (videoEncoder.ProcessInput(nv12Buffer, timestamp))
 }
 ```
 ## Audio decoding
-Create and initialize the decoder. AAC needs its AudioSpecificConfig, which the MP4 file's `esds` box holds; FLAC its metadata blocks, each with its header, as the `dfLa` box holds them; ALAC its ALACSpecificConfig, the 24 byte magic cookie. The channels, rate and bits of FLAC and ALAC are read of those. MP3 needs no config, and Opus of mono or stereo none - more channels need its `dOps` payload - but give Opus its pre-skip, the samples the decoder needs to warm up, so that they are dropped:
+Create and initialize the decoder. 
 ```cs
 var options = new AudioDecoderOptions
 {
@@ -189,7 +189,7 @@ foreach (var audioFrame in audioFrames)
 }
 ```
 ## Audio encoding
-Create and initialize the encoder. Windows' AAC encoder takes 44100 or 48000 Hz, 16 bit PCM of 1, 2 or 6 (5.1) channels, 1024 samples a frame, encoded at the rate it offers nearest 128 kbit/s a channel - not 3, 4 or 5 channels, which it does not encode, nor 8, whose 7.1 it encodes as front-wide, not as players play it; FLAC and ALAC 16 or 24 bit PCM (`BitsPerSample`), a frame of 4096 samples; MP3 16 bit PCM, at the `Bitrate` nearest its list. The config for the MP4 file is `Config`: AAC's AudioSpecificConfig, FLAC's metadata blocks - complete, with the total samples and MD5, once the encoder is drained - or ALAC's magic cookie:
+Create and initialize the encoder. 
 ```cs
 var options = new AudioEncoderOptions { Channels = channelCount, SampleRate = samplingRate };
 using (var audioEncoder = MediaCodecs.CreateAudioEncoder(AudioCodec.AAC, options))
