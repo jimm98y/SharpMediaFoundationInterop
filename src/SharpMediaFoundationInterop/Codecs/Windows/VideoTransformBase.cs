@@ -19,8 +19,13 @@ namespace SharpMediaFoundationInterop.Codecs
         public uint OriginalWidth { get; }
         public uint OriginalHeight { get; }
 
-        public uint Width { get; }
-        public uint Height { get; }
+        /// <summary>
+        /// The size of the frames handed out: of the size asked for, rounded to the codec's multiple - and, once the stream
+        /// changes the type, of that type's frame, which a decoder rounds its own way: of an odd width, AV1's to an even
+        /// one. Rows are <see cref="VideoFrameFormats.Stride"/> of it; the picture is the <see cref="OriginalWidth"/> of it.
+        /// </summary>
+        public uint Width { get; private set; }
+        public uint Height { get; private set; }
 
         /// <summary>The frame rate, where the stream says it; 0 over 0 where it does not.</summary>
         public uint FpsNom { get; }
@@ -99,6 +104,25 @@ namespace SharpMediaFoundationInterop.Codecs
         protected override void OnOutputSizeChanged(uint size)
         {
             OutputSize = Math.Max(size, MinimumOutputSize);
+        }
+
+        protected override void OnOutputTypeChanged(IMFMediaType mediaType)
+        {
+            try
+            {
+                // MF_MT_FRAME_SIZE: the width in its high 32 bits, the height in its low ones
+                mediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out ulong size);
+                uint width = (uint)(size >> 32), height = (uint)size;
+                if (width > 0 && height > 0)
+                {
+                    Width = width;
+                    Height = height;
+                }
+            }
+            catch (Exception)
+            {
+                // a type of no frame size: the size asked for
+            }
         }
 
         /// <summary>
