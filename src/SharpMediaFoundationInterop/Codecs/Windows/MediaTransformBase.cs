@@ -141,6 +141,9 @@ namespace SharpMediaFoundationInterop.Codecs
         /// <summary>The bytes of a frame of output grown, at a stream change: what a caller's buffer is to hold.</summary>
         protected virtual void OnOutputSizeChanged(uint size) { }
 
+        /// <summary>The type the transform hands out from now on, set at a stream change: of a video's, its frame's size.</summary>
+        protected virtual void OnOutputTypeChanged(IMFMediaType mediaType) { }
+
         /// <summary>
         /// The next output read into <paramref name="bytes"/>: from the sample of ours the output buffer holds, used again
         /// call after call, or from one the transform hands out - of the GPU's memory, decoding there - let go of after.
@@ -182,11 +185,9 @@ namespace SharpMediaFoundationInterop.Codecs
                     sample.ConvertToContiguousBuffer(out buffer);
                 try
                 {
-                    // a frame longer than the caller's buffer - of a type the transform turned to - into one of its size
-                    buffer.GetCurrentLength(out uint current);
-                    if (bytes != null && bytes.Length < current)
-                        bytes = new byte[current];
-                    return MediaUtils.CopyBuffer(buffer, bytes, out length);
+                    // a frame longer than the caller's buffer - of a type the transform turned to, or of padded rows - into
+                    // one of its size: of the length the buffer locks, which may be more than the length it says
+                    return MediaUtils.CopyBuffer(buffer, ref bytes, out length);
                 }
                 finally
                 {
@@ -366,6 +367,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 if (Log.WarnEnabled) Log.Warn(log.ToString());
 
                 transform.SetOutputType(streamID, mediaType, 0);
+                OnOutputTypeChanged(mediaType);
                 FitOutputBuffer(transform, streamID, dataBuffer);
 
                 // because the subtype has not changed, do not flush, otherwise we'd lose frames:

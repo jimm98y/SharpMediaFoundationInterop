@@ -87,6 +87,37 @@ namespace SharpMediaFoundationInterop.Utils
             return result;
         }
 
+        /// <summary>
+        /// The bytes of a buffer into the caller's array, grown to hold them: of a frame of padded rows - a decoder's of
+        /// an odd width - what the buffer locks is more than it says its length is.
+        /// </summary>
+        [SupportedOSPlatform("windows10.0.17763.0")]
+        public static unsafe bool CopyBuffer(IMFMediaBuffer buffer, ref byte[] sampleBytes, out uint sampleSize)
+        {
+            bool ret = false;
+            try
+            {
+                uint maxLength = default;
+                uint currentLength = default;
+                byte* data = default;
+                buffer.Lock(&data, &maxLength, &currentLength);
+                sampleSize = currentLength;
+                if (sampleBytes != null)
+                {
+                    if (sampleBytes.Length < currentLength)
+                        sampleBytes = new byte[currentLength];
+                    Marshal.Copy((nint)data, sampleBytes, 0, (int)currentLength);
+                }
+                ret = true;
+            }
+            finally
+            {
+                buffer.SetCurrentLength(0);
+                buffer.Unlock();
+            }
+            return ret;
+        }
+
         [SupportedOSPlatform("windows10.0.17763.0")]
         public static unsafe bool CopyBuffer(IMFMediaBuffer buffer, byte[] sampleBytes, out uint sampleSize)
         {
