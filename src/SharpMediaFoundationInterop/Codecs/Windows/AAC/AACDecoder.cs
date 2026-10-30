@@ -19,13 +19,6 @@ namespace SharpMediaFoundationInterop.Codecs
         public AACDecoder(uint channels, uint sampleRate, byte[] userData, int channelConfiguration)
           : base(1024, channels, sampleRate, 16) // PCM = 16 bit, Float = 32 bit
         {
-            if (sampleRate != 44100 && sampleRate != 48000)
-            {
-                throw new ArgumentException(
-                    $"MediaFoundation AAC encoder does not support sample rate {sampleRate} Hz. " +
-                    $"The only supported sample rates are 44100 and 48000 Hz.");
-            }
-
             if (userData == null)
             {
                 throw new ArgumentNullException(nameof(userData));
