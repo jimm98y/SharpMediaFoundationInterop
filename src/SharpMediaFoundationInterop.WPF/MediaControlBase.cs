@@ -1977,12 +1977,30 @@ namespace SharpMediaFoundationInterop.WPF
 
         private void VideoLoop(StopFlag stop)
         {
+            // the source told it is out of sight, or in sight again, as the control is: of this thread, between its reads -
+            // once it is initialized, which it is in sight, and as its surface is made
+            bool suspended = false;
+            IVideoSource told = null;
             while (!stop.Requested)
             {
                 bool worked = false;
                 try
                 {
-                    if (!_hidden && _source is IVideoSource videoSource)
+                    bool hidden = _hidden;
+                    if (_source is IVideoSource shown && HasSurface)
+                    {
+                        if (!ReferenceEquals(shown, told))
+                        {
+                            told = shown;
+                            suspended = false;
+                        }
+                        if (hidden != suspended)
+                        {
+                            shown.SetSuspended(hidden);
+                            suspended = hidden;
+                        }
+                    }
+                    if (!hidden && _source is IVideoSource videoSource)
                         worked = DecodeVideoPass(videoSource);
                 }
                 catch (Exception ex)

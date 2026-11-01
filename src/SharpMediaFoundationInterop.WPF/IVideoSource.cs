@@ -182,6 +182,13 @@ namespace SharpMediaFoundationInterop.WPF
         bool IsStill => false;
 
         /// <summary>
+        /// The control out of sight - on another tab, collapsed, unloaded - or in sight again: a live source lets go of
+        /// what it captures with - a camera, its light off - and opens it again. Of a file, nothing: it waits where it was.
+        /// Called on the thread frames are read on, between reads.
+        /// </summary>
+        void SetSuspended(bool suspended) { }
+
+        /// <summary>
         /// Asks for frames decoded on a device, before the source is initialized: where its decoder can decode on the GPU,
         /// <see cref="GetVideoFrame"/> hands them out as textures of it, <see cref="GpuVideoFrame"/>s, never leaving the GPU.
         /// </summary>

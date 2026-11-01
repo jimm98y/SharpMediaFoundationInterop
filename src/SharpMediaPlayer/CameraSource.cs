@@ -29,6 +29,11 @@ namespace SharpMediaFoundationInterop.WPF
 
         public byte[] GetVideoSample(out long timestamp)
         {
+            // the camera let go of, out of sight: no frame
+            timestamp = 0;
+            if (_device == null)
+                return Empty;
+
             // the capture time the device gives the frame, in 100 ns units
             if (_device.ReadSample(_yuy2Buffer, out timestamp))
             {
@@ -89,6 +94,29 @@ namespace SharpMediaFoundationInterop.WPF
             ArrayPool<byte>.Shared.Return(decoded);
         }
 
+        /// <summary>Out of sight, the camera let go of - its light off - and opened again as the control is shown.</summary>
+        public void SetSuspended(bool suspended)
+        {
+            if (suspended && _device != null)
+            {
+                CloseDevice();
+                if (Log.InfoEnabled) Log.Info("Camera closed: out of sight");
+            }
+            else if (!suspended && _device == null && !_disposedValue)
+            {
+                OpenAsync();
+                if (Log.InfoEnabled) Log.Info("Camera opened again: in sight");
+            }
+        }
+
+        private void CloseDevice()
+        {
+            _converter?.Dispose();
+            _converter = null;
+            _device?.Dispose();
+            _device = null;
+        }
+
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposedValue)
@@ -97,10 +125,7 @@ namespace SharpMediaFoundationInterop.WPF
                 {
                 }
 
-                if(_device != null)
-                {
-                    _device.Dispose();
-                }
+                CloseDevice();
 
                 _disposedValue = true;
             }
