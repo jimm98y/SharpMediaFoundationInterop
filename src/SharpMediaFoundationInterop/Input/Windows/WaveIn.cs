@@ -43,8 +43,9 @@ namespace SharpMediaFoundationInterop.Input
 
         private bool _disposedValue;
 
-        // https://github.com/microsoft/CsWin32/issues/623
-        private Delegate _callback; // hold on to the delegate so that it does not get garbage collected
+        // this, as the device's callback reaches it: a function of no instance, of no delegate - a weak handle, so the
+        // device holds nothing of it alive
+        private GCHandle _self;
 
         public WaveIn()
         { }
@@ -93,8 +94,10 @@ namespace SharpMediaFoundationInterop.Input
             waveFormat.wFormatTag = 1; // pcm
 
             HWAVEIN device;
-            _callback = DoneCallback;
-            PInvoke.waveInOpen(&device, deviceID, &waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
+            if (!_self.IsAllocated)
+                _self = GCHandle.Alloc(this, GCHandleType.Weak);
+            PInvoke.waveInOpen(&device, deviceID, &waveFormat,
+                (nuint)(delegate* unmanaged<HWAVEIN, uint, nuint, nuint, nuint, void>)&Callback, (nuint)(nint)GCHandle.ToIntPtr(_self), MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
             this._hDevice = device;
 
             uint audioBufferIndex = 0;
@@ -114,7 +117,23 @@ namespace SharpMediaFoundationInterop.Input
             PInvoke.waveInStart(this._hDevice);
         }
 
-        private unsafe void DoneCallback(HWAVEIN* dev, uint uMsg, uint* dwUser, uint dwParam1, uint dwParam2)
+        // the device's: a buffer recorded - of the input its instance is the handle of
+        [UnmanagedCallersOnly]
+        private static void Callback(HWAVEIN device, uint message, nuint instance, nuint param1, nuint param2)
+        {
+            try
+            {
+                if (instance != 0 && GCHandle.FromIntPtr((nint)instance).Target is WaveIn input)
+                    input.DoneCallback(message);
+            }
+            catch (Exception ex)
+            {
+                // nothing thrown back into the device's thread
+                if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
+            }
+        }
+
+        private unsafe void DoneCallback(uint uMsg)
         {
             if (uMsg == MM_WIM_DATA)
             {
@@ -196,6 +215,9 @@ namespace SharpMediaFoundationInterop.Input
                 if (disposing)
                 {
                     Close();
+                    // closed, the device calls back no more: of a finalizer, it may - the weak handle then reaches nothing
+                    if (_self.IsAllocated)
+                        _self.Free();
                 }
 
                 if (_audioBuffer != nint.Zero)

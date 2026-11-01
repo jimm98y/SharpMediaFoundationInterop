@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using System.Threading;
+using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Direct3D;
@@ -55,9 +56,9 @@ namespace SharpMediaFoundationInterop.WPF
             PInvoke.MFCreateDXGIDeviceManager(out uint resetToken, out IMFDXGIDeviceManager manager).ThrowOnFailure();
             manager.ResetDevice(device, resetToken);
 
-            _device = Marshal.GetIUnknownForObject(device);
-            _context = Marshal.GetIUnknownForObject(context);
-            _manager = Marshal.GetIUnknownForObject(manager);
+            _device = ComObjects.UnknownOf(device);
+            _context = ComObjects.UnknownOf(context);
+            _manager = ComObjects.UnknownOf(manager);
 
             // this thread's are the ones it was made with
             _threadDevice = new ThreadLocal<ID3D11Device>(() => (ID3D11Device)ForThisThread(_device));
@@ -68,10 +69,10 @@ namespace SharpMediaFoundationInterop.WPF
             _threadManager.Value = manager;
         }
 
-        /// <summary>A wrapper of the object, of the calling thread's apartment, whichever thread made the object.</summary>
-        internal static object ForThisThread(IntPtr unknown)
+        /// <summary>A wrapper of the object of its own, for the calling thread, whichever thread made the object.</summary>
+        internal static unsafe object ForThisThread(IntPtr unknown)
         {
-            return Marshal.GetUniqueObjectForIUnknown(unknown);
+            return ComObjects.Wrap<object>((void*)unknown);
         }
 
         /// <summary>

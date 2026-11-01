@@ -37,7 +37,8 @@ namespace SharpMediaFoundationInterop.Utils
         public static unsafe IMFSample CreateSample(ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
         {
             uint length = (uint)(prefix.Length + data.Length);
-            Check(PInvoke.MFCreateMemoryBuffer(length, out IMFMediaBuffer buffer));
+            // of each frame: objects of their own, let go of as soon as they are done with
+            IMFMediaBuffer buffer = MediaObjects.CreateMemoryBuffer(length);
 
             try
             {
@@ -54,8 +55,10 @@ namespace SharpMediaFoundationInterop.Utils
                 buffer.Unlock();
             }
 
-            Check(PInvoke.MFCreateSample(out IMFSample sample));
+            IMFSample sample = MediaObjects.CreateSample();
             sample.AddBuffer(buffer);
+            // the sample's to hold now
+            ComObjects.Release(buffer);
             if (sampleDuration > 0) // not known where the frame rate is not
                 sample.SetSampleDuration(sampleDuration);
             sample.SetSampleTime(timestamp); // timestamp is required
@@ -63,17 +66,23 @@ namespace SharpMediaFoundationInterop.Utils
             return sample;
         }
 
+        /// <summary>
+        /// The buffer a transform's output is read into: of a size, a sample of ours of a buffer that large - its pointer's
+        /// reference the buffer's, let go of with <see cref="ReleaseOutputDataBuffer"/>; of none, a transform's own samples.
+        /// </summary>
         [SupportedOSPlatform("windows10.0.17763.0")]
-        public static MFT_OUTPUT_DATA_BUFFER[] CreateOutputDataBuffer(uint size = 0)
+        public static unsafe MFT_OUTPUT_DATA_BUFFER[] CreateOutputDataBuffer(uint size = 0)
         {
             MFT_OUTPUT_DATA_BUFFER[] result = new MFT_OUTPUT_DATA_BUFFER[1];
 
             if (size > 0)
             {
-                Check(PInvoke.MFCreateMemoryBuffer(size, out IMFMediaBuffer buffer));
-                Check(PInvoke.MFCreateSample(out IMFSample sample));
+                IMFMediaBuffer buffer = MediaObjects.CreateMemoryBuffer(size);
+                IMFSample sample = MediaObjects.CreateSample();
                 sample.AddBuffer(buffer);
-                result[0].pSample = sample;
+                result[0].pSample = (IMFSample_unmanaged*)ComObjects.PointerOf(sample);
+                ComObjects.Release(buffer);
+                ComObjects.Release(sample);
             }
             else
             {
@@ -85,6 +94,20 @@ namespace SharpMediaFoundationInterop.Utils
             result[0].pEvents = default;
 
             return result;
+        }
+
+        /// <summary>Lets go of the sample of ours an output buffer holds, made with <see cref="CreateOutputDataBuffer"/>.</summary>
+        [SupportedOSPlatform("windows10.0.17763.0")]
+        public static unsafe void ReleaseOutputDataBuffer(MFT_OUTPUT_DATA_BUFFER[] dataBuffer)
+        {
+            if (dataBuffer == null)
+                return;
+            for (int i = 0; i < dataBuffer.Length; i++)
+            {
+                if (dataBuffer[i].pSample != null)
+                    Marshal.Release((nint)dataBuffer[i].pSample);
+                dataBuffer[i].pSample = null;
+            }
         }
 
         /// <summary>

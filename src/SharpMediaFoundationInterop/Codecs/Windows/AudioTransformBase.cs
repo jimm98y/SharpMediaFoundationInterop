@@ -105,6 +105,8 @@ namespace SharpMediaFoundationInterop.Codecs
                         DestroyTransform(_transform);
                         _transform = null;
                     }
+                    // the sample of ours the output is read into
+                    MediaUtils.ReleaseOutputDataBuffer(_dataBuffer);
                 }
 
                 _disposedValue = true;

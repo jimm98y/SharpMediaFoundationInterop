@@ -6,7 +6,7 @@ namespace SharpMediaFoundationInterop.Utils
 {
     /// <summary>AAudio, the NDK's sound API of Android 8 or later: streams out to the speaker and in from the microphone.</summary>
     [SupportedOSPlatform("android26.0")]
-    internal static unsafe class AAudio
+    internal static unsafe partial class AAudio
     {
         private const string Lib = "libaaudio.so";
 
@@ -20,27 +20,27 @@ namespace SharpMediaFoundationInterop.Utils
         public const int SHARING_MODE_SHARED = 1;
         public const int PERFORMANCE_MODE_NONE = 10;
 
-        [DllImport(Lib)] public static extern int AAudio_createStreamBuilder(out IntPtr builder);
-        [DllImport(Lib)] public static extern void AAudioStreamBuilder_setDirection(IntPtr builder, int direction);
-        [DllImport(Lib)] public static extern void AAudioStreamBuilder_setSampleRate(IntPtr builder, int sampleRate);
-        [DllImport(Lib)] public static extern void AAudioStreamBuilder_setChannelCount(IntPtr builder, int channelCount);
-        [DllImport(Lib)] public static extern void AAudioStreamBuilder_setFormat(IntPtr builder, int format);
-        [DllImport(Lib)] public static extern void AAudioStreamBuilder_setSharingMode(IntPtr builder, int sharingMode);
-        [DllImport(Lib)] public static extern void AAudioStreamBuilder_setPerformanceMode(IntPtr builder, int mode);
-        [DllImport(Lib)] public static extern int AAudioStreamBuilder_openStream(IntPtr builder, out IntPtr stream);
-        [DllImport(Lib)] public static extern int AAudioStreamBuilder_delete(IntPtr builder);
-        [DllImport(Lib)] public static extern int AAudioStream_requestStart(IntPtr stream);
-        [DllImport(Lib)] public static extern int AAudioStream_requestPause(IntPtr stream);
-        [DllImport(Lib)] public static extern int AAudioStream_requestFlush(IntPtr stream);
-        [DllImport(Lib)] public static extern int AAudioStream_requestStop(IntPtr stream);
-        [DllImport(Lib)] public static extern int AAudioStream_close(IntPtr stream);
-        [DllImport(Lib)] public static extern int AAudioStream_write(IntPtr stream, void* buffer, int numFrames, long timeoutNanoseconds);
-        [DllImport(Lib)] public static extern int AAudioStream_read(IntPtr stream, void* buffer, int numFrames, long timeoutNanoseconds);
-        [DllImport(Lib)] public static extern long AAudioStream_getFramesWritten(IntPtr stream);
-        [DllImport(Lib)] public static extern long AAudioStream_getFramesRead(IntPtr stream);
-        [DllImport(Lib)] public static extern IntPtr AAudio_convertResultToText(int result);
-        [DllImport(Lib)] public static extern int AAudioStream_waitForStateChange(IntPtr stream, int inputState, out int nextState, long timeoutNanoseconds);
-        [DllImport(Lib)] public static extern int AAudioStream_getState(IntPtr stream);
+        [LibraryImport(Lib)] public static partial int AAudio_createStreamBuilder(out IntPtr builder);
+        [LibraryImport(Lib)] public static partial void AAudioStreamBuilder_setDirection(IntPtr builder, int direction);
+        [LibraryImport(Lib)] public static partial void AAudioStreamBuilder_setSampleRate(IntPtr builder, int sampleRate);
+        [LibraryImport(Lib)] public static partial void AAudioStreamBuilder_setChannelCount(IntPtr builder, int channelCount);
+        [LibraryImport(Lib)] public static partial void AAudioStreamBuilder_setFormat(IntPtr builder, int format);
+        [LibraryImport(Lib)] public static partial void AAudioStreamBuilder_setSharingMode(IntPtr builder, int sharingMode);
+        [LibraryImport(Lib)] public static partial void AAudioStreamBuilder_setPerformanceMode(IntPtr builder, int mode);
+        [LibraryImport(Lib)] public static partial int AAudioStreamBuilder_openStream(IntPtr builder, out IntPtr stream);
+        [LibraryImport(Lib)] public static partial int AAudioStreamBuilder_delete(IntPtr builder);
+        [LibraryImport(Lib)] public static partial int AAudioStream_requestStart(IntPtr stream);
+        [LibraryImport(Lib)] public static partial int AAudioStream_requestPause(IntPtr stream);
+        [LibraryImport(Lib)] public static partial int AAudioStream_requestFlush(IntPtr stream);
+        [LibraryImport(Lib)] public static partial int AAudioStream_requestStop(IntPtr stream);
+        [LibraryImport(Lib)] public static partial int AAudioStream_close(IntPtr stream);
+        [LibraryImport(Lib)] public static partial int AAudioStream_write(IntPtr stream, void* buffer, int numFrames, long timeoutNanoseconds);
+        [LibraryImport(Lib)] public static partial int AAudioStream_read(IntPtr stream, void* buffer, int numFrames, long timeoutNanoseconds);
+        [LibraryImport(Lib)] public static partial long AAudioStream_getFramesWritten(IntPtr stream);
+        [LibraryImport(Lib)] public static partial long AAudioStream_getFramesRead(IntPtr stream);
+        [LibraryImport(Lib)] public static partial IntPtr AAudio_convertResultToText(int result);
+        [LibraryImport(Lib)] public static partial int AAudioStream_waitForStateChange(IntPtr stream, int inputState, out int nextState, long timeoutNanoseconds);
+        [LibraryImport(Lib)] public static partial int AAudioStream_getState(IntPtr stream);
 
         public const int STREAM_STATE_PAUSING = 7;
         public const int STREAM_STATE_PAUSED = 8;

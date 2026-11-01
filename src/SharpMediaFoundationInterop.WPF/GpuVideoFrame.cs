@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Graphics.Direct3D11;
 using Windows.Win32.Graphics.Dxgi.Common;
@@ -20,7 +21,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             _pool = pool;
             Texture = texture;
-            TexturePointer = Marshal.GetIUnknownForObject(texture);
+            TexturePointer = ComObjects.UnknownOf(texture);
         }
 
         /// <summary>
@@ -66,7 +67,8 @@ namespace SharpMediaFoundationInterop.WPF
         /// </summary>
         public GpuVideoFrame CopyOf(IMFSample sample)
         {
-            sample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
+            // of each frame: objects of their own, let go of once copied
+            IMFMediaBuffer buffer = MediaObjects.GetBuffer(sample, 0);
             try
             {
                 var dxgi = (IMFDXGIBuffer)buffer;
@@ -81,12 +83,12 @@ namespace SharpMediaFoundationInterop.WPF
                 }
                 finally
                 {
-                    Marshal.ReleaseComObject(source);
+                    ComObjects.Release(source);
                 }
             }
             finally
             {
-                Marshal.ReleaseComObject(buffer);
+                ComObjects.Release(buffer);
             }
         }
 
@@ -113,7 +115,7 @@ namespace SharpMediaFoundationInterop.WPF
                 // what a video processor takes its input from
                 BindFlags = D3D11_BIND_FLAG.D3D11_BIND_DECODER,
             };
-            _device.Device.CreateTexture2D(desc, null, out ID3D11Texture2D texture);
+            ID3D11Texture2D texture = D3D11Objects.CreateTexture2D(_device.Device, desc);
             frame = new GpuVideoFrame(this, texture);
             _all.Add(frame);
             return frame;
@@ -130,14 +132,7 @@ namespace SharpMediaFoundationInterop.WPF
             Guid iid = typeof(ID3D11Texture2D).GUID;
             void* resource;
             buffer.GetResource(&iid, &resource);
-            try
-            {
-                return (ID3D11Texture2D)Marshal.GetObjectForIUnknown((nint)resource);
-            }
-            finally
-            {
-                Marshal.Release((nint)resource);
-            }
+            return ComObjects.Take<ID3D11Texture2D>(resource);
         }
 
         public void Dispose()
@@ -146,7 +141,7 @@ namespace SharpMediaFoundationInterop.WPF
             while (_all.TryTake(out var frame))
             {
                 Marshal.Release(frame.TexturePointer);
-                Marshal.ReleaseComObject(frame.Texture);
+                ComObjects.Release(frame.Texture);
             }
             while (_spare.TryTake(out _)) { }
         }
@@ -190,7 +185,7 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 // of NV12, the chroma's rows after the luma's, of the same pitch
                 var initial = new D3D11_SUBRESOURCE_DATA { pSysMem = data, SysMemPitch = width };
-                device.Device.CreateTexture2D(desc, initial, out _black);
+                _black = D3D11Objects.CreateTexture2D(device.Device, desc, &initial);
             }
         }
 
@@ -236,7 +231,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (_staging == null || _stagingWidth != width || _stagingHeight != height)
             {
                 if (_staging != null)
-                    Marshal.ReleaseComObject(_staging);
+                    ComObjects.Release(_staging);
                 var desc = new D3D11_TEXTURE2D_DESC
                 {
                     Width = width,
@@ -248,7 +243,7 @@ namespace SharpMediaFoundationInterop.WPF
                     Usage = D3D11_USAGE.D3D11_USAGE_STAGING,
                     CPUAccessFlags = D3D11_CPU_ACCESS_FLAG.D3D11_CPU_ACCESS_READ,
                 };
-                _device.Device.CreateTexture2D(desc, null, out _staging);
+                _staging = D3D11Objects.CreateTexture2D(_device.Device, desc);
                 (_stagingWidth, _stagingHeight) = (width, height);
             }
 
@@ -285,9 +280,9 @@ namespace SharpMediaFoundationInterop.WPF
         public void Dispose()
         {
             _pool.Dispose();
-            Marshal.ReleaseComObject(_black);
+            ComObjects.Release(_black);
             if (_staging != null)
-                Marshal.ReleaseComObject(_staging);
+                ComObjects.Release(_staging);
             _eyes.Clear();
         }
     }
