@@ -115,7 +115,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             // an ICC profile, of a matrix and curves, says the primaries and the transfer over what else does
             var prof = colors.FirstOrDefault(x => x.ColourType == IsoStream.FromFourCC("prof") || x.ColourType == IsoStream.FromFourCC("rICC"));
-            if (prof?.ICCProfile?.Data is StreamMarker marker && ReadBytes(marker) is byte[] icc
+            if (prof?.ICCProfile?.Data is byte[] { Length: > 0 } icc
                 && VideoColor.FromIcc(icc, matrix, fullRange, bitDepth, height) is VideoColor profiled)
                 return profiled;
 
@@ -153,16 +153,6 @@ namespace SharpMediaFoundationInterop.WPF
                 default:
                     return null;
             }
-        }
-
-        private static byte[] ReadBytes(StreamMarker marker)
-        {
-            if (marker.Stream == null || marker.Length <= 0 || marker.Length > 16 * 1024 * 1024)
-                return null;
-            if (marker.Stream.GetCurrentOffset() != marker.Position)
-                marker.Stream.SeekFromBeginning(marker.Position);
-            marker.Stream.ReadBytes((ulong)marker.Length, out byte[] bytes);
-            return bytes;
         }
     }
 }
