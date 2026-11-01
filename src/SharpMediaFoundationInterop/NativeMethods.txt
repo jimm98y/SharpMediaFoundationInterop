@@ -45,7 +45,7 @@ IDXGIAdapter1
 D3D11CreateDevice
 D3D11_SDK_VERSION
 IDXGIOutput5
-SetProcessDpiAwarenessContext
+SetThreadDpiAwarenessContext
 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
 ID3D11VideoDevice
 ID3D11VideoContext

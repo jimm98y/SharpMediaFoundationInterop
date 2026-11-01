@@ -112,7 +112,36 @@ namespace SharpMediaFoundationInterop.Input
             Initialize(device.AdapterID, device.OutputID);
         }
 
-        public unsafe void Initialize(uint adapterID, uint outputID)
+        public void Initialize(uint adapterID, uint outputID)
+        {
+            using (PerMonitorAware())
+                InitializeOutput(adapterID, outputID);
+        }
+
+        /// <summary>
+        /// This thread per-monitor DPI aware till the scope is let go of, the thread's awareness as it was then: the screen
+        /// told of its pixels, not of pixels scaled, and DuplicateOutput1 duplicating it, which asks for it. Not the process:
+        /// its windows, made already of their own awareness - an app's of WPF - would be drawn scaled wrongly from then on,
+        /// their title bars first.
+        /// </summary>
+        private static DpiScope PerMonitorAware() =>
+            new DpiScope(PInvoke.SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2));
+
+        private readonly struct DpiScope : IDisposable
+        {
+            private readonly DPI_AWARENESS_CONTEXT _previous;
+
+            public DpiScope(DPI_AWARENESS_CONTEXT previous) => _previous = previous;
+
+            // of a thread's awareness not set - a call that failed - nothing to put back
+            public void Dispose()
+            {
+                if (_previous != default)
+                    PInvoke.SetThreadDpiAwarenessContext(_previous);
+            }
+        }
+
+        private unsafe void InitializeOutput(uint adapterID, uint outputID)
         {
             // TODO: reinitialize support when the device is lost
             PInvoke.CreateDXGIFactory1(typeof(IDXGIFactory1).GUID, out var factory);
@@ -164,10 +193,6 @@ namespace SharpMediaFoundationInterop.Input
                 SampleDesc = { Count = 1, Quality = 0 },
                 Usage = D3D11_USAGE.D3D11_USAGE_STAGING
             };
-
-            // must be set for the DuplicateOutput1 to succeed
-            // in WPF app, this call requires [assembly: DisableDpiAwareness] attribute and app.manifest with Windows 10 compatibility
-            PInvoke.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
             for (int i = 0; i < _staging.Length; i++)
                 _device.CreateTexture2D(stagingDesc, null, out _staging[i]);
@@ -288,8 +313,17 @@ namespace SharpMediaFoundationInterop.Input
         }
 
         private const int DXGI_ERROR_WAIT_TIMEOUT = unchecked((int)0x887A0027);
+        // of an adapter or an output past the last
+        private const int DXGI_ERROR_NOT_FOUND = unchecked((int)0x887A0002);
 
-        public static unsafe ScreenDevice[] Enumerate()
+        public static ScreenDevice[] Enumerate()
+        {
+            // each screen of its pixels: of where it is and how large, as Initialize finds it
+            using (PerMonitorAware())
+                return EnumerateOutputs();
+        }
+
+        private static unsafe ScreenDevice[] EnumerateOutputs()
         {
             List<ScreenDevice> ret = new List<ScreenDevice>();
 
@@ -304,7 +338,12 @@ namespace SharpMediaFoundationInterop.Input
                 {
                     factory1.EnumAdapters(adapterID, out adapter); // first returns the adapter with the output on which the desktop primary is displayed 
                 }
-                catch(Exception ex)
+                catch (COMException ex) when (ex.HResult == DXGI_ERROR_NOT_FOUND)
+                {
+                    // past the last adapter: the end of them, no error
+                    break;
+                }
+                catch (Exception ex)
                 {
                     if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
                     break;
@@ -334,13 +373,13 @@ namespace SharpMediaFoundationInterop.Input
                 {
                     IDXGIOutput outputEn;
 
-                    try
+                    // past the last output: the end of them, no error
+                    HRESULT enumerated = adapter.EnumOutputs(outputID, out outputEn);
+                    if (enumerated.Value == DXGI_ERROR_NOT_FOUND)
+                        break;
+                    if (enumerated.Failed)
                     {
-                        MediaUtils.Check(adapter.EnumOutputs(outputID, out outputEn));
-                    }
-                    catch (Exception ex)
-                    {
-                        if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
+                        if (Log.ErrorEnabled) Log.Error($"The outputs of adapter {adapterID} could not be told: 0x{enumerated.Value:X8}");
                         break;
                     }
 

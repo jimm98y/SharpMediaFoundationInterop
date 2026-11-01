@@ -22,6 +22,8 @@ namespace SharpMediaFoundationInterop.WPF
         private const int D3DPOOL_DEFAULT = 0;
 
         // the methods' places in the tables of IDirect3D9Ex, IDirect3DDevice9Ex and IDirect3DTexture9
+        private const int GetAdapterCountSlot = 4;
+        private const int GetAdapterMonitorSlot = 15;
         private const int CreateDeviceExSlot = 20;
         private const int CreateTextureSlot = 23;
         private const int GetSurfaceLevelSlot = 18;
@@ -60,12 +62,17 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>The IDirect3DSurface9 to give D3DImage.</summary>
         public IntPtr Surface => _surface;
 
-        /// <summary>Opens the shared texture, of this size, on a device of its own.</summary>
-        public D3D9SharedSurface(IntPtr sharedHandle, uint width, uint height)
+        /// <summary>
+        /// Opens the shared texture, of this size, on a device of its own: of the adapter of <paramref name="monitor"/> -
+        /// Direct3D 9 has an adapter of each screen, and WPF shows a surface on a screen of the adapter of that screen
+        /// alone: of another's, a window there shows white. Of no monitor, or one no adapter is of, the first adapter.
+        /// </summary>
+        public D3D9SharedSurface(IntPtr sharedHandle, uint width, uint height, IntPtr monitor)
         {
             try
             {
                 Marshal.ThrowExceptionForHR(Direct3DCreate9Ex(D3D_SDK_VERSION, out _d3d));
+                uint adapter = AdapterOf(_d3d, monitor);
 
                 // windowed, and presenting nothing: the device is for the texture; WPF presents
                 var parameters = new D3DPRESENT_PARAMETERS
@@ -79,7 +86,7 @@ namespace SharpMediaFoundationInterop.WPF
                 };
                 IntPtr device;
                 var createDeviceEx = (delegate* unmanaged[Stdcall]<IntPtr, uint, int, IntPtr, uint, D3DPRESENT_PARAMETERS*, void*, IntPtr*, int>)Slot(_d3d, CreateDeviceExSlot);
-                Marshal.ThrowExceptionForHR(createDeviceEx(_d3d, 0, D3DDEVTYPE_HAL, parameters.hDeviceWindow,
+                Marshal.ThrowExceptionForHR(createDeviceEx(_d3d, adapter, D3DDEVTYPE_HAL, parameters.hDeviceWindow,
                     D3DCREATE_HARDWARE_VERTEXPROCESSING | D3DCREATE_MULTITHREADED | D3DCREATE_FPU_PRESERVE, &parameters, null, &device));
                 _device = device;
 
@@ -103,6 +110,22 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         private static IntPtr Slot(IntPtr com, int slot) => ((IntPtr*)*(IntPtr*)com)[slot];
+
+        // the adapter of a screen: the one whose monitor it is
+        private static uint AdapterOf(IntPtr d3d, IntPtr monitor)
+        {
+            if (monitor == IntPtr.Zero)
+                return 0;
+            var getAdapterCount = (delegate* unmanaged[Stdcall]<IntPtr, uint>)Slot(d3d, GetAdapterCountSlot);
+            var getAdapterMonitor = (delegate* unmanaged[Stdcall]<IntPtr, uint, IntPtr>)Slot(d3d, GetAdapterMonitorSlot);
+            uint count = getAdapterCount(d3d);
+            for (uint adapter = 0; adapter < count; adapter++)
+            {
+                if (getAdapterMonitor(d3d, adapter) == monitor)
+                    return adapter;
+            }
+            return 0;
+        }
 
         public void Dispose()
         {

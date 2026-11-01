@@ -26,6 +26,8 @@ namespace SharpMediaFoundationInterop.WPF
         private D3DImage _d3dImage;
         private D3D11FrameRenderer _renderer;
         private D3D9SharedSurface _surface;
+        // the screen the surface is of: shown on another, it is made again of that one's adapter
+        private IntPtr _surfaceMonitor;
         private Int32Rect _dirty;
         private Image _image;
         private VideoInfo _videoInfo;
@@ -69,14 +71,42 @@ namespace SharpMediaFoundationInterop.WPF
             _renderer = output == null
                 ? new D3D11FrameRenderer(_device, videoInfo)
                 : new D3D11FrameRenderer(_device, videoInfo, output.Value.Width, output.Value.Height);
-            _surface = new D3D9SharedSurface(_renderer.SharedHandle, _renderer.Width, _renderer.Height);
             _dirty = new Int32Rect(0, 0, (int)_renderer.Width, (int)_renderer.Height);
+            CreateSharedSurface();
+        }
+
+        /// <summary>
+        /// The surface WPF shows, of the renderer's texture, and the D3DImage of it: of the adapter of the screen the control
+        /// is on now - WPF shows a surface of another adapter's as white.
+        /// </summary>
+        private void CreateSharedSurface()
+        {
+            ReleaseSharedSurface();
+            _surfaceMonitor = CurrentMonitor();
+            _surface = new D3D9SharedSurface(_renderer.SharedHandle, _renderer.Width, _renderer.Height, _surfaceMonitor);
 
             _d3dImage = new D3DImage();
             _d3dImage.IsFrontBufferAvailableChanged += D3DImage_IsFrontBufferAvailableChanged;
             SetBackBuffer();
             _image.Source = _d3dImage;
         }
+
+        /// <summary>The screen the control is on, most of its window: zero where it is in no window yet.</summary>
+        private IntPtr CurrentMonitor() =>
+            PresentationSource.FromVisual(this) is HwndSource source ? MonitorFromWindow(source.Handle, MONITOR_DEFAULTTONEAREST) : IntPtr.Zero;
+
+        /// <summary>Of a control moved to a screen of another adapter, its surface made again of that one's.</summary>
+        private void FollowMonitor()
+        {
+            var monitor = CurrentMonitor();
+            if (monitor != IntPtr.Zero && monitor != _surfaceMonitor && _renderer != null)
+                CreateSharedSurface();
+        }
+
+        private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
 
         /// <summary>
         /// The size of what is shown: null for the whole frame; one eye's picture at its own size; a spherical view at the
@@ -142,6 +172,8 @@ namespace SharpMediaFoundationInterop.WPF
             var output = OutputSize(view, videoInfo);
             if (!RendererFits(output))
                 CreateRenderer(videoInfo, output);
+            else
+                FollowMonitor();
 
             var d3dImage = _d3dImage;
             if (d3dImage == null || !d3dImage.IsFrontBufferAvailable)
@@ -168,6 +200,8 @@ namespace SharpMediaFoundationInterop.WPF
         /// </summary>
         protected override bool RedrawView()
         {
+            if (_renderer != null)
+                FollowMonitor();
             var d3dImage = _d3dImage;
             if (_renderer == null || _videoInfo == null || d3dImage == null || !d3dImage.IsFrontBufferAvailable)
                 return false;
@@ -190,6 +224,13 @@ namespace SharpMediaFoundationInterop.WPF
 
         private void ReleaseResources()
         {
+            ReleaseSharedSurface();
+            _renderer?.Dispose();
+            _renderer = null;
+        }
+
+        private void ReleaseSharedSurface()
+        {
             if (_d3dImage != null)
             {
                 _d3dImage.IsFrontBufferAvailableChanged -= D3DImage_IsFrontBufferAvailableChanged;
@@ -200,8 +241,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
             _surface?.Dispose();
             _surface = null;
-            _renderer?.Dispose();
-            _renderer = null;
+            _surfaceMonitor = IntPtr.Zero;
         }
 
         protected override void Dispose(bool disposing)
