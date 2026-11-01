@@ -149,6 +149,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         private bool _isLooping = false;
         private bool _isMute = false;
+        private float _gain = 1;
 
         /// <summary>
         /// Whether a video plays again from the start as it ends - the overlay's Repeat button, R; off, it stops there,
@@ -223,6 +224,43 @@ namespace SharpMediaFoundationInterop.WPF
                 sender._isMute = (bool)e.NewValue;
             }
         }
+
+        /// <summary>
+        /// How loud the sound is played, from 0 to 1, the default: the overlay's volume slider. The samples are scaled by its
+        /// square, which is heard as even steps, as a player's slider is. Turned, the sound is no longer <see cref="Mute"/>d.
+        /// </summary>
+        public double Volume
+        {
+            get { return (double)GetValue(VolumeProperty); }
+            set { SetValue(VolumeProperty, value); }
+        }
+
+        public static readonly DependencyProperty VolumeProperty =
+            DependencyProperty.Register("Volume", typeof(double), typeof(MediaControlBase),
+                new FrameworkPropertyMetadata(1.0, FrameworkPropertyMetadataOptions.BindsTwoWayByDefault, OnVolumeChanged, (d, value) => Math.Clamp((double)value, 0, 1)));
+
+        private static void OnVolumeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is MediaControlBase sender)
+            {
+                double volume = (double)e.NewValue;
+                Volatile.Write(ref sender._gain, (float)(volume * volume));
+                // a volume turned up is to be heard; of none, there is nothing to unmute for
+                if (volume > 0 && sender.IsLoaded)
+                    sender.Mute = false;
+            }
+        }
+
+        /// <summary>Whether the source has sound that plays: the overlay's mute button and volume are shown for it.</summary>
+        public bool HasAudio
+        {
+            get { return (bool)GetValue(HasAudioProperty); }
+            private set { SetValue(HasAudioPropertyKey, value); }
+        }
+
+        private static readonly DependencyPropertyKey HasAudioPropertyKey =
+            DependencyProperty.RegisterReadOnly("HasAudio", typeof(bool), typeof(MediaControlBase), new PropertyMetadata(false));
+        public static readonly DependencyProperty HasAudioProperty = HasAudioPropertyKey.DependencyProperty;
 
         #region Trick play properties
 
@@ -1135,6 +1173,9 @@ namespace SharpMediaFoundationInterop.WPF
                     break;
                 case Key.H when HasSoundField:
                     ToggleBinaural();
+                    break;
+                case Key.M when HasAudio:
+                    Mute = !Mute;
                     break;
                 case Key.E when IsStereo:
                     NextEyeView();
@@ -2115,7 +2156,7 @@ namespace SharpMediaFoundationInterop.WPF
                 // its speaker mask says: of 5.1, headphones in the sound card's jack - of the front pair - would hear nothing.
                 bool monoToStereo = ambisonics == null && audioInfo.ChannelCount == 1;
                 uint channels = ambisonics?.Channels ?? (monoToStereo ? 2 : audioInfo.ChannelCount);
-                ShowSoundField(ambisonics);
+                ShowSoundField(ambisonics, true);
 
                 lock (_waveSync)
                 {
@@ -2137,11 +2178,12 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         /// <summary>Of the sound's thread, whether there is a sound field, and what it is heard on, for the overlay.</summary>
-        private void ShowSoundField(AmbisonicRenderer ambisonics)
+        private void ShowSoundField(AmbisonicRenderer ambisonics, bool hasAudio)
         {
             bool field = ambisonics != null, binaural = ambisonics?.IsBinaural == true;
             Dispatcher.BeginInvoke(() =>
             {
+                HasAudio = hasAudio;
                 HasSoundField = field;
                 IsBinaural = binaural;
                 CommandManager.InvalidateRequerySuggested();
@@ -2156,7 +2198,7 @@ namespace SharpMediaFoundationInterop.WPF
                 this._waveOut = null;
                 this._ambisonics = null;
                 this._audioClockStart = -1;
-                ShowSoundField(null);
+                ShowSoundField(null, false);
             }
 
             return Task.CompletedTask;
@@ -2199,6 +2241,10 @@ namespace SharpMediaFoundationInterop.WPF
                         if (_isMute)
                         {
                             Array.Fill<byte>(sample, 0);
+                        }
+                        else
+                        {
+                            ScaleVolume(sample, (int)(audioInfo?.BitsPerSample ?? 16));
                         }
 
                         byte[] played = sample;
@@ -2250,6 +2296,25 @@ namespace SharpMediaFoundationInterop.WPF
             }
 
             return false;
+        }
+
+        /// <summary>The decoded sound, integer PCM of 16 or 32 bits, made as loud as <see cref="Volume"/> says, in place.</summary>
+        private void ScaleVolume(byte[] sample, int bitsPerSample)
+        {
+            float gain = Volatile.Read(ref _gain);
+            if (gain >= 1)
+                return;
+
+            if (bitsPerSample == 32)
+            {
+                foreach (ref int value in MemoryMarshal.Cast<byte, int>(sample.AsSpan()))
+                    value = (int)(value * gain);
+            }
+            else if (bitsPerSample == 16)
+            {
+                foreach (ref short value in MemoryMarshal.Cast<byte, short>(sample.AsSpan()))
+                    value = (short)(value * gain);
+            }
         }
 
         private void StartPlaying()

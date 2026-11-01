@@ -205,6 +205,13 @@
                                 <Button x:Name="FullScreenButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                         Command="{x:Static local:MediaControlBase.ToggleFullScreenCommand}" Content="&#xE740;"
                                         ToolTip="Full screen (F, or a double click)" />
+                                <!-- the sound: muted or not, and how loud -->
+                                <Slider x:Name="VolumeSlider" DockPanel.Dock="Right" Width="80" Margin="2,0,6,0" VerticalAlignment="Center"
+                                        Minimum="0" Maximum="1" SmallChange="0.05" LargeChange="0.1" Visibility="Collapsed" ToolTip="Volume"
+                                        Value="{Binding Volume, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                                        Style="{StaticResource {x:Static local:MediaControlBase.SeekSliderStyleKey}}" />
+                                <Button x:Name="MuteButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
+                                        Command="MediaCommands.MuteVolume" Content="&#xE767;" ToolTip="Mute (M)" Visibility="Collapsed" />
                                 <Button x:Name="RepeatButton" DockPanel.Dock="Right" Style="{StaticResource {x:Static local:MediaControlBase.ButtonStyleKey}}"
                                         Command="{x:Static local:MediaControlBase.ToggleRepeatCommand}" Content="&#xE8EE;"
                                         ToolTip="Repeat the video (R)" />
@@ -280,6 +287,16 @@
                         </Trigger>
                         <Trigger Property="IsBinaural" Value="False">
                             <Setter TargetName="HeadphonesButton" Property="Opacity" Value="0.5" />
+                        </Trigger>
+                        <Trigger Property="HasAudio" Value="True">
+                            <Setter TargetName="MuteButton" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="VolumeSlider" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <!-- muted: the speaker crossed out, the volume dimmed -->
+                        <Trigger Property="Mute" Value="True">
+                            <Setter TargetName="MuteButton" Property="Content" Value="&#xE74F;" />
+                            <Setter TargetName="MuteButton" Property="ToolTip" Value="Unmute (M)" />
+                            <Setter TargetName="VolumeSlider" Property="Opacity" Value="0.5" />
                         </Trigger>
                         <Trigger Property="HasSubtitles" Value="True">
                             <Setter TargetName="SubtitleButton" Property="Visibility" Value="Visible" />
