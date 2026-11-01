@@ -27,47 +27,47 @@ namespace SharpMediaFoundationInterop.Utils
     /// <summary>AudioQueue's functions, which play and record sound on macOS and iOS alike.</summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    internal static unsafe class AudioQueue
+    internal static unsafe partial class AudioQueue
     {
         private const string AudioToolboxLib = "/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox";
 
         public static readonly uint kAudioQueueProperty_CurrentDevice = FourCC("aqcd");
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueueNewOutput(AudioStreamBasicDescription* format,
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueueNewOutput(AudioStreamBasicDescription* format,
             delegate* unmanaged<IntPtr, IntPtr, AudioQueueBuffer*, void> callback, IntPtr userData, IntPtr runLoop, IntPtr runLoopMode, uint flags, out IntPtr queue);
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueueNewInput(AudioStreamBasicDescription* format,
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueueNewInput(AudioStreamBasicDescription* format,
             delegate* unmanaged<IntPtr, IntPtr, AudioQueueBuffer*, AudioTimeStamp*, uint, AudioStreamPacketDescription*, void> callback,
             IntPtr userData, IntPtr runLoop, IntPtr runLoopMode, uint flags, out IntPtr queue);
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueueAllocateBuffer(IntPtr queue, uint byteSize, out AudioQueueBuffer* buffer);
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueueAllocateBuffer(IntPtr queue, uint byteSize, out AudioQueueBuffer* buffer);
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueueEnqueueBuffer(IntPtr queue, AudioQueueBuffer* buffer, uint numPacketDescs, AudioStreamPacketDescription* packetDescs);
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueueEnqueueBuffer(IntPtr queue, AudioQueueBuffer* buffer, uint numPacketDescs, AudioStreamPacketDescription* packetDescs);
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueueStart(IntPtr queue, AudioTimeStamp* startTime);
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueueStart(IntPtr queue, AudioTimeStamp* startTime);
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueuePause(IntPtr queue);
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueuePause(IntPtr queue);
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueueStop(IntPtr queue, byte immediate);
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueueStop(IntPtr queue, byte immediate);
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueueReset(IntPtr queue);
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueueReset(IntPtr queue);
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueueDispose(IntPtr queue, byte immediate);
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueueDispose(IntPtr queue, byte immediate);
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueueSetProperty(IntPtr queue, uint propertyID, void* data, uint dataSize);
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueueSetProperty(IntPtr queue, uint propertyID, void* data, uint dataSize);
 
-        [DllImport(AudioToolboxLib)]
-        public static extern int AudioQueueGetCurrentTime(IntPtr queue, IntPtr timeline, AudioTimeStamp* timeStamp, byte* discontinuity);
+        [LibraryImport(AudioToolboxLib)]
+        public static partial int AudioQueueGetCurrentTime(IntPtr queue, IntPtr timeline, AudioTimeStamp* timeStamp, byte* discontinuity);
 
         /// <summary>The PCM format of the library's devices: interleaved, of signed integers, as WAVE's is.</summary>
         public static AudioStreamBasicDescription PcmFormat(uint sampleRate, uint channels, uint bitsPerSample)
