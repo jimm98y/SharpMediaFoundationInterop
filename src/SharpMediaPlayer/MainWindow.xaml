@@ -11,13 +11,20 @@
         <TabControl x:Name="Tabs">
             <TabItem Header="File" x:Name="FileTab">
                 <DockPanel>
-                    <ToolBar DockPanel.Dock="Top">
-                        <Button Content="Open" Click="OpenVideo_Click" ToolTip="A video, or a HEIC, HEIF or AVIF image" />
-                        <Button Content="Open left and right eye..." Click="OpenStereo_Click" Visibility="Collapsed" ToolTip="Two videos of a stereo pair, played side by side" />
-                        <Separator />
-                        <CheckBox x:Name="UseDirect3D" Content="Direct3D" IsChecked="True" Click="UseDirect3D_Click"
+                    <!-- a command bar as Windows 11's apps have: no toolbar's grip -->
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="8,8,8,8">
+                        <Button Click="OpenVideo_Click" ToolTip="A video, or a HEIC, HEIF or AVIF image" Padding="12,5" Margin="0,0,8,0"
+                                Style="{DynamicResource AccentButtonStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Text="&#xE8E5;" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Open" />
+                            </StackPanel>
+                        </Button>
+                        <Button Content="Open left and right eye..." Click="OpenStereo_Click" Visibility="Collapsed" ToolTip="Two videos of a stereo pair, played side by side"
+                                Padding="12,5" Margin="0,0,8,0" />
+                        <CheckBox x:Name="UseDirect3D" Content="Direct3D" IsChecked="True" Click="UseDirect3D_Click" VerticalAlignment="Center" Margin="8,0,0,0"
                                   ToolTip="Drawn with Direct3D, which shows a 180 or 360 degree video as a view to look around in; else into a bitmap, flat" />
-                    </ToolBar>
+                    </StackPanel>
                     <ContentControl x:Name="FileHost" />
                 </DockPanel>
             </TabItem>

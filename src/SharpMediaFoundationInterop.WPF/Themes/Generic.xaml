@@ -8,7 +8,7 @@
         <Setter Property="Height" Value="28" />
         <Setter Property="Margin" Value="2,0" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="Foreground" Value="White" />
         <Setter Property="Background" Value="Transparent" />

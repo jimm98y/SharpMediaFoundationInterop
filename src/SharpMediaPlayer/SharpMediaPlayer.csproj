@@ -8,6 +8,8 @@
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
 	<GeneratePackageOnBuild>False</GeneratePackageOnBuild>
+	<!-- Windows 11's look, of the Fluent theme of ThemeMode, which is marked experimental -->
+	<NoWarn>$(NoWarn);WPF0001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
