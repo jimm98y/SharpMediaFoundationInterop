@@ -219,7 +219,7 @@ namespace SharpMediaFoundationInterop.Input
                      */
                     try
                     {
-                        ComObjects.Release(_screenResource);
+                        Marshal.ReleaseComObject(_screenResource);
                         _screenResource = null;
                         _duplicatedOutput?.ReleaseFrame();
                     }
@@ -359,20 +359,20 @@ namespace SharpMediaFoundationInterop.Input
 
                     outputID++;
 
-                    ComObjects.Release(outputEn);
+                    Marshal.ReleaseComObject(outputEn);
                     outputEn = null;
                 }
 
                 if (device != null)
                 {
-                    ComObjects.Release(device);
+                    Marshal.ReleaseComObject(device);
                     device = null;
                 }
 
                 adapterID++;
             }
 
-            ComObjects.Release(factory1);
+            Marshal.ReleaseComObject(factory1);
             factory1 = null;
 
             return ret.ToArray();
@@ -389,7 +389,7 @@ namespace SharpMediaFoundationInterop.Input
                 {
                     try
                     {
-                        ComObjects.Release(screenResource);
+                        Marshal.ReleaseComObject(screenResource);
                     }
                     catch (Exception ex)
                     {
@@ -399,14 +399,14 @@ namespace SharpMediaFoundationInterop.Input
 
                 if (_factory != null)
                 {
-                    ComObjects.Release(_factory);
+                    Marshal.ReleaseComObject(_factory);
                     _factory = null;
                 }
 
                 if (_duplicatedOutput != null)
                 {
                     _duplicatedOutput.ReleaseFrame();
-                    ComObjects.Release(_duplicatedOutput);
+                    Marshal.ReleaseComObject(_duplicatedOutput);
                     _duplicatedOutput = null;
                 }
 
@@ -414,26 +414,26 @@ namespace SharpMediaFoundationInterop.Input
                 {
                     if (_staging[i] != null)
                     {
-                        ComObjects.Release(_staging[i]);
+                        Marshal.ReleaseComObject(_staging[i]);
                         _staging[i] = null;
                     }
                 }
 
                 if (_context != null)
                 {
-                    ComObjects.Release(_context);
+                    Marshal.ReleaseComObject(_context);
                     _context = null;
                 }
 
                 if (_output != null)
                 {
-                    ComObjects.Release(_output);
+                    Marshal.ReleaseComObject(_output);
                     _output = null;
                 }
 
                 if (_device != null)
                 {
-                    ComObjects.Release(_device);
+                    Marshal.ReleaseComObject(_device);
                     _device = null;
                 }
 

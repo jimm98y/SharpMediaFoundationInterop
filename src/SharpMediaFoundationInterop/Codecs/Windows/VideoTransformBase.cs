@@ -149,7 +149,7 @@ namespace SharpMediaFoundationInterop.Codecs
             if (aware == 0)
                 return;
 
-            nint manager = ComObjects.UnknownOf(DeviceManager);
+            nint manager = Marshal.GetIUnknownForObject(DeviceManager);
             try
             {
                 var result = transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_SET_D3D_MANAGER, (nuint)manager);
@@ -270,8 +270,6 @@ namespace SharpMediaFoundationInterop.Codecs
                         DestroyTransform(_transform);
                         _transform = null;
                     }
-                    // the sample of ours the output is read into
-                    MediaUtils.ReleaseOutputDataBuffer(_dataBuffer);
                 }
 
                 _disposedValue = true;

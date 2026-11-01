@@ -928,8 +928,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (!gpu.ProcessOutput(out IMFSample sample, out frameTime))
                 return false;
 
-            // of each frame: objects of their own, let go of once read
-            IMFMediaBuffer buffer = MediaObjects.GetBuffer(sample, 0);
+            sample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
             try
             {
                 if (_gpuPool != null && buffer is IMFDXGIBuffer)
@@ -939,15 +938,15 @@ namespace SharpMediaFoundationInterop.WPF
                 }
 
                 // of the CPU's memory after all: into the buffer, as a decoder filling ours does
-                IMFMediaBuffer contiguous = MediaObjects.GetContiguousBuffer(sample);
+                sample.ConvertToContiguousBuffer(out IMFMediaBuffer contiguous);
                 MediaUtils.CopyBuffer(contiguous, _nv12Buffer, out _);
-                ComObjects.Release(contiguous);
-                ComObjects.Release(sample);
+                Marshal.ReleaseComObject(contiguous);
+                Marshal.ReleaseComObject(sample);
                 return true;
             }
             finally
             {
-                ComObjects.Release(buffer);
+                Marshal.ReleaseComObject(buffer);
             }
         }
 
@@ -956,7 +955,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             if (_gpuOutput != null)
             {
-                ComObjects.Release(_gpuOutput);
+                Marshal.ReleaseComObject(_gpuOutput);
                 _gpuOutput = null;
             }
         }

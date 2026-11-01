@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using SharpMediaFoundationInterop.Codecs;
-using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Direct3D;
@@ -74,7 +73,7 @@ namespace SharpMediaFoundationInterop.WPF
                 Usage = D3D11_USAGE.D3D11_USAGE_STAGING,
                 CPUAccessFlags = D3D11_CPU_ACCESS_FLAG.D3D11_CPU_ACCESS_READ,
             };
-            var staging = D3D11Objects.CreateTexture2D(_device, desc);
+            _device.CreateTexture2D(desc, null, out var staging);
             try
             {
                 _context.CopyResource(staging, _picture);
@@ -91,7 +90,7 @@ namespace SharpMediaFoundationInterop.WPF
             }
             finally
             {
-                ComObjects.Release(staging);
+                Marshal.ReleaseComObject(staging);
             }
         }
 
@@ -147,7 +146,7 @@ namespace SharpMediaFoundationInterop.WPF
                 BindFlags = D3D11_BIND_FLAG.D3D11_BIND_RENDER_TARGET | D3D11_BIND_FLAG.D3D11_BIND_SHADER_RESOURCE,
                 MiscFlags = wholeFrame ? D3D11_RESOURCE_MISC_FLAG.D3D11_RESOURCE_MISC_SHARED : 0,
             };
-            _picture = D3D11Objects.CreateTexture2D(_device, pictureDesc);
+            _device.CreateTexture2D(pictureDesc, null, out _picture);
             if (wholeFrame)
             {
                 _output = _picture;
@@ -158,7 +157,7 @@ namespace SharpMediaFoundationInterop.WPF
                 outputDesc.Width = _outputWidth;
                 outputDesc.Height = _outputHeight;
                 outputDesc.MiscFlags = D3D11_RESOURCE_MISC_FLAG.D3D11_RESOURCE_MISC_SHARED;
-                _output = D3D11Objects.CreateTexture2D(_device, outputDesc);
+                _device.CreateTexture2D(outputDesc, null, out _output);
             }
             HANDLE shared;
             ((IDXGIResource)_output).GetSharedHandle(&shared);
@@ -418,8 +417,8 @@ namespace SharpMediaFoundationInterop.WPF
                 MaxLOD = float.MaxValue,
             };
             _device.CreateSamplerState(samplerDesc, out _sampler);
-            _pictureView = D3D11Objects.CreateShaderResourceView(_device, (ID3D11Resource)_picture);
-            _outputTarget = D3D11Objects.CreateRenderTargetView(_device, (ID3D11Resource)_output);
+            _device.CreateShaderResourceView((ID3D11Resource)_picture, null, out _pictureView);
+            _device.CreateRenderTargetView((ID3D11Resource)_output, null, out _outputTarget);
 
             _views = new[] { _pictureView };
             _samplers = new[] { _sampler };
@@ -428,7 +427,12 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         /// <summary>A wrapper of an object made, which the wrapper then holds alone.</summary>
-        private static object Wrap(void* unknown) => ComObjects.Take<object>(unknown);
+        private static object Wrap(void* unknown)
+        {
+            var wrapper = Marshal.GetObjectForIUnknown((nint)unknown);
+            Marshal.Release((nint)unknown);
+            return wrapper;
+        }
 
         /// <summary>
         /// A shader's bytecode, compiled ahead of time (Shaders/build-shaders.ps1) and embedded: no compiler is needed where
@@ -459,18 +463,16 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 var texture = (ID3D11Texture2D)Direct3DDevice.ForThisThread(frame.TexturePointer);
                 var desc = new D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC { ViewDimension = D3D11_VPIV_DIMENSION.D3D11_VPIV_DIMENSION_TEXTURE2D };
-                // the view as the stream holds it: its pointer, of a reference of ours, let go of as the renderer is
-                ID3D11VideoProcessorInputView_unmanaged* view;
-                _videoDevice.CreateVideoProcessorInputView(texture, _enumerator, &desc, &view);
-                input = (texture, (nint)view);
+                _videoDevice.CreateVideoProcessorInputView(texture, _enumerator, desc, out var view);
+                input = (texture, view);
                 _inputViews.Add(frame.TexturePointer, input);
             }
-            _streams[0].pInputSurface = (ID3D11VideoProcessorInputView_unmanaged*)input.View;
+            _streams[0].pInputSurface = input.View;
             _videoContext.VideoProcessorBlt(_processor, _outputView, 0, 1, _streams);
         }
 
-        private readonly System.Collections.Generic.Dictionary<IntPtr, (ID3D11Texture2D Texture, nint View)> _inputViews =
-            new System.Collections.Generic.Dictionary<IntPtr, (ID3D11Texture2D Texture, nint View)>();
+        private readonly System.Collections.Generic.Dictionary<IntPtr, (ID3D11Texture2D Texture, ID3D11VideoProcessorInputView View)> _inputViews =
+            new System.Collections.Generic.Dictionary<IntPtr, (ID3D11Texture2D Texture, ID3D11VideoProcessorInputView View)>();
 
         private void Draw(byte[] frame)
         {
@@ -615,7 +617,7 @@ namespace SharpMediaFoundationInterop.WPF
                 _device.CreateTexture3D(tableDesc, null, out _table);
                 fixed (ushort* data = table)
                     _context.UpdateSubresource((ID3D11Resource)_table, 0, null, data, n * 8, n * n * 8);
-                _tableView = D3D11Objects.CreateShaderResourceView(_device, (ID3D11Resource)_table);
+                _device.CreateShaderResourceView((ID3D11Resource)_table, null, out _tableView);
             }
 
             lock (_compileLock)
@@ -675,7 +677,7 @@ namespace SharpMediaFoundationInterop.WPF
                 MaxLOD = float.MaxValue,
             };
             _device.CreateSamplerState(samplerDesc, out _tableSampler);
-            _pictureTarget = D3D11Objects.CreateRenderTargetView(_device, (ID3D11Resource)_picture);
+            _device.CreateRenderTargetView((ID3D11Resource)_picture, null, out _pictureTarget);
 
             _yuvViews = new[] { _plane0View, _plane1View, _tableView };
             _yuvSamplers = new[] { _tableSampler };
@@ -696,8 +698,8 @@ namespace SharpMediaFoundationInterop.WPF
                 Usage = D3D11_USAGE.D3D11_USAGE_DEFAULT,
                 BindFlags = D3D11_BIND_FLAG.D3D11_BIND_SHADER_RESOURCE,
             };
-            var texture = D3D11Objects.CreateTexture2D(_device, desc);
-            view = D3D11Objects.CreateShaderResourceView(_device, (ID3D11Resource)texture);
+            _device.CreateTexture2D(desc, null, out var texture);
+            _device.CreateShaderResourceView((ID3D11Resource)texture, null, out view);
             return texture;
         }
 
@@ -755,8 +757,8 @@ namespace SharpMediaFoundationInterop.WPF
         {
             foreach (var input in _inputViews.Values)
             {
-                Marshal.Release(input.View);
-                ComObjects.Release(input.Texture);
+                Marshal.ReleaseComObject(input.View);
+                Marshal.ReleaseComObject(input.Texture);
             }
             _inputViews.Clear();
             Release(ref _outputTarget);
@@ -795,8 +797,8 @@ namespace SharpMediaFoundationInterop.WPF
 
         private static void Release<T>(ref T com) where T : class
         {
-            if (com != null)
-                ComObjects.Release(com);
+            if (com != null && Marshal.IsComObject(com))
+                Marshal.ReleaseComObject(com);
             com = null;
         }
     }

@@ -19,7 +19,7 @@ namespace SharpMediaFoundationInterop.Utils
 
     /// <summary>Core Audio's devices, and AudioQueue's functions, which play and record through them.</summary>
     [SupportedOSPlatform("macos11.0")]
-    internal static unsafe partial class CoreAudio
+    internal static unsafe class CoreAudio
     {
         private const string CoreAudioLib = "/System/Library/Frameworks/CoreAudio.framework/CoreAudio";
 
@@ -33,11 +33,11 @@ namespace SharpMediaFoundationInterop.Utils
         public static readonly uint kAudioObjectPropertyScopeOutput = FourCC("outp");
 
 
-        [LibraryImport(CoreAudioLib)]
-        private static partial int AudioObjectGetPropertyDataSize(uint objectID, AudioObjectPropertyAddress* address, uint qualifierDataSize, void* qualifierData, out uint dataSize);
+        [DllImport(CoreAudioLib)]
+        private static extern int AudioObjectGetPropertyDataSize(uint objectID, AudioObjectPropertyAddress* address, uint qualifierDataSize, void* qualifierData, out uint dataSize);
 
-        [LibraryImport(CoreAudioLib)]
-        private static partial int AudioObjectGetPropertyData(uint objectID, AudioObjectPropertyAddress* address, uint qualifierDataSize, void* qualifierData, uint* dataSize, void* data);
+        [DllImport(CoreAudioLib)]
+        private static extern int AudioObjectGetPropertyData(uint objectID, AudioObjectPropertyAddress* address, uint qualifierDataSize, void* qualifierData, uint* dataSize, void* data);
 
         /// <summary>The devices with streams of the scope given: input, or output.</summary>
         public static CoreAudioDevice[] Enumerate(uint scope)

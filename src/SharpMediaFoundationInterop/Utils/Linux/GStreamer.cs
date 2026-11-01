@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop.Utils
     /// once, at start, of an object whose fields are known.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    internal static unsafe partial class Gst
+    internal static unsafe class Gst
     {
         private const string LibGst = "libgstreamer-1.0.so.0";
         private const string LibGstApp = "libgstapp-1.0.so.0";
@@ -475,64 +475,64 @@ namespace SharpMediaFoundationInterop.Utils
 
         #region Native
 
-        [LibraryImport(LibGst)] private static partial int gst_init_check(IntPtr argc, IntPtr argv, out IntPtr error);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] private static partial IntPtr gst_parse_launch([MarshalAs(UnmanagedType.LPUTF8Str)] string description, out IntPtr error);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] private static partial IntPtr gst_parse_bin_from_description([MarshalAs(UnmanagedType.LPUTF8Str)] string description, int ghostUnlinkedPads, out IntPtr error);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] public static partial IntPtr gst_bin_get_by_name(IntPtr bin, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
-        [LibraryImport(LibGst)] public static partial int gst_bin_add(IntPtr bin, IntPtr element);
-        [LibraryImport(LibGst)] public static partial int gst_element_link(IntPtr source, IntPtr destination);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] public static partial IntPtr gst_pipeline_new([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
-        [LibraryImport(LibGst)] public static partial void gst_object_unref(IntPtr obj);
-        [LibraryImport(LibGst)] public static partial IntPtr gst_object_ref(IntPtr obj);
-        [LibraryImport(LibGst)] public static partial void gst_mini_object_unref(IntPtr obj);
-        [LibraryImport(LibGst)] public static partial int gst_element_set_state(IntPtr element, int state);
-        [LibraryImport(LibGst)] public static partial int gst_element_get_state(IntPtr element, out int state, out int pending, ulong timeoutNs);
-        [LibraryImport(LibGst)] public static partial IntPtr gst_element_get_bus(IntPtr element);
-        [LibraryImport(LibGst)] public static partial int gst_element_send_event(IntPtr element, IntPtr evt);
-        [LibraryImport(LibGst)] public static partial IntPtr gst_event_new_flush_start();
-        [LibraryImport(LibGst)] public static partial IntPtr gst_event_new_flush_stop(int resetTime);
-        [LibraryImport(LibGst)] public static partial int gst_element_query_position(IntPtr element, int format, out long cur);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] private static partial IntPtr gst_element_factory_find([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_element_factory_list_get_elements(ulong type, int minRank);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_element_factory_list_filter(IntPtr list, IntPtr caps, int direction, int subsetOnly);
-        [LibraryImport(LibGst)] private static partial void gst_plugin_feature_list_free(IntPtr list);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] private static partial void gst_util_set_object_arg(IntPtr obj, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_bus_pop_filtered(IntPtr bus, uint types);
-        [LibraryImport(LibGst)] private static partial void gst_message_parse_error(IntPtr message, out IntPtr error, out IntPtr debug);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_buffer_new();
-        [LibraryImport(LibGst)] private static partial IntPtr gst_buffer_new_allocate(IntPtr allocator, nuint size, IntPtr parameters);
-        [LibraryImport(LibGst)] private static partial nuint gst_buffer_fill(IntPtr buffer, nuint offset, void* src, nuint size);
-        [LibraryImport(LibGst)] private static partial int gst_buffer_map(IntPtr buffer, GstMapInfo* info, int flags);
-        [LibraryImport(LibGst)] private static partial void gst_buffer_unmap(IntPtr buffer, GstMapInfo* info);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_buffer_get_meta(IntPtr buffer, nuint api);
-        [LibraryImport(LibGst)] public static partial IntPtr gst_sample_get_buffer(IntPtr sample);
-        [LibraryImport(LibGst)] public static partial IntPtr gst_sample_get_caps(IntPtr sample);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] private static partial IntPtr gst_caps_from_string([MarshalAs(UnmanagedType.LPUTF8Str)] string caps);
-        [LibraryImport(LibGst)] private static partial uint gst_caps_get_size(IntPtr caps);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_caps_get_structure(IntPtr caps, uint index);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] private static partial int gst_structure_get_int(IntPtr structure, [MarshalAs(UnmanagedType.LPUTF8Str)] string field, out int value);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] private static partial IntPtr gst_structure_get_value(IntPtr structure, [MarshalAs(UnmanagedType.LPUTF8Str)] string field);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] private static partial IntPtr gst_structure_get_string(IntPtr structure, [MarshalAs(UnmanagedType.LPUTF8Str)] string field);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_structure_get_name(IntPtr structure);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_structure_to_string(IntPtr structure);
-        [LibraryImport(LibGst)] private static partial void gst_structure_free(IntPtr structure);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_device_monitor_new();
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] private static partial uint gst_device_monitor_add_filter(IntPtr monitor, [MarshalAs(UnmanagedType.LPUTF8Str)] string classes, IntPtr caps);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_device_monitor_get_devices(IntPtr monitor);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_device_get_display_name(IntPtr device);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_device_get_properties(IntPtr device);
-        [LibraryImport(LibGst)] private static partial IntPtr gst_device_get_caps(IntPtr device);
-        [LibraryImport(LibGst, StringMarshalling = StringMarshalling.Utf8)] private static partial IntPtr gst_device_create_element(IntPtr device, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
-        [LibraryImport(LibGstApp)] public static partial int gst_app_src_push_buffer(IntPtr appsrc, IntPtr buffer);
-        [LibraryImport(LibGstApp)] public static partial int gst_app_src_end_of_stream(IntPtr appsrc);
-        [LibraryImport(LibGstApp)] public static partial IntPtr gst_app_sink_try_pull_sample(IntPtr appsink, ulong timeoutNs);
-        [LibraryImport(LibGstApp)] public static partial int gst_app_sink_is_eos(IntPtr appsink);
-        [LibraryImport(LibGstVideo)] private static partial nuint gst_video_meta_api_get_type();
-        [LibraryImport(LibGObject, StringMarshalling = StringMarshalling.Utf8)] private static partial IntPtr g_object_class_find_property(IntPtr objectClass, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
-        [LibraryImport(LibGObject)] private static partial IntPtr g_value_get_boxed(IntPtr value);
-        [LibraryImport(LibGLib)] private static partial void g_free(IntPtr mem);
-        [LibraryImport(LibGLib)] private static partial void g_error_free(IntPtr error);
-        [LibraryImport(LibGLib)] private static partial void g_list_free(IntPtr list);
+        [DllImport(LibGst)] private static extern int gst_init_check(IntPtr argc, IntPtr argv, out IntPtr error);
+        [DllImport(LibGst)] private static extern IntPtr gst_parse_launch([MarshalAs(UnmanagedType.LPUTF8Str)] string description, out IntPtr error);
+        [DllImport(LibGst)] private static extern IntPtr gst_parse_bin_from_description([MarshalAs(UnmanagedType.LPUTF8Str)] string description, int ghostUnlinkedPads, out IntPtr error);
+        [DllImport(LibGst)] public static extern IntPtr gst_bin_get_by_name(IntPtr bin, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+        [DllImport(LibGst)] public static extern int gst_bin_add(IntPtr bin, IntPtr element);
+        [DllImport(LibGst)] public static extern int gst_element_link(IntPtr source, IntPtr destination);
+        [DllImport(LibGst)] public static extern IntPtr gst_pipeline_new([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+        [DllImport(LibGst)] public static extern void gst_object_unref(IntPtr obj);
+        [DllImport(LibGst)] public static extern IntPtr gst_object_ref(IntPtr obj);
+        [DllImport(LibGst)] public static extern void gst_mini_object_unref(IntPtr obj);
+        [DllImport(LibGst)] public static extern int gst_element_set_state(IntPtr element, int state);
+        [DllImport(LibGst)] public static extern int gst_element_get_state(IntPtr element, out int state, out int pending, ulong timeoutNs);
+        [DllImport(LibGst)] public static extern IntPtr gst_element_get_bus(IntPtr element);
+        [DllImport(LibGst)] public static extern int gst_element_send_event(IntPtr element, IntPtr evt);
+        [DllImport(LibGst)] public static extern IntPtr gst_event_new_flush_start();
+        [DllImport(LibGst)] public static extern IntPtr gst_event_new_flush_stop(int resetTime);
+        [DllImport(LibGst)] public static extern int gst_element_query_position(IntPtr element, int format, out long cur);
+        [DllImport(LibGst)] private static extern IntPtr gst_element_factory_find([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+        [DllImport(LibGst)] private static extern IntPtr gst_element_factory_list_get_elements(ulong type, int minRank);
+        [DllImport(LibGst)] private static extern IntPtr gst_element_factory_list_filter(IntPtr list, IntPtr caps, int direction, int subsetOnly);
+        [DllImport(LibGst)] private static extern void gst_plugin_feature_list_free(IntPtr list);
+        [DllImport(LibGst)] private static extern void gst_util_set_object_arg(IntPtr obj, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+        [DllImport(LibGst)] private static extern IntPtr gst_bus_pop_filtered(IntPtr bus, uint types);
+        [DllImport(LibGst)] private static extern void gst_message_parse_error(IntPtr message, out IntPtr error, out IntPtr debug);
+        [DllImport(LibGst)] private static extern IntPtr gst_buffer_new();
+        [DllImport(LibGst)] private static extern IntPtr gst_buffer_new_allocate(IntPtr allocator, nuint size, IntPtr parameters);
+        [DllImport(LibGst)] private static extern nuint gst_buffer_fill(IntPtr buffer, nuint offset, void* src, nuint size);
+        [DllImport(LibGst)] private static extern int gst_buffer_map(IntPtr buffer, GstMapInfo* info, int flags);
+        [DllImport(LibGst)] private static extern void gst_buffer_unmap(IntPtr buffer, GstMapInfo* info);
+        [DllImport(LibGst)] private static extern IntPtr gst_buffer_get_meta(IntPtr buffer, nuint api);
+        [DllImport(LibGst)] public static extern IntPtr gst_sample_get_buffer(IntPtr sample);
+        [DllImport(LibGst)] public static extern IntPtr gst_sample_get_caps(IntPtr sample);
+        [DllImport(LibGst)] private static extern IntPtr gst_caps_from_string([MarshalAs(UnmanagedType.LPUTF8Str)] string caps);
+        [DllImport(LibGst)] private static extern uint gst_caps_get_size(IntPtr caps);
+        [DllImport(LibGst)] private static extern IntPtr gst_caps_get_structure(IntPtr caps, uint index);
+        [DllImport(LibGst)] private static extern int gst_structure_get_int(IntPtr structure, [MarshalAs(UnmanagedType.LPUTF8Str)] string field, out int value);
+        [DllImport(LibGst)] private static extern IntPtr gst_structure_get_value(IntPtr structure, [MarshalAs(UnmanagedType.LPUTF8Str)] string field);
+        [DllImport(LibGst)] private static extern IntPtr gst_structure_get_string(IntPtr structure, [MarshalAs(UnmanagedType.LPUTF8Str)] string field);
+        [DllImport(LibGst)] private static extern IntPtr gst_structure_get_name(IntPtr structure);
+        [DllImport(LibGst)] private static extern IntPtr gst_structure_to_string(IntPtr structure);
+        [DllImport(LibGst)] private static extern void gst_structure_free(IntPtr structure);
+        [DllImport(LibGst)] private static extern IntPtr gst_device_monitor_new();
+        [DllImport(LibGst)] private static extern uint gst_device_monitor_add_filter(IntPtr monitor, [MarshalAs(UnmanagedType.LPUTF8Str)] string classes, IntPtr caps);
+        [DllImport(LibGst)] private static extern IntPtr gst_device_monitor_get_devices(IntPtr monitor);
+        [DllImport(LibGst)] private static extern IntPtr gst_device_get_display_name(IntPtr device);
+        [DllImport(LibGst)] private static extern IntPtr gst_device_get_properties(IntPtr device);
+        [DllImport(LibGst)] private static extern IntPtr gst_device_get_caps(IntPtr device);
+        [DllImport(LibGst)] private static extern IntPtr gst_device_create_element(IntPtr device, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+        [DllImport(LibGstApp)] public static extern int gst_app_src_push_buffer(IntPtr appsrc, IntPtr buffer);
+        [DllImport(LibGstApp)] public static extern int gst_app_src_end_of_stream(IntPtr appsrc);
+        [DllImport(LibGstApp)] public static extern IntPtr gst_app_sink_try_pull_sample(IntPtr appsink, ulong timeoutNs);
+        [DllImport(LibGstApp)] public static extern int gst_app_sink_is_eos(IntPtr appsink);
+        [DllImport(LibGstVideo)] private static extern nuint gst_video_meta_api_get_type();
+        [DllImport(LibGObject)] private static extern IntPtr g_object_class_find_property(IntPtr objectClass, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+        [DllImport(LibGObject)] private static extern IntPtr g_value_get_boxed(IntPtr value);
+        [DllImport(LibGLib)] private static extern void g_free(IntPtr mem);
+        [DllImport(LibGLib)] private static extern void g_error_free(IntPtr error);
+        [DllImport(LibGLib)] private static extern void g_list_free(IntPtr list);
 
         #endregion
     }
@@ -542,7 +542,7 @@ namespace SharpMediaFoundationInterop.Utils
     /// of Linux's is. Samples go in at the source and come out of the sink; its errors are thrown, of GStreamer's message.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    internal sealed unsafe partial class GstAppPipeline : IDisposable
+    internal sealed unsafe class GstAppPipeline : IDisposable
     {
         public IntPtr Pipeline { get; private set; }
         public IntPtr Source { get; private set; }

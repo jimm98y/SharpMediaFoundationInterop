@@ -7,7 +7,7 @@ namespace SharpMediaFoundationInterop.Utils
 {
     /// <summary>The NDK's Camera2, libcamera2ndk: the device's cameras, their characteristics, and capture sessions of them.</summary>
     [SupportedOSPlatform("android26.0")]
-    internal static unsafe partial class CameraNdk
+    internal static unsafe class CameraNdk
     {
         private const string Lib = "libcamera2ndk.so";
 
@@ -50,29 +50,29 @@ namespace SharpMediaFoundationInterop.Utils
             public delegate* unmanaged<IntPtr, IntPtr, void> OnActive;
         }
 
-        [LibraryImport(Lib)] public static partial IntPtr ACameraManager_create();
-        [LibraryImport(Lib)] public static partial void ACameraManager_delete(IntPtr manager);
-        [LibraryImport(Lib)] private static partial int ACameraManager_getCameraIdList(IntPtr manager, out ACameraIdList* list);
-        [LibraryImport(Lib)] private static partial void ACameraManager_deleteCameraIdList(ACameraIdList* list);
-        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] private static partial int ACameraManager_getCameraCharacteristics(IntPtr manager, [MarshalAs(UnmanagedType.LPUTF8Str)] string id, out IntPtr metadata);
-        [LibraryImport(Lib)] private static partial void ACameraMetadata_free(IntPtr metadata);
-        [LibraryImport(Lib)] private static partial int ACameraMetadata_getConstEntry(IntPtr metadata, uint tag, out ACameraMetadataConstEntry entry);
-        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] public static partial int ACameraManager_openCamera(IntPtr manager, [MarshalAs(UnmanagedType.LPUTF8Str)] string id, DeviceStateCallbacks* callbacks, out IntPtr device);
-        [LibraryImport(Lib)] public static partial int ACameraDevice_close(IntPtr device);
-        [LibraryImport(Lib)] public static partial int ACameraDevice_createCaptureRequest(IntPtr device, int template, out IntPtr request);
-        [LibraryImport(Lib)] public static partial void ACaptureRequest_free(IntPtr request);
-        [LibraryImport(Lib)] public static partial int ACaptureRequest_addTarget(IntPtr request, IntPtr target);
-        [LibraryImport(Lib)] public static partial int ACameraOutputTarget_create(IntPtr window, out IntPtr target);
-        [LibraryImport(Lib)] public static partial void ACameraOutputTarget_free(IntPtr target);
-        [LibraryImport(Lib)] public static partial int ACaptureSessionOutputContainer_create(out IntPtr container);
-        [LibraryImport(Lib)] public static partial void ACaptureSessionOutputContainer_free(IntPtr container);
-        [LibraryImport(Lib)] public static partial int ACaptureSessionOutputContainer_add(IntPtr container, IntPtr output);
-        [LibraryImport(Lib)] public static partial int ACaptureSessionOutput_create(IntPtr window, out IntPtr output);
-        [LibraryImport(Lib)] public static partial void ACaptureSessionOutput_free(IntPtr output);
-        [LibraryImport(Lib)] public static partial int ACameraDevice_createCaptureSession(IntPtr device, IntPtr outputs, SessionStateCallbacks* callbacks, out IntPtr session);
-        [LibraryImport(Lib)] public static partial int ACameraCaptureSession_setRepeatingRequest(IntPtr session, IntPtr callbacks, int numRequests, IntPtr* requests, IntPtr captureSequenceId);
-        [LibraryImport(Lib)] public static partial int ACameraCaptureSession_stopRepeating(IntPtr session);
-        [LibraryImport(Lib)] public static partial void ACameraCaptureSession_close(IntPtr session);
+        [DllImport(Lib)] public static extern IntPtr ACameraManager_create();
+        [DllImport(Lib)] public static extern void ACameraManager_delete(IntPtr manager);
+        [DllImport(Lib)] private static extern int ACameraManager_getCameraIdList(IntPtr manager, out ACameraIdList* list);
+        [DllImport(Lib)] private static extern void ACameraManager_deleteCameraIdList(ACameraIdList* list);
+        [DllImport(Lib)] private static extern int ACameraManager_getCameraCharacteristics(IntPtr manager, [MarshalAs(UnmanagedType.LPUTF8Str)] string id, out IntPtr metadata);
+        [DllImport(Lib)] private static extern void ACameraMetadata_free(IntPtr metadata);
+        [DllImport(Lib)] private static extern int ACameraMetadata_getConstEntry(IntPtr metadata, uint tag, out ACameraMetadataConstEntry entry);
+        [DllImport(Lib)] public static extern int ACameraManager_openCamera(IntPtr manager, [MarshalAs(UnmanagedType.LPUTF8Str)] string id, DeviceStateCallbacks* callbacks, out IntPtr device);
+        [DllImport(Lib)] public static extern int ACameraDevice_close(IntPtr device);
+        [DllImport(Lib)] public static extern int ACameraDevice_createCaptureRequest(IntPtr device, int template, out IntPtr request);
+        [DllImport(Lib)] public static extern void ACaptureRequest_free(IntPtr request);
+        [DllImport(Lib)] public static extern int ACaptureRequest_addTarget(IntPtr request, IntPtr target);
+        [DllImport(Lib)] public static extern int ACameraOutputTarget_create(IntPtr window, out IntPtr target);
+        [DllImport(Lib)] public static extern void ACameraOutputTarget_free(IntPtr target);
+        [DllImport(Lib)] public static extern int ACaptureSessionOutputContainer_create(out IntPtr container);
+        [DllImport(Lib)] public static extern void ACaptureSessionOutputContainer_free(IntPtr container);
+        [DllImport(Lib)] public static extern int ACaptureSessionOutputContainer_add(IntPtr container, IntPtr output);
+        [DllImport(Lib)] public static extern int ACaptureSessionOutput_create(IntPtr window, out IntPtr output);
+        [DllImport(Lib)] public static extern void ACaptureSessionOutput_free(IntPtr output);
+        [DllImport(Lib)] public static extern int ACameraDevice_createCaptureSession(IntPtr device, IntPtr outputs, SessionStateCallbacks* callbacks, out IntPtr session);
+        [DllImport(Lib)] public static extern int ACameraCaptureSession_setRepeatingRequest(IntPtr session, IntPtr callbacks, int numRequests, IntPtr* requests, IntPtr captureSequenceId);
+        [DllImport(Lib)] public static extern int ACameraCaptureSession_stopRepeating(IntPtr session);
+        [DllImport(Lib)] public static extern void ACameraCaptureSession_close(IntPtr session);
 
         private static bool? _available;
 

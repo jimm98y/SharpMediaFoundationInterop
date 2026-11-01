@@ -103,7 +103,7 @@ namespace SharpMediaFoundationInterop.Utils
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    internal static unsafe partial class AppleNative
+    internal static unsafe class AppleNative
     {
         private const string CoreFoundationLib = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
         private const string CoreMediaLib = "/System/Library/Frameworks/CoreMedia.framework/CoreMedia";
@@ -135,26 +135,26 @@ namespace SharpMediaFoundationInterop.Utils
         private const int kCFNumberSInt32Type = 3;
         private const int kCFNumberFloat64Type = 6;
 
-        [LibraryImport(CoreFoundationLib)]
-        public static partial void CFRelease(IntPtr cf);
+        [DllImport(CoreFoundationLib)]
+        public static extern void CFRelease(IntPtr cf);
 
-        [LibraryImport(CoreFoundationLib)]
-        public static partial IntPtr CFRetain(IntPtr cf);
+        [DllImport(CoreFoundationLib)]
+        public static extern IntPtr CFRetain(IntPtr cf);
 
-        [LibraryImport(CoreFoundationLib)]
-        private static partial IntPtr CFStringCreateWithCString(IntPtr allocator, byte* cStr, uint encoding);
+        [DllImport(CoreFoundationLib)]
+        private static extern IntPtr CFStringCreateWithCString(IntPtr allocator, byte* cStr, uint encoding);
 
-        [LibraryImport(CoreFoundationLib)]
-        private static partial IntPtr CFDataCreate(IntPtr allocator, byte* bytes, nint length);
+        [DllImport(CoreFoundationLib)]
+        private static extern IntPtr CFDataCreate(IntPtr allocator, byte* bytes, nint length);
 
-        [LibraryImport(CoreFoundationLib)]
-        private static partial IntPtr CFNumberCreate(IntPtr allocator, int type, void* value);
+        [DllImport(CoreFoundationLib)]
+        private static extern IntPtr CFNumberCreate(IntPtr allocator, int type, void* value);
 
-        [LibraryImport(CoreFoundationLib)]
-        private static partial IntPtr CFDictionaryCreateMutable(IntPtr allocator, nint capacity, IntPtr keyCallBacks, IntPtr valueCallBacks);
+        [DllImport(CoreFoundationLib)]
+        private static extern IntPtr CFDictionaryCreateMutable(IntPtr allocator, nint capacity, IntPtr keyCallBacks, IntPtr valueCallBacks);
 
-        [LibraryImport(CoreFoundationLib)]
-        private static partial void CFDictionarySetValue(IntPtr dictionary, IntPtr key, IntPtr value);
+        [DllImport(CoreFoundationLib)]
+        private static extern void CFDictionarySetValue(IntPtr dictionary, IntPtr key, IntPtr value);
 
         private static readonly IntPtr CoreFoundation = NativeLibrary.Load(CoreFoundationLib);
         private static readonly IntPtr CoreMedia = NativeLibrary.Load(CoreMediaLib);
@@ -205,68 +205,68 @@ namespace SharpMediaFoundationInterop.Utils
 
         public const uint kCMBlockBufferAssureMemoryNowFlag = 1;
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial int CMVideoFormatDescriptionCreate(IntPtr allocator, uint codecType, int width, int height, IntPtr extensions, out IntPtr formatDescription);
+        [DllImport(CoreMediaLib)]
+        public static extern int CMVideoFormatDescriptionCreate(IntPtr allocator, uint codecType, int width, int height, IntPtr extensions, out IntPtr formatDescription);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial int CMVideoFormatDescriptionCreateFromH264ParameterSets(IntPtr allocator, nuint parameterSetCount,
+        [DllImport(CoreMediaLib)]
+        public static extern int CMVideoFormatDescriptionCreateFromH264ParameterSets(IntPtr allocator, nuint parameterSetCount,
             byte** parameterSetPointers, nuint* parameterSetSizes, int nalUnitHeaderLength, out IntPtr formatDescription);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial int CMVideoFormatDescriptionCreateFromHEVCParameterSets(IntPtr allocator, nuint parameterSetCount,
+        [DllImport(CoreMediaLib)]
+        public static extern int CMVideoFormatDescriptionCreateFromHEVCParameterSets(IntPtr allocator, nuint parameterSetCount,
             byte** parameterSetPointers, nuint* parameterSetSizes, int nalUnitHeaderLength, IntPtr extensions, out IntPtr formatDescription);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial int CMBlockBufferCreateWithMemoryBlock(IntPtr structureAllocator, void* memoryBlock, nuint blockLength,
+        [DllImport(CoreMediaLib)]
+        public static extern int CMBlockBufferCreateWithMemoryBlock(IntPtr structureAllocator, void* memoryBlock, nuint blockLength,
             IntPtr blockAllocator, IntPtr customBlockSource, nuint offsetToData, nuint dataLength, uint flags, out IntPtr blockBuffer);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial int CMBlockBufferReplaceDataBytes(void* sourceBytes, IntPtr destinationBuffer, nuint offsetIntoDestination, nuint dataLength);
+        [DllImport(CoreMediaLib)]
+        public static extern int CMBlockBufferReplaceDataBytes(void* sourceBytes, IntPtr destinationBuffer, nuint offsetIntoDestination, nuint dataLength);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial int CMSampleBufferCreateReady(IntPtr allocator, IntPtr dataBuffer, IntPtr formatDescription, nint numSamples,
+        [DllImport(CoreMediaLib)]
+        public static extern int CMSampleBufferCreateReady(IntPtr allocator, IntPtr dataBuffer, IntPtr formatDescription, nint numSamples,
             nint numSampleTimingEntries, CMSampleTimingInfo* sampleTimingArray, nint numSampleSizeEntries, nuint* sampleSizeArray, out IntPtr sampleBuffer);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial IntPtr CMSampleBufferGetImageBuffer(IntPtr sampleBuffer);
+        [DllImport(CoreMediaLib)]
+        public static extern IntPtr CMSampleBufferGetImageBuffer(IntPtr sampleBuffer);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial IntPtr CMSampleBufferGetDataBuffer(IntPtr sampleBuffer);
+        [DllImport(CoreMediaLib)]
+        public static extern IntPtr CMSampleBufferGetDataBuffer(IntPtr sampleBuffer);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial IntPtr CMSampleBufferGetFormatDescription(IntPtr sampleBuffer);
+        [DllImport(CoreMediaLib)]
+        public static extern IntPtr CMSampleBufferGetFormatDescription(IntPtr sampleBuffer);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial nuint CMBlockBufferGetDataLength(IntPtr blockBuffer);
+        [DllImport(CoreMediaLib)]
+        public static extern nuint CMBlockBufferGetDataLength(IntPtr blockBuffer);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial int CMBlockBufferCopyDataBytes(IntPtr blockBuffer, nuint offsetToData, nuint dataLength, void* destination);
+        [DllImport(CoreMediaLib)]
+        public static extern int CMBlockBufferCopyDataBytes(IntPtr blockBuffer, nuint offsetToData, nuint dataLength, void* destination);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial int CMVideoFormatDescriptionGetH264ParameterSetAtIndex(IntPtr videoDesc, nuint parameterSetIndex,
+        [DllImport(CoreMediaLib)]
+        public static extern int CMVideoFormatDescriptionGetH264ParameterSetAtIndex(IntPtr videoDesc, nuint parameterSetIndex,
             out byte* parameterSetPointer, out nuint parameterSetSize, out nuint parameterSetCount, out int nalUnitHeaderLength);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial int CMVideoFormatDescriptionGetHEVCParameterSetAtIndex(IntPtr videoDesc, nuint parameterSetIndex,
+        [DllImport(CoreMediaLib)]
+        public static extern int CMVideoFormatDescriptionGetHEVCParameterSetAtIndex(IntPtr videoDesc, nuint parameterSetIndex,
             out byte* parameterSetPointer, out nuint parameterSetSize, out nuint parameterSetCount, out int nalUnitHeaderLength);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial CMTime CMSampleBufferGetPresentationTimeStamp(IntPtr sampleBuffer);
+        [DllImport(CoreMediaLib)]
+        public static extern CMTime CMSampleBufferGetPresentationTimeStamp(IntPtr sampleBuffer);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial IntPtr CMSampleBufferGetSampleAttachmentsArray(IntPtr sampleBuffer, byte createIfNecessary);
+        [DllImport(CoreMediaLib)]
+        public static extern IntPtr CMSampleBufferGetSampleAttachmentsArray(IntPtr sampleBuffer, byte createIfNecessary);
 
-        [LibraryImport(CoreMediaLib)]
-        public static partial CMVideoDimensions CMVideoFormatDescriptionGetDimensions(IntPtr videoDesc);
+        [DllImport(CoreMediaLib)]
+        public static extern CMVideoDimensions CMVideoFormatDescriptionGetDimensions(IntPtr videoDesc);
 
-        [LibraryImport(CoreFoundationLib)]
-        public static partial nint CFArrayGetCount(IntPtr array);
+        [DllImport(CoreFoundationLib)]
+        public static extern nint CFArrayGetCount(IntPtr array);
 
-        [LibraryImport(CoreFoundationLib)]
-        public static partial IntPtr CFArrayGetValueAtIndex(IntPtr array, nint index);
+        [DllImport(CoreFoundationLib)]
+        public static extern IntPtr CFArrayGetValueAtIndex(IntPtr array, nint index);
 
-        [LibraryImport(CoreFoundationLib)]
-        public static partial IntPtr CFDictionaryGetValue(IntPtr dictionary, IntPtr key);
+        [DllImport(CoreFoundationLib)]
+        public static extern IntPtr CFDictionaryGetValue(IntPtr dictionary, IntPtr key);
 
         #endregion
 
@@ -287,47 +287,47 @@ namespace SharpMediaFoundationInterop.Utils
         /// <summary>A key or value of Core Video's: a CFStringRef it exports, of the name its header gives it.</summary>
         public static IntPtr CoreVideoConstant(string name) => Constant(CoreVideo, name);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial void CVBufferSetAttachment(IntPtr buffer, IntPtr key, IntPtr value, uint attachmentMode);
+        [DllImport(CoreVideoLib)]
+        public static extern void CVBufferSetAttachment(IntPtr buffer, IntPtr key, IntPtr value, uint attachmentMode);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial int CVPixelBufferCreate(IntPtr allocator, nuint width, nuint height, uint pixelFormatType, IntPtr pixelBufferAttributes, out IntPtr pixelBuffer);
+        [DllImport(CoreVideoLib)]
+        public static extern int CVPixelBufferCreate(IntPtr allocator, nuint width, nuint height, uint pixelFormatType, IntPtr pixelBufferAttributes, out IntPtr pixelBuffer);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial int CVPixelBufferPoolCreatePixelBuffer(IntPtr allocator, IntPtr pixelBufferPool, out IntPtr pixelBuffer);
+        [DllImport(CoreVideoLib)]
+        public static extern int CVPixelBufferPoolCreatePixelBuffer(IntPtr allocator, IntPtr pixelBufferPool, out IntPtr pixelBuffer);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial int CVPixelBufferLockBaseAddress(IntPtr pixelBuffer, ulong lockFlags);
+        [DllImport(CoreVideoLib)]
+        public static extern int CVPixelBufferLockBaseAddress(IntPtr pixelBuffer, ulong lockFlags);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial int CVPixelBufferUnlockBaseAddress(IntPtr pixelBuffer, ulong unlockFlags);
+        [DllImport(CoreVideoLib)]
+        public static extern int CVPixelBufferUnlockBaseAddress(IntPtr pixelBuffer, ulong unlockFlags);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial uint CVPixelBufferGetPixelFormatType(IntPtr pixelBuffer);
+        [DllImport(CoreVideoLib)]
+        public static extern uint CVPixelBufferGetPixelFormatType(IntPtr pixelBuffer);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial nuint CVPixelBufferGetWidth(IntPtr pixelBuffer);
+        [DllImport(CoreVideoLib)]
+        public static extern nuint CVPixelBufferGetWidth(IntPtr pixelBuffer);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial nuint CVPixelBufferGetHeight(IntPtr pixelBuffer);
+        [DllImport(CoreVideoLib)]
+        public static extern nuint CVPixelBufferGetHeight(IntPtr pixelBuffer);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial IntPtr CVPixelBufferGetBaseAddress(IntPtr pixelBuffer);
+        [DllImport(CoreVideoLib)]
+        public static extern IntPtr CVPixelBufferGetBaseAddress(IntPtr pixelBuffer);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial nuint CVPixelBufferGetBytesPerRow(IntPtr pixelBuffer);
+        [DllImport(CoreVideoLib)]
+        public static extern nuint CVPixelBufferGetBytesPerRow(IntPtr pixelBuffer);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial IntPtr CVPixelBufferGetBaseAddressOfPlane(IntPtr pixelBuffer, nuint planeIndex);
+        [DllImport(CoreVideoLib)]
+        public static extern IntPtr CVPixelBufferGetBaseAddressOfPlane(IntPtr pixelBuffer, nuint planeIndex);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial nuint CVPixelBufferGetBytesPerRowOfPlane(IntPtr pixelBuffer, nuint planeIndex);
+        [DllImport(CoreVideoLib)]
+        public static extern nuint CVPixelBufferGetBytesPerRowOfPlane(IntPtr pixelBuffer, nuint planeIndex);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial nuint CVPixelBufferGetWidthOfPlane(IntPtr pixelBuffer, nuint planeIndex);
+        [DllImport(CoreVideoLib)]
+        public static extern nuint CVPixelBufferGetWidthOfPlane(IntPtr pixelBuffer, nuint planeIndex);
 
-        [LibraryImport(CoreVideoLib)]
-        public static partial nuint CVPixelBufferGetHeightOfPlane(IntPtr pixelBuffer, nuint planeIndex);
+        [DllImport(CoreVideoLib)]
+        public static extern nuint CVPixelBufferGetHeightOfPlane(IntPtr pixelBuffer, nuint planeIndex);
 
         #endregion
 
@@ -343,75 +343,75 @@ namespace SharpMediaFoundationInterop.Utils
         /// <summary>The configuration of the stream is not one the decoder takes: of MPEG-4 Part 2, one of the advanced simple profile.</summary>
         public const int codecBadDataErr = -8969;
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial int VTDecompressionSessionCreate(IntPtr allocator, IntPtr videoFormatDescription, IntPtr videoDecoderSpecification,
+        [DllImport(VideoToolboxLib)]
+        public static extern int VTDecompressionSessionCreate(IntPtr allocator, IntPtr videoFormatDescription, IntPtr videoDecoderSpecification,
             IntPtr destinationImageBufferAttributes, VTDecompressionOutputCallbackRecord* outputCallback, out IntPtr decompressionSession);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial int VTDecompressionSessionDecodeFrame(IntPtr session, IntPtr sampleBuffer, uint decodeFlags, IntPtr sourceFrameRefCon, out uint infoFlagsOut);
+        [DllImport(VideoToolboxLib)]
+        public static extern int VTDecompressionSessionDecodeFrame(IntPtr session, IntPtr sampleBuffer, uint decodeFlags, IntPtr sourceFrameRefCon, out uint infoFlagsOut);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial int VTDecompressionSessionFinishDelayedFrames(IntPtr session);
+        [DllImport(VideoToolboxLib)]
+        public static extern int VTDecompressionSessionFinishDelayedFrames(IntPtr session);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial int VTDecompressionSessionWaitForAsynchronousFrames(IntPtr session);
+        [DllImport(VideoToolboxLib)]
+        public static extern int VTDecompressionSessionWaitForAsynchronousFrames(IntPtr session);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial void VTDecompressionSessionInvalidate(IntPtr session);
+        [DllImport(VideoToolboxLib)]
+        public static extern void VTDecompressionSessionInvalidate(IntPtr session);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial byte VTDecompressionSessionCanAcceptFormatDescription(IntPtr session, IntPtr newFormatDescription);
+        [DllImport(VideoToolboxLib)]
+        public static extern byte VTDecompressionSessionCanAcceptFormatDescription(IntPtr session, IntPtr newFormatDescription);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial byte VTIsHardwareDecodeSupported(uint codecType);
+        [DllImport(VideoToolboxLib)]
+        public static extern byte VTIsHardwareDecodeSupported(uint codecType);
 
         private static readonly IntPtr VideoToolbox = NativeLibrary.Load(VideoToolboxLib);
 
         /// <summary>A key or value of VideoToolbox's: a CFStringRef it exports, of the name its header gives it.</summary>
         public static IntPtr VideoToolboxConstant(string name) => Constant(VideoToolbox, name);
 
-        [LibraryImport(VideoToolboxLib)]
+        [DllImport(VideoToolboxLib)]
         [SupportedOSPlatform("ios16.0")]
         [SupportedOSPlatform("macos11.0")]
-        public static partial int VTPixelTransferSessionCreate(IntPtr allocator, out IntPtr pixelTransferSession);
+        public static extern int VTPixelTransferSessionCreate(IntPtr allocator, out IntPtr pixelTransferSession);
 
-        [LibraryImport(VideoToolboxLib)]
+        [DllImport(VideoToolboxLib)]
         [SupportedOSPlatform("ios16.0")]
         [SupportedOSPlatform("macos11.0")]
-        public static partial int VTPixelTransferSessionTransferImage(IntPtr session, IntPtr sourceBuffer, IntPtr destinationBuffer);
+        public static extern int VTPixelTransferSessionTransferImage(IntPtr session, IntPtr sourceBuffer, IntPtr destinationBuffer);
 
-        [LibraryImport(VideoToolboxLib)]
+        [DllImport(VideoToolboxLib)]
         [SupportedOSPlatform("ios16.0")]
         [SupportedOSPlatform("macos11.0")]
-        public static partial void VTPixelTransferSessionInvalidate(IntPtr session);
+        public static extern void VTPixelTransferSessionInvalidate(IntPtr session);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial int VTCompressionSessionCreate(IntPtr allocator, int width, int height, uint codecType, IntPtr encoderSpecification,
+        [DllImport(VideoToolboxLib)]
+        public static extern int VTCompressionSessionCreate(IntPtr allocator, int width, int height, uint codecType, IntPtr encoderSpecification,
             IntPtr sourceImageBufferAttributes, IntPtr compressedDataAllocator,
             delegate* unmanaged<IntPtr, IntPtr, int, uint, IntPtr, void> outputCallback, IntPtr outputCallbackRefCon, out IntPtr compressionSession);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial int VTSessionSetProperty(IntPtr session, IntPtr propertyKey, IntPtr propertyValue);
+        [DllImport(VideoToolboxLib)]
+        public static extern int VTSessionSetProperty(IntPtr session, IntPtr propertyKey, IntPtr propertyValue);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial int VTCompressionSessionPrepareToEncodeFrames(IntPtr session);
+        [DllImport(VideoToolboxLib)]
+        public static extern int VTCompressionSessionPrepareToEncodeFrames(IntPtr session);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial IntPtr VTCompressionSessionGetPixelBufferPool(IntPtr session);
+        [DllImport(VideoToolboxLib)]
+        public static extern IntPtr VTCompressionSessionGetPixelBufferPool(IntPtr session);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial int VTCompressionSessionEncodeFrame(IntPtr session, IntPtr imageBuffer, CMTime presentationTimeStamp, CMTime duration,
+        [DllImport(VideoToolboxLib)]
+        public static extern int VTCompressionSessionEncodeFrame(IntPtr session, IntPtr imageBuffer, CMTime presentationTimeStamp, CMTime duration,
             IntPtr frameProperties, IntPtr sourceFrameRefcon, out uint infoFlagsOut);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial int VTCompressionSessionCompleteFrames(IntPtr session, CMTime completeUntilPresentationTimeStamp);
+        [DllImport(VideoToolboxLib)]
+        public static extern int VTCompressionSessionCompleteFrames(IntPtr session, CMTime completeUntilPresentationTimeStamp);
 
-        [LibraryImport(VideoToolboxLib)]
-        public static partial void VTCompressionSessionInvalidate(IntPtr session);
+        [DllImport(VideoToolboxLib)]
+        public static extern void VTCompressionSessionInvalidate(IntPtr session);
 
-        [LibraryImport(VideoToolboxLib)]
+        [DllImport(VideoToolboxLib)]
         [SupportedOSPlatform("macos11.0")]
-        public static partial void VTRegisterSupplementalVideoDecoderIfAvailable(uint codecType);
+        public static extern void VTRegisterSupplementalVideoDecoderIfAvailable(uint codecType);
 
         #endregion
 
@@ -419,32 +419,32 @@ namespace SharpMediaFoundationInterop.Utils
 
         private const string CoreGraphicsLib = "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics";
 
-        [LibraryImport(CoreGraphicsLib)]
-        public static partial int CGGetActiveDisplayList(uint maxDisplays, uint* activeDisplays, out uint displayCount);
+        [DllImport(CoreGraphicsLib)]
+        public static extern int CGGetActiveDisplayList(uint maxDisplays, uint* activeDisplays, out uint displayCount);
 
-        [LibraryImport(CoreGraphicsLib)]
-        public static partial uint CGMainDisplayID();
+        [DllImport(CoreGraphicsLib)]
+        public static extern uint CGMainDisplayID();
 
-        [LibraryImport(CoreGraphicsLib)]
-        public static partial int CGDisplayIsBuiltin(uint display);
+        [DllImport(CoreGraphicsLib)]
+        public static extern int CGDisplayIsBuiltin(uint display);
 
-        [LibraryImport(CoreGraphicsLib)]
-        public static partial IntPtr CGDisplayCopyDisplayMode(uint display);
+        [DllImport(CoreGraphicsLib)]
+        public static extern IntPtr CGDisplayCopyDisplayMode(uint display);
 
-        [LibraryImport(CoreGraphicsLib)]
-        public static partial nuint CGDisplayModeGetPixelWidth(IntPtr mode);
+        [DllImport(CoreGraphicsLib)]
+        public static extern nuint CGDisplayModeGetPixelWidth(IntPtr mode);
 
-        [LibraryImport(CoreGraphicsLib)]
-        public static partial nuint CGDisplayModeGetPixelHeight(IntPtr mode);
+        [DllImport(CoreGraphicsLib)]
+        public static extern nuint CGDisplayModeGetPixelHeight(IntPtr mode);
 
-        [LibraryImport(CoreGraphicsLib)]
-        public static partial void CGDisplayModeRelease(IntPtr mode);
+        [DllImport(CoreGraphicsLib)]
+        public static extern void CGDisplayModeRelease(IntPtr mode);
 
-        [LibraryImport(CoreGraphicsLib)]
-        public static partial byte CGPreflightScreenCaptureAccess();
+        [DllImport(CoreGraphicsLib)]
+        public static extern byte CGPreflightScreenCaptureAccess();
 
-        [LibraryImport(CoreGraphicsLib)]
-        public static partial byte CGRequestScreenCaptureAccess();
+        [DllImport(CoreGraphicsLib)]
+        public static extern byte CGRequestScreenCaptureAccess();
 
         #endregion
 
@@ -463,32 +463,32 @@ namespace SharpMediaFoundationInterop.Utils
         public static readonly uint kAudioConverterDecompressionMagicCookie = FourCC("dmgc");
         public static readonly uint kAudioConverterOutputChannelLayout = FourCC("ocl ");
 
-        [LibraryImport(AudioToolboxLib)]
-        public static partial int AudioFormatGetPropertyInfo(uint propertyID, uint specifierSize, void* specifier, out uint propertyDataSize);
+        [DllImport(AudioToolboxLib)]
+        public static extern int AudioFormatGetPropertyInfo(uint propertyID, uint specifierSize, void* specifier, out uint propertyDataSize);
 
-        [LibraryImport(AudioToolboxLib)]
-        public static partial int AudioFormatGetProperty(uint propertyID, uint specifierSize, void* specifier, uint* propertyDataSize, void* propertyData);
+        [DllImport(AudioToolboxLib)]
+        public static extern int AudioFormatGetProperty(uint propertyID, uint specifierSize, void* specifier, uint* propertyDataSize, void* propertyData);
 
-        [LibraryImport(AudioToolboxLib)]
-        public static partial int AudioConverterNew(AudioStreamBasicDescription* sourceFormat, AudioStreamBasicDescription* destinationFormat, out IntPtr audioConverter);
+        [DllImport(AudioToolboxLib)]
+        public static extern int AudioConverterNew(AudioStreamBasicDescription* sourceFormat, AudioStreamBasicDescription* destinationFormat, out IntPtr audioConverter);
 
-        [LibraryImport(AudioToolboxLib)]
-        public static partial int AudioConverterDispose(IntPtr audioConverter);
+        [DllImport(AudioToolboxLib)]
+        public static extern int AudioConverterDispose(IntPtr audioConverter);
 
-        [LibraryImport(AudioToolboxLib)]
-        public static partial int AudioConverterReset(IntPtr audioConverter);
+        [DllImport(AudioToolboxLib)]
+        public static extern int AudioConverterReset(IntPtr audioConverter);
 
-        [LibraryImport(AudioToolboxLib)]
-        public static partial int AudioConverterGetPropertyInfo(IntPtr audioConverter, uint propertyID, out uint size, out byte writable);
+        [DllImport(AudioToolboxLib)]
+        public static extern int AudioConverterGetPropertyInfo(IntPtr audioConverter, uint propertyID, out uint size, out byte writable);
 
-        [LibraryImport(AudioToolboxLib)]
-        public static partial int AudioConverterGetProperty(IntPtr audioConverter, uint propertyID, uint* ioPropertyDataSize, void* outPropertyData);
+        [DllImport(AudioToolboxLib)]
+        public static extern int AudioConverterGetProperty(IntPtr audioConverter, uint propertyID, uint* ioPropertyDataSize, void* outPropertyData);
 
-        [LibraryImport(AudioToolboxLib)]
-        public static partial int AudioConverterSetProperty(IntPtr audioConverter, uint propertyID, uint propertyDataSize, void* propertyData);
+        [DllImport(AudioToolboxLib)]
+        public static extern int AudioConverterSetProperty(IntPtr audioConverter, uint propertyID, uint propertyDataSize, void* propertyData);
 
-        [LibraryImport(AudioToolboxLib)]
-        public static partial int AudioConverterFillComplexBuffer(IntPtr audioConverter,
+        [DllImport(AudioToolboxLib)]
+        public static extern int AudioConverterFillComplexBuffer(IntPtr audioConverter,
             delegate* unmanaged<IntPtr, uint*, AudioBufferList*, AudioStreamPacketDescription**, IntPtr, int> inputDataProc,
             IntPtr inputDataProcUserData, uint* ioOutputDataPacketSize, AudioBufferList* outOutputData, AudioStreamPacketDescription* outPacketDescription);
 

@@ -13,7 +13,7 @@ namespace SharpMediaFoundationInterop.Utils
     /// of the stream on it, which pipewiresrc reads. The session ends as this is disposed.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    internal sealed unsafe partial class ScreenCastPortal : IDisposable
+    internal sealed unsafe class ScreenCastPortal : IDisposable
     {
         private const string Lib = "libdbus-1.so.3";
         private const string PortalName = "org.freedesktop.portal.Desktop";
@@ -287,7 +287,7 @@ namespace SharpMediaFoundationInterop.Utils
         }
 
         /// <summary>Writes a message's arguments: of the iterators of libdbus, one for each container open.</summary>
-        private sealed partial class Writer : IDisposable
+        private sealed class Writer : IDisposable
         {
             private readonly Stack<IntPtr> _iters = new Stack<IntPtr>();
 
@@ -394,32 +394,32 @@ namespace SharpMediaFoundationInterop.Utils
             _connection = IntPtr.Zero;
         }
 
-        [LibraryImport(Lib)] private static partial void dbus_error_init(byte* error);
-        [LibraryImport(Lib)] private static partial void dbus_error_free(byte* error);
-        [LibraryImport(Lib)] private static partial int dbus_error_is_set(byte* error);
-        [LibraryImport(Lib)] private static partial IntPtr dbus_bus_get_private(int type, byte* error);
-        [LibraryImport(Lib)] private static partial IntPtr dbus_bus_get_unique_name(IntPtr connection);
-        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] private static partial void dbus_bus_add_match(IntPtr connection, [MarshalAs(UnmanagedType.LPUTF8Str)] string rule, byte* error);
-        [LibraryImport(Lib)] private static partial void dbus_connection_set_exit_on_disconnect(IntPtr connection, int exit);
-        [LibraryImport(Lib)] private static partial IntPtr dbus_connection_send_with_reply_and_block(IntPtr connection, IntPtr message, int timeoutMs, byte* error);
-        [LibraryImport(Lib)] private static partial int dbus_connection_send(IntPtr connection, IntPtr message, IntPtr serial);
-        [LibraryImport(Lib)] private static partial void dbus_connection_flush(IntPtr connection);
-        [LibraryImport(Lib)] private static partial int dbus_connection_read_write(IntPtr connection, int timeoutMs);
-        [LibraryImport(Lib)] private static partial IntPtr dbus_connection_pop_message(IntPtr connection);
-        [LibraryImport(Lib)] private static partial void dbus_connection_close(IntPtr connection);
-        [LibraryImport(Lib)] private static partial void dbus_connection_unref(IntPtr connection);
-        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] private static partial IntPtr dbus_message_new_method_call([MarshalAs(UnmanagedType.LPUTF8Str)] string destination, [MarshalAs(UnmanagedType.LPUTF8Str)] string path, [MarshalAs(UnmanagedType.LPUTF8Str)] string iface, [MarshalAs(UnmanagedType.LPUTF8Str)] string method);
-        [LibraryImport(Lib)] private static partial void dbus_message_unref(IntPtr message);
-        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] private static partial int dbus_message_is_signal(IntPtr message, [MarshalAs(UnmanagedType.LPUTF8Str)] string iface, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
-        [LibraryImport(Lib)] private static partial IntPtr dbus_message_get_path(IntPtr message);
-        [LibraryImport(Lib)] private static partial void dbus_message_iter_init_append(IntPtr message, byte* iter);
-        [LibraryImport(Lib)] private static partial int dbus_message_iter_append_basic(byte* iter, int type, void* value);
-        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] private static partial int dbus_message_iter_open_container(byte* iter, int type, [MarshalAs(UnmanagedType.LPUTF8Str)] string signature, byte* sub);
-        [LibraryImport(Lib)] private static partial int dbus_message_iter_close_container(byte* iter, byte* sub);
-        [LibraryImport(Lib)] private static partial int dbus_message_iter_init(IntPtr message, byte* iter);
-        [LibraryImport(Lib)] private static partial int dbus_message_iter_get_arg_type(byte* iter);
-        [LibraryImport(Lib)] private static partial void dbus_message_iter_get_basic(byte* iter, void* value);
-        [LibraryImport(Lib)] private static partial int dbus_message_iter_next(byte* iter);
-        [LibraryImport(Lib)] private static partial void dbus_message_iter_recurse(byte* iter, byte* sub);
+        [DllImport(Lib)] private static extern void dbus_error_init(byte* error);
+        [DllImport(Lib)] private static extern void dbus_error_free(byte* error);
+        [DllImport(Lib)] private static extern int dbus_error_is_set(byte* error);
+        [DllImport(Lib)] private static extern IntPtr dbus_bus_get_private(int type, byte* error);
+        [DllImport(Lib)] private static extern IntPtr dbus_bus_get_unique_name(IntPtr connection);
+        [DllImport(Lib)] private static extern void dbus_bus_add_match(IntPtr connection, [MarshalAs(UnmanagedType.LPUTF8Str)] string rule, byte* error);
+        [DllImport(Lib)] private static extern void dbus_connection_set_exit_on_disconnect(IntPtr connection, int exit);
+        [DllImport(Lib)] private static extern IntPtr dbus_connection_send_with_reply_and_block(IntPtr connection, IntPtr message, int timeoutMs, byte* error);
+        [DllImport(Lib)] private static extern int dbus_connection_send(IntPtr connection, IntPtr message, IntPtr serial);
+        [DllImport(Lib)] private static extern void dbus_connection_flush(IntPtr connection);
+        [DllImport(Lib)] private static extern int dbus_connection_read_write(IntPtr connection, int timeoutMs);
+        [DllImport(Lib)] private static extern IntPtr dbus_connection_pop_message(IntPtr connection);
+        [DllImport(Lib)] private static extern void dbus_connection_close(IntPtr connection);
+        [DllImport(Lib)] private static extern void dbus_connection_unref(IntPtr connection);
+        [DllImport(Lib)] private static extern IntPtr dbus_message_new_method_call([MarshalAs(UnmanagedType.LPUTF8Str)] string destination, [MarshalAs(UnmanagedType.LPUTF8Str)] string path, [MarshalAs(UnmanagedType.LPUTF8Str)] string iface, [MarshalAs(UnmanagedType.LPUTF8Str)] string method);
+        [DllImport(Lib)] private static extern void dbus_message_unref(IntPtr message);
+        [DllImport(Lib)] private static extern int dbus_message_is_signal(IntPtr message, [MarshalAs(UnmanagedType.LPUTF8Str)] string iface, [MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+        [DllImport(Lib)] private static extern IntPtr dbus_message_get_path(IntPtr message);
+        [DllImport(Lib)] private static extern void dbus_message_iter_init_append(IntPtr message, byte* iter);
+        [DllImport(Lib)] private static extern int dbus_message_iter_append_basic(byte* iter, int type, void* value);
+        [DllImport(Lib)] private static extern int dbus_message_iter_open_container(byte* iter, int type, [MarshalAs(UnmanagedType.LPUTF8Str)] string signature, byte* sub);
+        [DllImport(Lib)] private static extern int dbus_message_iter_close_container(byte* iter, byte* sub);
+        [DllImport(Lib)] private static extern int dbus_message_iter_init(IntPtr message, byte* iter);
+        [DllImport(Lib)] private static extern int dbus_message_iter_get_arg_type(byte* iter);
+        [DllImport(Lib)] private static extern void dbus_message_iter_get_basic(byte* iter, void* value);
+        [DllImport(Lib)] private static extern int dbus_message_iter_next(byte* iter);
+        [DllImport(Lib)] private static extern void dbus_message_iter_recurse(byte* iter, byte* sub);
     }
 }

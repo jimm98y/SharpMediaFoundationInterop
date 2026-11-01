@@ -100,14 +100,12 @@ namespace SharpMediaFoundationInterop.Input
 
         private static unsafe bool ReadSample(IMFSourceReader pReader, ref byte[] sampleBytes, out uint actualStreamIndex, out uint dwStreamFlags, out long timestamp, out uint sampleSize)
         {
+            IMFSample sample;
             uint lactualStreamIndex;
             uint ldwStreamFlags;
             long ltimestamp;
 
-            // of each frame: the sample an object of its own, let go of once read
-            IMFSample_unmanaged* read = null;
-            pReader.ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, &lactualStreamIndex, &ldwStreamFlags, &ltimestamp, &read);
-            IMFSample sample = ComObjects.Take<IMFSample>(read);
+            pReader.ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, out lactualStreamIndex, out ldwStreamFlags, out ltimestamp, out sample);
 
             actualStreamIndex = lactualStreamIndex;
             dwStreamFlags = ldwStreamFlags;
@@ -115,12 +113,12 @@ namespace SharpMediaFoundationInterop.Input
 
             if (sample != null)
             {
-                IMFMediaBuffer buffer = MediaObjects.GetContiguousBuffer(sample);
+                sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
                 bool ret =  MediaUtils.CopyBuffer(buffer, sampleBytes, out sampleSize);
                 GC.AddMemoryPressure(sampleSize); // samples are large, so to keep the memory usage low we have to tell GC about large amounts of unmanaged memory being allocated
 
-                ComObjects.Release(sample);
-                ComObjects.Release(buffer);
+                Marshal.ReleaseComObject(sample);
+                Marshal.ReleaseComObject(buffer);
                 GC.RemoveMemoryPressure(sampleSize);
                 return ret;
             }
@@ -241,9 +239,9 @@ namespace SharpMediaFoundationInterop.Input
             {
                 devices[deviceIndex]->Release();
             }
-            ComObjects.Release(pConfig);
+            Marshal.ReleaseComObject(pConfig);
 
-            var ret = ComObjects.Wrap<IMFMediaSource>(device);
+            var ret = (IMFMediaSource)Marshal.GetObjectForIUnknown((nint)device);
             device->Release();
             device = null;
             return ret;
@@ -262,7 +260,7 @@ namespace SharpMediaFoundationInterop.Input
                 ret.Add(new CaptureDevice(name.ToString(), symbolicLink.ToString()));
                 devices[i]->Release();
             }
-            ComObjects.Release(pConfig);
+            Marshal.ReleaseComObject(pConfig);
             return ret.ToArray();
         }
 
@@ -272,7 +270,7 @@ namespace SharpMediaFoundationInterop.Input
             {
                 if (_pReader != null)
                 {
-                    ComObjects.Release(_pReader);
+                    Marshal.ReleaseComObject(_pReader);
                     _pReader = null;
                 }
 

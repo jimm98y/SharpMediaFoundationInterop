@@ -53,7 +53,7 @@ namespace SharpMediaFoundationInterop.Codecs
             }
             finally
             {
-                ComObjects.Release(sample);
+                Marshal.ReleaseComObject(sample);
                 GC.RemoveMemoryPressure(length);
             }
 
@@ -105,36 +105,16 @@ namespace SharpMediaFoundationInterop.Codecs
         /// <see cref="Output"/> knows its own by. Of monochrome, L8 and L16, a buffer of two dimensions, whatever its size:
         /// HEVC's decoder fails one of one, too small, of any size.
         /// </summary>
-        private unsafe void FitOutputBuffer(IMFTransform transform, uint streamID, MFT_OUTPUT_DATA_BUFFER[] dataBuffer)
+        private void FitOutputBuffer(IMFTransform transform, uint streamID, MFT_OUTPUT_DATA_BUFFER[] dataBuffer)
         {
-            var sample = ComObjects.Wrap<IMFSample>(dataBuffer[0].pSample);
+            var sample = dataBuffer[0].pSample;
             if (sample == null)
                 return;
-            try
-            {
-                FitOutputBuffer(transform, streamID, sample);
-            }
-            finally
-            {
-                ComObjects.Release(sample);
-            }
-        }
-
-        private void FitOutputBuffer(IMFTransform transform, uint streamID, IMFSample sample)
-        {
             transform.GetOutputStreamInfo(streamID, out var info);
             transform.GetOutputCurrentType(streamID, out IMFMediaType type);
             type.GetGUID(PInvoke.MF_MT_SUBTYPE, out var subtype);
-            uint length;
-            IMFMediaBuffer buffer = MediaObjects.GetBuffer(sample, 0);
-            try
-            {
-                buffer.GetMaxLength(out length);
-            }
-            finally
-            {
-                ComObjects.Release(buffer);
-            }
+            sample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
+            buffer.GetMaxLength(out uint length);
 
             bool monochrome = subtype == PInvoke.MFVideoFormat_L8 || subtype == PInvoke.MFVideoFormat_L16;
             if (!monochrome && info.cbSize <= length)
@@ -151,10 +131,9 @@ namespace SharpMediaFoundationInterop.Codecs
             }
             else
             {
-                fitted = MediaObjects.CreateMemoryBuffer(info.cbSize);
+                MediaUtils.Check(PInvoke.MFCreateMemoryBuffer(info.cbSize, out fitted));
             }
             sample.AddBuffer(fitted);
-            ComObjects.Release(fitted);
             if (info.cbSize > length)
                 OnOutputSizeChanged(info.cbSize);
         }
@@ -169,10 +148,10 @@ namespace SharpMediaFoundationInterop.Codecs
         /// The next output read into <paramref name="bytes"/>: from the sample of ours the output buffer holds, used again
         /// call after call, or from one the transform hands out - of the GPU's memory, decoding there - let go of after.
         /// </summary>
-        private unsafe bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length, out long timestamp)
+        private bool Output(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] bytes, out uint length, out long timestamp)
         {
             length = 0;
-            IMFSample_unmanaged* mine = dataBuffer[0].pSample;
+            IMFSample mine = dataBuffer[0].pSample;
             if (!OutputSample(streamID, transform, dataBuffer, out IMFSample sample, out timestamp))
             {
                 dataBuffer[0].pSample = mine;
@@ -181,20 +160,7 @@ namespace SharpMediaFoundationInterop.Codecs
 
             // A transform may hand out a sample of its own in place of the one it was given, though it does not say it
             // provides its own - as FLAC's encoder does: that one is let go of once read, and ours put back.
-            IMFSample_unmanaged* handed = dataBuffer[0].pSample;
-            bool ours = mine != null && handed == mine;
-
-            // the object read of the sample let go of; of a sample of the transform's, its reference the buffer holds too
-            void LetGo()
-            {
-                ComObjects.Release(sample);
-                if (!ours)
-                {
-                    if (handed != null)
-                        Marshal.Release((nint)handed);
-                    dataBuffer[0].pSample = mine;
-                }
-            }
+            bool ours = mine != null && ReferenceEquals(sample, mine);
 
             // A sample of no buffer says something in its attributes alone - FLAC's encoder's final stream info, as it
             // drains: whoever reads it reads it, and the next output is handed out in its place.
@@ -202,7 +168,9 @@ namespace SharpMediaFoundationInterop.Codecs
             if (buffers == 0)
             {
                 OnOutputWithoutData(sample);
-                LetGo();
+                if (!ours)
+                    Marshal.ReleaseComObject(sample);
+                dataBuffer[0].pSample = mine;
                 return Output(streamID, transform, dataBuffer, ref bytes, out length, out timestamp);
             }
 
@@ -210,8 +178,11 @@ namespace SharpMediaFoundationInterop.Codecs
             {
                 // a sample of one buffer read from that buffer: FLAC's encoder's own samples refuse to be made contiguous,
                 // E_UNEXPECTED, though they are of one buffer
-                // an object of its own, let go of once read: of a sample of the transform's, of each frame
-                IMFMediaBuffer buffer = buffers == 1 ? MediaObjects.GetBuffer(sample, 0) : MediaObjects.GetContiguousBuffer(sample);
+                IMFMediaBuffer buffer;
+                if (buffers == 1)
+                    sample.GetBufferByIndex(0, out buffer);
+                else
+                    sample.ConvertToContiguousBuffer(out buffer);
                 try
                 {
                     // a frame longer than the caller's buffer - of a type the transform turned to, or of padded rows - into
@@ -220,12 +191,17 @@ namespace SharpMediaFoundationInterop.Codecs
                 }
                 finally
                 {
-                    ComObjects.Release(buffer);
+                    if (!ours)
+                        Marshal.ReleaseComObject(buffer);
                 }
             }
             finally
             {
-                LetGo();
+                if (!ours)
+                {
+                    Marshal.ReleaseComObject(sample);
+                    dataBuffer[0].pSample = mine;
+                }
             }
         }
 
@@ -234,16 +210,13 @@ namespace SharpMediaFoundationInterop.Codecs
         /// to let go of. Only of a transform that hands out samples of its own; one that fills the caller's is read with
         /// <see cref="ProcessOutput(IMFTransform, MFT_OUTPUT_DATA_BUFFER[], ref byte[], out uint, out long)"/>.
         /// </summary>
-        protected unsafe bool ProcessOutputSample(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, out IMFSample sample, out long timestamp)
+        protected bool ProcessOutputSample(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, out IMFSample sample, out long timestamp)
         {
             if (dataBuffer[0].pSample != null)
                 throw new InvalidOperationException("The transform fills samples of its caller's: read its output into a buffer.");
 
             bool ready = OutputSample(0, transform, dataBuffer, out sample, out timestamp);
-            // the caller's now, of the object's own reference: the one the buffer holds let go of
-            if (dataBuffer[0].pSample != null)
-                Marshal.Release((nint)dataBuffer[0].pSample);
-            dataBuffer[0].pSample = null;
+            dataBuffer[0].pSample = null; // the caller's now
             return ready;
         }
 
@@ -412,8 +385,7 @@ namespace SharpMediaFoundationInterop.Codecs
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {
-                // an object of its own, of a reference of its own: let go of by whoever reads it
-                sample = ComObjects.Wrap<IMFSample>(dataBuffer[0].pSample);
+                sample = dataBuffer[0].pSample;
 
                 // The decoder reorders pictures, so the timestamp is the only reliable way for a
                 // caller to tell which input a decoded frame came from.
@@ -449,7 +421,7 @@ namespace SharpMediaFoundationInterop.Codecs
                     name = friendly.ToString();
 
                     IUnknown* ptr = (IUnknown*)activates[i]->ActivateObject(typeof(IMFTransform).GUID);
-                    var transform = ComObjects.Wrap<IMFTransform>(ptr);
+                    var transform = (IMFTransform)Marshal.GetObjectForIUnknown((nint)ptr);
                     ptr->Release();
                     found.Add((name, transform));
                 }
@@ -479,7 +451,7 @@ namespace SharpMediaFoundationInterop.Codecs
                     activates[i]->GetAllocatedString(PInvoke.MFT_FRIENDLY_NAME_Attribute, out PWSTR name, out _);
                     if (Log.InfoEnabled) Log.Info($"Found MFT: {name}");
                     IUnknown* ptr = (IUnknown*)activates[i]->ActivateObject(typeof(IMFTransform).GUID);
-                    transform = ComObjects.Wrap<IMFTransform>(ptr);
+                    transform = (IMFTransform)Marshal.GetObjectForIUnknown((nint)ptr);
                     ptr->Release();
                     ptr = null;
                     break;
@@ -499,7 +471,7 @@ namespace SharpMediaFoundationInterop.Codecs
 
         public static void DestroyTransform(IMFTransform transform)
         {
-            ComObjects.Release(transform);
+            Marshal.ReleaseComObject(transform);
         }
     }
 }

@@ -1,6 +1,5 @@
 using System;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 using System.Runtime.Versioning;
 
 namespace SharpMediaFoundationInterop.Codecs
@@ -10,77 +9,35 @@ namespace SharpMediaFoundationInterop.Codecs
     /// control mode, temporal layers, long term references. What a given encoder implements varies
     /// by vendor and by codec, so every property has to be asked about before it is set.
     ///
-    /// Declared here, of the COM source generators, its values VARIANTs of <see cref="CodecApiValue"/>:
-    /// the numbers and flags a codec's properties are, read and written by hand, not marshalled by the
-    /// runtime - which does not, trimmed or compiled ahead of time. Only the methods up to SetValue, in
-    /// the order of the interface's table.
+    /// Declared here rather than taken from the generated interop because the values are VARIANTs,
+    /// and letting the runtime marshal those to and from object is far less work than handling
+    /// VARIANT by hand.
     /// </summary>
-    [GeneratedComInterface]
+    [ComImport]
     [Guid("901db4c7-31ce-41a2-85dc-8fa0bf41b8da")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public unsafe partial interface ICodecApi
+    public interface ICodecApi
     {
-        [PreserveSig] int IsSupported(Guid* api);
-        [PreserveSig] int IsModifiable(Guid* api);
-        [PreserveSig] int GetParameterRange(Guid* api, CodecApiValue* min, CodecApiValue* max, CodecApiValue* steppingDelta);
-        [PreserveSig] int GetParameterValues(Guid* api, CodecApiValue** values, uint* count);
-        [PreserveSig] int GetDefaultValue(Guid* api, CodecApiValue* value);
-        [PreserveSig] int GetValue(Guid* api, CodecApiValue* value);
-        [PreserveSig] int SetValue(Guid* api, CodecApiValue* value);
-    }
+        [PreserveSig] int IsSupported(ref Guid api);
+        [PreserveSig] int IsModifiable(ref Guid api);
 
-    /// <summary>
-    /// A VARIANT of a codec property's value: its type, and a number of up to 64 bits after it - of 24 bytes on 64 bits, of
-    /// 16 on 32, as VARIANT is. Of the types a codec's properties are; another read as no value.
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential)]
-    public unsafe struct CodecApiValue
-    {
-        private const ushort VT_EMPTY = 0, VT_I2 = 2, VT_I4 = 3, VT_R8 = 5, VT_BOOL = 11, VT_I1 = 16, VT_UI1 = 17, VT_UI2 = 18,
-            VT_UI4 = 19, VT_I8 = 20, VT_UI8 = 21, VT_INT = 22, VT_UINT = 23;
+        [PreserveSig]
+        int GetParameterRange(ref Guid api,
+            [MarshalAs(UnmanagedType.Struct)] out object min,
+            [MarshalAs(UnmanagedType.Struct)] out object max,
+            [MarshalAs(UnmanagedType.Struct)] out object steppingDelta);
 
-        public ushort Type;
-        private ushort _reserved1, _reserved2, _reserved3;
-        // the value's 8 bytes - the union's first, whatever its size
-        private long _value;
-        private nint _record;
+        [PreserveSig] int GetParameterValues(ref Guid api, out IntPtr values, out int count);
 
-        /// <summary>A value of a number or a flag; null of another type.</summary>
-        public static CodecApiValue? Of(object value)
-        {
-            var variant = new CodecApiValue();
-            switch (value)
-            {
-                case bool b: variant.Type = VT_BOOL; variant._value = b ? -1 : 0; break;
-                case byte n: variant.Type = VT_UI1; variant._value = n; break;
-                case sbyte n: variant.Type = VT_I1; variant._value = n; break;
-                case ushort n: variant.Type = VT_UI2; variant._value = n; break;
-                case short n: variant.Type = VT_I2; variant._value = n; break;
-                case uint n: variant.Type = VT_UI4; variant._value = n; break;
-                case int n: variant.Type = VT_I4; variant._value = n; break;
-                case ulong n: variant.Type = VT_UI8; variant._value = unchecked((long)n); break;
-                case long n: variant.Type = VT_I8; variant._value = n; break;
-                case double d: variant.Type = VT_R8; variant._value = BitConverter.DoubleToInt64Bits(d); break;
-                default: return null;
-            }
-            return variant;
-        }
+        [PreserveSig]
+        int GetDefaultValue(ref Guid api, [MarshalAs(UnmanagedType.Struct)] out object value);
 
-        /// <summary>The value, of its type; null of a type of no number or flag.</summary>
-        public object Value => Type switch
-        {
-            VT_BOOL => (short)_value != 0,
-            VT_UI1 => (byte)_value,
-            VT_I1 => (sbyte)_value,
-            VT_UI2 => (ushort)_value,
-            VT_I2 => (short)_value,
-            VT_UI4 or VT_UINT => (uint)_value,
-            VT_I4 or VT_INT => (int)_value,
-            VT_UI8 => unchecked((ulong)_value),
-            VT_I8 => _value,
-            VT_R8 => BitConverter.Int64BitsToDouble(_value),
-            _ => null,
-        };
+        [PreserveSig]
+        int GetValue(ref Guid api, [MarshalAs(UnmanagedType.Struct)] out object value);
+
+        [PreserveSig]
+        int SetValue(ref Guid api, [MarshalAs(UnmanagedType.Struct)] ref object value);
     }
 
     /// <summary>
@@ -169,14 +126,14 @@ namespace SharpMediaFoundationInterop.Codecs
     public static class CodecApiExtensions
     {
         /// <summary>True when the encoder implements this property at all.</summary>
-        public static unsafe bool IsPropertySupported(this ICodecApi codec, Guid property) =>
-            codec != null && codec.IsSupported(&property) == 0;
+        public static bool IsPropertySupported(this ICodecApi codec, Guid property) =>
+            codec != null && codec.IsSupported(ref property) == 0;
 
         /// <summary>True when the property can still be changed in the encoder's current state.</summary>
-        public static unsafe bool IsPropertyModifiable(this ICodecApi codec, Guid property) =>
-            codec != null && codec.IsModifiable(&property) == 0;
+        public static bool IsPropertyModifiable(this ICodecApi codec, Guid property) =>
+            codec != null && codec.IsModifiable(ref property) == 0;
 
-        public static unsafe bool TryGetProperty(this ICodecApi codec, Guid property, out object value)
+        public static bool TryGetProperty(this ICodecApi codec, Guid property, out object value)
         {
             value = null;
             if (codec == null)
@@ -184,11 +141,7 @@ namespace SharpMediaFoundationInterop.Codecs
 
             try
             {
-                CodecApiValue variant = default;
-                if (codec.GetValue(&property, &variant) != 0)
-                    return false;
-                value = variant.Value;
-                return value != null;
+                return codec.GetValue(ref property, out value) == 0;
             }
             catch (Exception)
             {
@@ -196,15 +149,14 @@ namespace SharpMediaFoundationInterop.Codecs
             }
         }
 
-        public static unsafe bool TrySetProperty(this ICodecApi codec, Guid property, object value)
+        public static bool TrySetProperty(this ICodecApi codec, Guid property, object value)
         {
-            // of a value of no number or flag, nothing set
-            if (codec == null || CodecApiValue.Of(value) is not CodecApiValue variant)
+            if (codec == null)
                 return false;
 
             try
             {
-                return codec.SetValue(&property, &variant) == 0;
+                return codec.SetValue(ref property, ref value) == 0;
             }
             catch (Exception)
             {
