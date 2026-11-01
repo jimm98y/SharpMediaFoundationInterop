@@ -14,7 +14,7 @@ namespace SharpMediaFoundationInterop.Utils
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    internal static unsafe class ObjC
+    internal static unsafe partial class ObjC
     {
         // the names iOS has them by, which macOS has as well
         private const string ObjCLib = "/usr/lib/libobjc.dylib";
@@ -26,44 +26,44 @@ namespace SharpMediaFoundationInterop.Utils
         /// <summary>objc_msgSend, of which each signature is a function pointer of its own.</summary>
         private static readonly IntPtr MsgSend = NativeLibrary.GetExport(ObjCHandle, "objc_msgSend");
 
-        [DllImport(ObjCLib)]
-        public static extern IntPtr objc_getClass(string name);
+        [LibraryImport(ObjCLib, StringMarshalling = StringMarshalling.Utf8)]
+        public static partial IntPtr objc_getClass(string name);
 
-        [DllImport(ObjCLib)]
-        public static extern IntPtr objc_getProtocol(string name);
+        [LibraryImport(ObjCLib, StringMarshalling = StringMarshalling.Utf8)]
+        public static partial IntPtr objc_getProtocol(string name);
 
-        [DllImport(ObjCLib)]
-        private static extern IntPtr sel_registerName(string name);
+        [LibraryImport(ObjCLib, StringMarshalling = StringMarshalling.Utf8)]
+        private static partial IntPtr sel_registerName(string name);
 
-        [DllImport(ObjCLib)]
-        public static extern IntPtr objc_allocateClassPair(IntPtr superclass, string name, nint extraBytes);
+        [LibraryImport(ObjCLib, StringMarshalling = StringMarshalling.Utf8)]
+        public static partial IntPtr objc_allocateClassPair(IntPtr superclass, string name, nint extraBytes);
 
-        [DllImport(ObjCLib)]
-        public static extern void objc_registerClassPair(IntPtr cls);
+        [LibraryImport(ObjCLib)]
+        public static partial void objc_registerClassPair(IntPtr cls);
 
-        [DllImport(ObjCLib)]
-        public static extern byte class_addMethod(IntPtr cls, IntPtr selector, IntPtr implementation, string types);
+        [LibraryImport(ObjCLib, StringMarshalling = StringMarshalling.Utf8)]
+        public static partial byte class_addMethod(IntPtr cls, IntPtr selector, IntPtr implementation, string types);
 
-        [DllImport(ObjCLib)]
-        public static extern byte class_addProtocol(IntPtr cls, IntPtr protocol);
+        [LibraryImport(ObjCLib)]
+        public static partial byte class_addProtocol(IntPtr cls, IntPtr protocol);
 
-        [DllImport(ObjCLib)]
-        public static extern IntPtr objc_retain(IntPtr obj);
+        [LibraryImport(ObjCLib)]
+        public static partial IntPtr objc_retain(IntPtr obj);
 
-        [DllImport(ObjCLib)]
-        public static extern void objc_release(IntPtr obj);
+        [LibraryImport(ObjCLib)]
+        public static partial void objc_release(IntPtr obj);
 
-        [DllImport(ObjCLib)]
-        public static extern IntPtr objc_autoreleasePoolPush();
+        [LibraryImport(ObjCLib)]
+        public static partial IntPtr objc_autoreleasePoolPush();
 
-        [DllImport(ObjCLib)]
-        public static extern void objc_autoreleasePoolPop(IntPtr pool);
+        [LibraryImport(ObjCLib)]
+        public static partial void objc_autoreleasePoolPop(IntPtr pool);
 
-        [DllImport(SystemLib)]
-        private static extern IntPtr dispatch_queue_create(string label, IntPtr attributes);
+        [LibraryImport(SystemLib, StringMarshalling = StringMarshalling.Utf8)]
+        private static partial IntPtr dispatch_queue_create(string label, IntPtr attributes);
 
-        [DllImport(SystemLib)]
-        public static extern void dispatch_release(IntPtr obj);
+        [LibraryImport(SystemLib)]
+        public static partial void dispatch_release(IntPtr obj);
 
         private static readonly ConcurrentDictionary<string, IntPtr> Selectors = new ConcurrentDictionary<string, IntPtr>();
 
@@ -275,10 +275,10 @@ namespace SharpMediaFoundationInterop.Utils
             public nint Length;
         }
 
-        [DllImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
-        private static extern nint CFStringGetLength(IntPtr str);
+        [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+        private static partial nint CFStringGetLength(IntPtr str);
 
-        [DllImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
-        private static extern void CFStringGetCharacters(IntPtr str, CFRange range, char* buffer);
+        [LibraryImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
+        private static partial void CFStringGetCharacters(IntPtr str, CFRange range, char* buffer);
     }
 }

@@ -10,7 +10,7 @@ namespace SharpMediaFoundationInterop.Utils
     /// Android head decodes. No JNI: every call is a C entry point of the NDK's, of API 26 or later.
     /// </summary>
     [SupportedOSPlatform("android26.0")]
-    internal static unsafe class MediaNdk
+    internal static unsafe partial class MediaNdk
     {
         private const string Lib = "libmediandk.so";
 
@@ -57,15 +57,15 @@ namespace SharpMediaFoundationInterop.Utils
 
         #region AMediaFormat
 
-        [DllImport(Lib)] public static extern IntPtr AMediaFormat_new();
-        [DllImport(Lib)] public static extern int AMediaFormat_delete(IntPtr format);
-        [DllImport(Lib)] public static extern void AMediaFormat_setString(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
-        [DllImport(Lib)] public static extern void AMediaFormat_setInt32(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, int value);
-        [DllImport(Lib)] public static extern void AMediaFormat_setInt64(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, long value);
-        [DllImport(Lib)] public static extern void AMediaFormat_setFloat(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, float value);
-        [DllImport(Lib)] public static extern void AMediaFormat_setBuffer(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, void* data, nuint size);
-        [DllImport(Lib)] [return: MarshalAs(UnmanagedType.I1)] public static extern bool AMediaFormat_getInt32(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, out int value);
-        [DllImport(Lib)] [return: MarshalAs(UnmanagedType.I1)] public static extern bool AMediaFormat_getBuffer(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, out void* data, out nuint size);
+        [LibraryImport(Lib)] public static partial IntPtr AMediaFormat_new();
+        [LibraryImport(Lib)] public static partial int AMediaFormat_delete(IntPtr format);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] public static partial void AMediaFormat_setString(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] public static partial void AMediaFormat_setInt32(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, int value);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] public static partial void AMediaFormat_setInt64(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, long value);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] public static partial void AMediaFormat_setFloat(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, float value);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] public static partial void AMediaFormat_setBuffer(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, void* data, nuint size);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] [return: MarshalAs(UnmanagedType.I1)] public static partial bool AMediaFormat_getInt32(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, out int value);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] [return: MarshalAs(UnmanagedType.I1)] public static partial bool AMediaFormat_getBuffer(IntPtr format, [MarshalAs(UnmanagedType.LPUTF8Str)] string name, out void* data, out nuint size);
 
         public static void SetBuffer(IntPtr format, string name, ReadOnlySpan<byte> data)
         {
@@ -77,38 +77,38 @@ namespace SharpMediaFoundationInterop.Utils
 
         #region AMediaCodec
 
-        [DllImport(Lib)] public static extern IntPtr AMediaCodec_createDecoderByType([MarshalAs(UnmanagedType.LPUTF8Str)] string mimeType);
-        [DllImport(Lib)] public static extern IntPtr AMediaCodec_createEncoderByType([MarshalAs(UnmanagedType.LPUTF8Str)] string mimeType);
-        [DllImport(Lib)] public static extern int AMediaCodec_configure(IntPtr codec, IntPtr format, IntPtr surface, IntPtr crypto, uint flags);
-        [DllImport(Lib)] public static extern int AMediaCodec_start(IntPtr codec);
-        [DllImport(Lib)] public static extern int AMediaCodec_stop(IntPtr codec);
-        [DllImport(Lib)] public static extern int AMediaCodec_flush(IntPtr codec);
-        [DllImport(Lib)] public static extern int AMediaCodec_delete(IntPtr codec);
-        [DllImport(Lib)] public static extern nint AMediaCodec_dequeueInputBuffer(IntPtr codec, long timeoutUs);
-        [DllImport(Lib)] public static extern byte* AMediaCodec_getInputBuffer(IntPtr codec, nuint index, out nuint size);
-        [DllImport(Lib)] public static extern int AMediaCodec_queueInputBuffer(IntPtr codec, nuint index, nint offset, nuint size, ulong timeUs, uint flags);
-        [DllImport(Lib)] public static extern nint AMediaCodec_dequeueOutputBuffer(IntPtr codec, AMediaCodecBufferInfo* info, long timeoutUs);
-        [DllImport(Lib)] public static extern byte* AMediaCodec_getOutputBuffer(IntPtr codec, nuint index, out nuint size);
-        [DllImport(Lib)] public static extern IntPtr AMediaCodec_getOutputFormat(IntPtr codec);
-        [DllImport(Lib)] public static extern int AMediaCodec_releaseOutputBuffer(IntPtr codec, nuint index, [MarshalAs(UnmanagedType.I1)] bool render);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] public static partial IntPtr AMediaCodec_createDecoderByType([MarshalAs(UnmanagedType.LPUTF8Str)] string mimeType);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] public static partial IntPtr AMediaCodec_createEncoderByType([MarshalAs(UnmanagedType.LPUTF8Str)] string mimeType);
+        [LibraryImport(Lib)] public static partial int AMediaCodec_configure(IntPtr codec, IntPtr format, IntPtr surface, IntPtr crypto, uint flags);
+        [LibraryImport(Lib)] public static partial int AMediaCodec_start(IntPtr codec);
+        [LibraryImport(Lib)] public static partial int AMediaCodec_stop(IntPtr codec);
+        [LibraryImport(Lib)] public static partial int AMediaCodec_flush(IntPtr codec);
+        [LibraryImport(Lib)] public static partial int AMediaCodec_delete(IntPtr codec);
+        [LibraryImport(Lib)] public static partial nint AMediaCodec_dequeueInputBuffer(IntPtr codec, long timeoutUs);
+        [LibraryImport(Lib)] public static partial byte* AMediaCodec_getInputBuffer(IntPtr codec, nuint index, out nuint size);
+        [LibraryImport(Lib)] public static partial int AMediaCodec_queueInputBuffer(IntPtr codec, nuint index, nint offset, nuint size, ulong timeUs, uint flags);
+        [LibraryImport(Lib)] public static partial nint AMediaCodec_dequeueOutputBuffer(IntPtr codec, AMediaCodecBufferInfo* info, long timeoutUs);
+        [LibraryImport(Lib)] public static partial byte* AMediaCodec_getOutputBuffer(IntPtr codec, nuint index, out nuint size);
+        [LibraryImport(Lib)] public static partial IntPtr AMediaCodec_getOutputFormat(IntPtr codec);
+        [LibraryImport(Lib)] public static partial int AMediaCodec_releaseOutputBuffer(IntPtr codec, nuint index, [MarshalAs(UnmanagedType.I1)] bool render);
 
         #endregion
 
         #region AImageReader
 
-        [DllImport(Lib)] public static extern int AImageReader_new(int width, int height, int format, int maxImages, out IntPtr reader);
-        [DllImport(Lib)] public static extern void AImageReader_delete(IntPtr reader);
-        [DllImport(Lib)] public static extern int AImageReader_getWindow(IntPtr reader, out IntPtr window);
-        [DllImport(Lib)] public static extern int AImageReader_acquireNextImage(IntPtr reader, out IntPtr image);
-        [DllImport(Lib)] public static extern int AImageReader_acquireLatestImage(IntPtr reader, out IntPtr image);
-        [DllImport(Lib)] public static extern void AImage_delete(IntPtr image);
-        [DllImport(Lib)] public static extern int AImage_getTimestamp(IntPtr image, out long timestampNs);
-        [DllImport(Lib)] public static extern int AImage_getWidth(IntPtr image, out int width);
-        [DllImport(Lib)] public static extern int AImage_getHeight(IntPtr image, out int height);
-        [DllImport(Lib)] public static extern int AImage_getCropRect(IntPtr image, out AImageCropRect rect);
-        [DllImport(Lib)] public static extern int AImage_getPlaneData(IntPtr image, int planeIndex, out byte* data, out int length);
-        [DllImport(Lib)] public static extern int AImage_getPlaneRowStride(IntPtr image, int planeIndex, out int rowStride);
-        [DllImport(Lib)] public static extern int AImage_getPlanePixelStride(IntPtr image, int planeIndex, out int pixelStride);
+        [LibraryImport(Lib)] public static partial int AImageReader_new(int width, int height, int format, int maxImages, out IntPtr reader);
+        [LibraryImport(Lib)] public static partial void AImageReader_delete(IntPtr reader);
+        [LibraryImport(Lib)] public static partial int AImageReader_getWindow(IntPtr reader, out IntPtr window);
+        [LibraryImport(Lib)] public static partial int AImageReader_acquireNextImage(IntPtr reader, out IntPtr image);
+        [LibraryImport(Lib)] public static partial int AImageReader_acquireLatestImage(IntPtr reader, out IntPtr image);
+        [LibraryImport(Lib)] public static partial void AImage_delete(IntPtr image);
+        [LibraryImport(Lib)] public static partial int AImage_getTimestamp(IntPtr image, out long timestampNs);
+        [LibraryImport(Lib)] public static partial int AImage_getWidth(IntPtr image, out int width);
+        [LibraryImport(Lib)] public static partial int AImage_getHeight(IntPtr image, out int height);
+        [LibraryImport(Lib)] public static partial int AImage_getCropRect(IntPtr image, out AImageCropRect rect);
+        [LibraryImport(Lib)] public static partial int AImage_getPlaneData(IntPtr image, int planeIndex, out byte* data, out int length);
+        [LibraryImport(Lib)] public static partial int AImage_getPlaneRowStride(IntPtr image, int planeIndex, out int rowStride);
+        [LibraryImport(Lib)] public static partial int AImage_getPlanePixelStride(IntPtr image, int planeIndex, out int pixelStride);
 
         #endregion
 

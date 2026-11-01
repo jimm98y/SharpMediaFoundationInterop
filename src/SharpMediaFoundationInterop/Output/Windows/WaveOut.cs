@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
+using SharpMediaFoundationInterop.Utils;
 using Windows.Win32;
 using Windows.Win32.Media;
 using Windows.Win32.Media.Audio;
@@ -47,7 +48,9 @@ namespace SharpMediaFoundationInterop.Output
         public event EventHandler<EventArgs> OnPlaybackCompleted;
 
         // https://github.com/microsoft/CsWin32/issues/623
-        private Delegate _callback; // hold on to the delegate so that it does not get garbage collected
+        // this, as the device's callback reaches it: a function of no instance, of no delegate - a weak handle, so the
+        // device holds nothing of it alive
+        private GCHandle _self;
 
         public WaveOut()
         { }
@@ -98,7 +101,6 @@ namespace SharpMediaFoundationInterop.Output
                 _audioBuffer = Marshal.AllocHGlobal(_audioBufferSize);
             }
 
-            _callback = DoneCallback;
 
             // Of more than two channels, or more than 16 bits, WAVEFORMATEXTENSIBLE: which speaker each channel is for - the
             // channels in WAVE's order, as Windows' decoders hand them out - and the bits that are of the samples. Without
@@ -123,7 +125,10 @@ namespace SharpMediaFoundationInterop.Output
 
             // a device refused leaves no handle: none is kept, and nothing is played - not a handle of whatever was there
             HWAVEOUT device = default;
-            uint result = PInvoke.waveOutOpen(&device, deviceID, (WAVEFORMATEX*)&format, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
+            if (!_self.IsAllocated)
+                _self = GCHandle.Alloc(this, GCHandleType.Weak);
+            uint result = PInvoke.waveOutOpen(&device, deviceID, (WAVEFORMATEX*)&format,
+                (nuint)(delegate* unmanaged<HWAVEOUT, uint, nuint, nuint, nuint, void>)&Callback, (nuint)(nint)GCHandle.ToIntPtr(_self), MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
             if (result != MMSYSERR_NOERROR)
             {
                 device = default;
@@ -168,7 +173,7 @@ namespace SharpMediaFoundationInterop.Output
         {
             try
             {
-                var enumerator = (IMMDeviceEnumerator)Activator.CreateInstance(Type.GetTypeFromCLSID(typeof(MMDeviceEnumerator).GUID, true));
+                MediaUtils.Check(PInvoke.CoCreateInstance(typeof(MMDeviceEnumerator).GUID, null, CLSCTX.CLSCTX_ALL, out IMMDeviceEnumerator enumerator));
                 enumerator.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eConsole, out IMMDevice device);
                 device.Activate(typeof(IAudioClient).GUID, CLSCTX.CLSCTX_ALL, null, out object activated);
                 var client = (IAudioClient)activated;
@@ -192,7 +197,7 @@ namespace SharpMediaFoundationInterop.Output
         {
             try
             {
-                var enumerator = (IMMDeviceEnumerator)Activator.CreateInstance(Type.GetTypeFromCLSID(typeof(MMDeviceEnumerator).GUID, true));
+                MediaUtils.Check(PInvoke.CoCreateInstance(typeof(MMDeviceEnumerator).GUID, null, CLSCTX.CLSCTX_ALL, out IMMDeviceEnumerator enumerator));
                 enumerator.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eConsole, out IMMDevice device);
                 device.OpenPropertyStore(STGM.STGM_READ, out IPropertyStore store);
                 store.GetValue(PInvoke.PKEY_AudioEndpoint_FormFactor, out var value);
@@ -206,7 +211,23 @@ namespace SharpMediaFoundationInterop.Output
             }
         }
 
-        private unsafe void DoneCallback(HWAVEOUT* dev, uint uMsg, uint* dwUser, uint dwParam1, uint dwParam2)
+        // the device's: a buffer played - of the output its instance is the handle of
+        [UnmanagedCallersOnly]
+        private static void Callback(HWAVEOUT device, uint message, nuint instance, nuint param1, nuint param2)
+        {
+            try
+            {
+                if (instance != 0 && GCHandle.FromIntPtr((nint)instance).Target is WaveOut output)
+                    output.DoneCallback(message);
+            }
+            catch (Exception ex)
+            {
+                // nothing thrown back into the device's thread
+                if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
+            }
+        }
+
+        private void DoneCallback(uint uMsg)
         {
             if (uMsg == MM_WOM_DONE)
             {
@@ -340,6 +361,9 @@ namespace SharpMediaFoundationInterop.Output
                 if (disposing)
                 {
                     Close();
+                    // closed, the device calls back no more: of a finalizer, it may - the weak handle then reaches nothing
+                    if (_self.IsAllocated)
+                        _self.Free();
                 }
 
                 if (_audioBuffer != nint.Zero)
