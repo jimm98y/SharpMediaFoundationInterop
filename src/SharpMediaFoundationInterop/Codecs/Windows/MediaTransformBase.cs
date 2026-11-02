@@ -38,11 +38,12 @@ namespace SharpMediaFoundationInterop.Codecs
         /// One sample in, of <paramref name="prefix"/> and then <paramref name="data"/>, copied straight into the media
         /// buffer - nothing is allocated on the managed heap for it.
         /// </summary>
-        protected bool ProcessInput(IMFTransform transform, ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
+        protected unsafe bool ProcessInput(IMFTransform transform, ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
         {
             bool ret = false;
             int length = prefix.Length + data.Length;
-            IMFSample sample = MediaUtils.CreateSample(prefix, data, sampleDuration, timestamp);
+            // of no object: of each frame, nothing on the managed heap
+            IMFSample_unmanaged* sample = MediaUtils.CreateRawSample(prefix, data, sampleDuration, timestamp);
 
             // samples are large, so to keep the memory usage low we have to tell GC about large amounts of unmanaged memory being allocated
             GC.AddMemoryPressure(length); // approximate size
@@ -53,7 +54,7 @@ namespace SharpMediaFoundationInterop.Codecs
             }
             finally
             {
-                ComObjects.Release(sample);
+                sample->Release();
                 GC.RemoveMemoryPressure(length);
             }
 
@@ -74,19 +75,25 @@ namespace SharpMediaFoundationInterop.Codecs
             return Output(0, transform, dataBuffer, ref buffer, out length, out timestamp);
         }
 
-        private unsafe bool Input(uint streamID, IMFTransform transform, IMFSample sample)
+        // ProcessInput's place in the table of IMFTransform: of the generated interop, the sample passed would be an object
+        // made of each frame
+        private const int ProcessInputSlot = 24;
+
+        private unsafe bool Input(uint streamID, IMFTransform transform, IMFSample_unmanaged* sample)
         {
             bool ret = false;
             const uint MF_E_NOTACCEPTING = 0xC00D36B5;
 
+            void* pointer = ComObjects.PointerOf(transform);
             try
             {
+                var processInput = (delegate* unmanaged[Stdcall]<void*, uint, IMFSample_unmanaged*, uint, HRESULT>)(*(void***)pointer)[ProcessInputSlot];
                 MediaUtils.Check(transform.GetInputStatus(streamID, out uint decoderInputFlags));
-                HRESULT inputResult = transform.ProcessInput(streamID, sample, 0);
+                HRESULT inputResult = processInput(pointer, streamID, sample, 0);
                 if(inputResult == MF_E_NOTACCEPTING) // after stream change, we have to flush sometimes
                 {
                     transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_COMMAND_FLUSH, default);
-                    inputResult = transform.ProcessInput(streamID, sample, 0); // try again
+                    inputResult = processInput(pointer, streamID, sample, 0); // try again
                 }
                 MediaUtils.Check(inputResult);
                 ret = true;
@@ -94,6 +101,10 @@ namespace SharpMediaFoundationInterop.Codecs
             catch (Exception ex)
             {
                 if (Log.ErrorEnabled) Log.Error(ex.Message, ex);
+            }
+            finally
+            {
+                Marshal.Release((nint)pointer);
             }
 
             return ret;
@@ -173,7 +184,7 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             length = 0;
             IMFSample_unmanaged* mine = dataBuffer[0].pSample;
-            if (!OutputSample(streamID, transform, dataBuffer, out IMFSample sample, out timestamp))
+            if (!OutputSample(streamID, transform, dataBuffer, out timestamp))
             {
                 dataBuffer[0].pSample = mine;
                 return false;
@@ -184,10 +195,10 @@ namespace SharpMediaFoundationInterop.Codecs
             IMFSample_unmanaged* handed = dataBuffer[0].pSample;
             bool ours = mine != null && handed == mine;
 
-            // the object read of the sample let go of; of a sample of the transform's, its reference the buffer holds too
+            // read of its pointer, of no object - of each frame, nothing on the managed heap: of a sample of the transform's,
+            // the reference the buffer holds let go of
             void LetGo()
             {
-                ComObjects.Release(sample);
                 if (!ours)
                 {
                     if (handed != null)
@@ -198,11 +209,20 @@ namespace SharpMediaFoundationInterop.Codecs
 
             // A sample of no buffer says something in its attributes alone - FLAC's encoder's final stream info, as it
             // drains: whoever reads it reads it, and the next output is handed out in its place.
-            sample.GetBufferCount(out uint buffers);
+            handed->GetBufferCount(out uint buffers);
             if (buffers == 0)
             {
-                OnOutputWithoutData(sample);
-                LetGo();
+                // an object of it for whoever reads it: once, as the stream ends
+                var sample = ComObjects.Wrap<IMFSample>(handed);
+                try
+                {
+                    OnOutputWithoutData(sample);
+                }
+                finally
+                {
+                    ComObjects.Release(sample);
+                    LetGo();
+                }
                 return Output(streamID, transform, dataBuffer, ref bytes, out length, out timestamp);
             }
 
@@ -210,8 +230,12 @@ namespace SharpMediaFoundationInterop.Codecs
             {
                 // a sample of one buffer read from that buffer: FLAC's encoder's own samples refuse to be made contiguous,
                 // E_UNEXPECTED, though they are of one buffer
-                // an object of its own, let go of once read: of a sample of the transform's, of each frame
-                IMFMediaBuffer buffer = buffers == 1 ? MediaObjects.GetBuffer(sample, 0) : MediaObjects.GetContiguousBuffer(sample);
+                // of a reference of its own, let go of once read
+                IMFMediaBuffer_unmanaged* buffer;
+                if (buffers == 1)
+                    handed->GetBufferByIndex(0, out buffer);
+                else
+                    handed->ConvertToContiguousBuffer(out buffer);
                 try
                 {
                     // a frame longer than the caller's buffer - of a type the transform turned to, or of padded rows - into
@@ -220,7 +244,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 }
                 finally
                 {
-                    ComObjects.Release(buffer);
+                    buffer->Release();
                 }
             }
             finally
@@ -239,8 +263,9 @@ namespace SharpMediaFoundationInterop.Codecs
             if (dataBuffer[0].pSample != null)
                 throw new InvalidOperationException("The transform fills samples of its caller's: read its output into a buffer.");
 
-            bool ready = OutputSample(0, transform, dataBuffer, out sample, out timestamp);
-            // the caller's now, of the object's own reference: the one the buffer holds let go of
+            bool ready = OutputSample(0, transform, dataBuffer, out timestamp);
+            // an object of its own, of a reference of its own: the caller's now, the one the buffer holds let go of
+            sample = ready ? ComObjects.Wrap<IMFSample>(dataBuffer[0].pSample) : null;
             if (dataBuffer[0].pSample != null)
                 Marshal.Release((nint)dataBuffer[0].pSample);
             dataBuffer[0].pSample = null;
@@ -270,10 +295,9 @@ namespace SharpMediaFoundationInterop.Codecs
                 : subtype.ToString();
         }
 
-        private unsafe bool OutputSample(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, out IMFSample sample, out long timestamp, bool changed = false)
+        private unsafe bool OutputSample(uint streamID, IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, out long timestamp, bool changed = false)
         {
             timestamp = 0;
-            sample = null;
             bool ret = false;
             const int MF_E_TRANSFORM_NEED_MORE_INPUT = unchecked((int)0xc00d6d72);
             const int MF_E_TRANSFORM_STREAM_CHANGE = unchecked((int)0xc00d6d61);
@@ -404,7 +428,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 // The frame that brought the change is ready, of the new type: asked for again, it comes out now, not with
                 // the next input - of which there is none, draining a key frame decoded on its own.
                 if (!changed)
-                    return OutputSample(streamID, transform, dataBuffer, out sample, out timestamp, changed: true);
+                    return OutputSample(streamID, transform, dataBuffer, out timestamp, changed: true);
             }
             else if (outputResult.Value == MF_E_TRANSFORM_NEED_MORE_INPUT)
             {
@@ -412,12 +436,15 @@ namespace SharpMediaFoundationInterop.Codecs
             }
             else if (outputResult.Value == 0 && decoderOutputStatus == 0)
             {
-                // an object of its own, of a reference of its own: let go of by whoever reads it
-                sample = ComObjects.Wrap<IMFSample>(dataBuffer[0].pSample);
+                // the sample in the buffer, read of its pointer by the caller
 
                 // The decoder reorders pictures, so the timestamp is the only reliable way for a
                 // caller to tell which input a decoded frame came from.
-                try { sample.GetSampleTime(out timestamp); } catch { timestamp = 0; }
+                IMFSample_unmanaged* sample = dataBuffer[0].pSample;
+                if (sample != null)
+                {
+                    try { sample->GetSampleTime(out timestamp); } catch { timestamp = 0; }
+                }
                 ret = true;
             }
             else

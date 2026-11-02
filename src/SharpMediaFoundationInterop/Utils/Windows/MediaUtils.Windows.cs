@@ -36,34 +36,54 @@ namespace SharpMediaFoundationInterop.Utils
         [SupportedOSPlatform("windows10.0.17763.0")]
         public static unsafe IMFSample CreateSample(ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
         {
-            uint length = (uint)(prefix.Length + data.Length);
-            // of each frame: objects of their own, let go of as soon as they are done with
-            IMFMediaBuffer buffer = MediaObjects.CreateMemoryBuffer(length);
+            // an object of its own, let go of as soon as it is done with
+            return ComObjects.Take<IMFSample>(CreateRawSample(prefix, data, sampleDuration, timestamp));
+        }
 
+        /// <summary>
+        /// The sample of <see cref="CreateSample(ReadOnlySpan{byte}, ReadOnlySpan{byte}, long, long)"/> as its pointer, of a
+        /// reference the caller's to let go of: of no object - of each frame, nothing on the managed heap.
+        /// </summary>
+        [SupportedOSPlatform("windows10.0.17763.0")]
+        internal static unsafe IMFSample_unmanaged* CreateRawSample(ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
+        {
+            uint length = (uint)(prefix.Length + data.Length);
+            IMFMediaBuffer_unmanaged* buffer;
+            Check(MediaObjects.CreateMemoryBufferRaw(length, &buffer));
+            IMFSample_unmanaged* sample = null;
             try
             {
-                uint maxLength = default;
-                uint currentLength = default;
                 byte* target = default;
-                buffer.Lock(&target, &maxLength, &currentLength);
-                prefix.CopyTo(new Span<byte>(target, prefix.Length));
-                data.CopyTo(new Span<byte>(target + prefix.Length, data.Length));
+                buffer->Lock(&target, null, null);
+                try
+                {
+                    prefix.CopyTo(new Span<byte>(target, prefix.Length));
+                    data.CopyTo(new Span<byte>(target + prefix.Length, data.Length));
+                }
+                finally
+                {
+                    buffer->SetCurrentLength(length);
+                    buffer->Unlock();
+                }
+
+                Check(MediaObjects.CreateSampleRaw(&sample));
+                sample->AddBuffer(buffer);
+                if (sampleDuration > 0) // not known where the frame rate is not
+                    sample->SetSampleDuration(sampleDuration);
+                sample->SetSampleTime(timestamp); // timestamp is required
+                return sample;
+            }
+            catch
+            {
+                if (sample != null)
+                    sample->Release();
+                throw;
             }
             finally
             {
-                buffer.SetCurrentLength(length);
-                buffer.Unlock();
+                // the sample's to hold now
+                buffer->Release();
             }
-
-            IMFSample sample = MediaObjects.CreateSample();
-            sample.AddBuffer(buffer);
-            // the sample's to hold now
-            ComObjects.Release(buffer);
-            if (sampleDuration > 0) // not known where the frame rate is not
-                sample.SetSampleDuration(sampleDuration);
-            sample.SetSampleTime(timestamp); // timestamp is required
-
-            return sample;
         }
 
         /// <summary>
@@ -137,6 +157,37 @@ namespace SharpMediaFoundationInterop.Utils
             {
                 buffer.SetCurrentLength(0);
                 buffer.Unlock();
+            }
+            return ret;
+        }
+
+        /// <summary>
+        /// <see cref="CopyBuffer(IMFMediaBuffer, ref byte[], out uint)"/> of a buffer's pointer: of no object - of each frame,
+        /// nothing on the managed heap.
+        /// </summary>
+        [SupportedOSPlatform("windows10.0.17763.0")]
+        internal static unsafe bool CopyBuffer(IMFMediaBuffer_unmanaged* buffer, ref byte[] sampleBytes, out uint sampleSize)
+        {
+            bool ret = false;
+            try
+            {
+                uint maxLength = default;
+                uint currentLength = default;
+                byte* data = default;
+                buffer->Lock(&data, &maxLength, &currentLength);
+                sampleSize = currentLength;
+                if (sampleBytes != null)
+                {
+                    if (sampleBytes.Length < currentLength)
+                        sampleBytes = new byte[currentLength];
+                    new ReadOnlySpan<byte>(data, (int)currentLength).CopyTo(sampleBytes);
+                }
+                ret = true;
+            }
+            finally
+            {
+                buffer->SetCurrentLength(0);
+                buffer->Unlock();
             }
             return ret;
         }

@@ -85,9 +85,9 @@ namespace SharpMediaFoundationInterop.Utils
         private static partial HRESULT CreateSourceReaderRaw(void* source, void* attributes, void** reader);
 
         [LibraryImport("mfplat.dll", EntryPoint = "MFCreateSample")]
-        private static partial HRESULT CreateSampleRaw(IMFSample_unmanaged** sample);
+        internal static partial HRESULT CreateSampleRaw(IMFSample_unmanaged** sample);
 
         [LibraryImport("mfplat.dll", EntryPoint = "MFCreateMemoryBuffer")]
-        private static partial HRESULT CreateMemoryBufferRaw(uint maxLength, IMFMediaBuffer_unmanaged** buffer);
+        internal static partial HRESULT CreateMemoryBufferRaw(uint maxLength, IMFMediaBuffer_unmanaged** buffer);
     }
 }
