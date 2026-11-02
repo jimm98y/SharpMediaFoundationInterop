@@ -199,7 +199,23 @@ namespace SharpMediaFoundationInterop.Input
 
             // TODO https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/error-when-dda-capable-app-is-against-gpu
             IDXGIOutputDuplication duplicatedOutput;
-            output.DuplicateOutput1(_device, 0, new[] { DXGI_FORMAT.DXGI_FORMAT_B8G8R8A8_UNORM }, out duplicatedOutput);
+            // an object of its own, let go of as the capture is: one held on - the generated interop's, cached of its pointer,
+            // let go of only as it is collected - makes the next duplication of the output fail
+            void* output5 = ComObjects.PointerOf(output);
+            nint deviceUnknown = ComObjects.UnknownOf(_device);
+            try
+            {
+                var format = DXGI_FORMAT.DXGI_FORMAT_B8G8R8A8_UNORM;
+                void* duplication = null;
+                var duplicateOutput1 = (delegate* unmanaged[Stdcall]<void*, nint, uint, uint, DXGI_FORMAT*, void**, HRESULT>)Method(output5, DuplicateOutput1Slot);
+                MediaUtils.Check(duplicateOutput1(output5, deviceUnknown, 0, 1, &format, &duplication));
+                duplicatedOutput = ComObjects.Take<IDXGIOutputDuplication>(duplication);
+            }
+            finally
+            {
+                Marshal.Release(deviceUnknown);
+                Marshal.Release((nint)output5);
+            }
             _duplicatedOutput = duplicatedOutput;
 
             _stopwatch.Start();
@@ -256,11 +272,27 @@ namespace SharpMediaFoundationInterop.Input
 
                 int written = -1;
                 // the desktop not changed by the time out is no error: what is still to be read is handed out
-                HRESULT acquired = _duplicatedOutput.AcquireNextFrame(ReadTimeoutInMilliseconds, out DXGI_OUTDUPL_FRAME_INFO frameInfo, out _screenResource);
+                // the frame an object of its own, let go of before the next is asked for: one held on - cached of its pointer -
+                // keeps the frame, and the next is not handed out
+                DXGI_OUTDUPL_FRAME_INFO frameInfo;
+                void* resource = null;
+                void* duplication = ComObjects.PointerOf(_duplicatedOutput);
+                HRESULT acquired;
+                try
+                {
+                    var acquireNextFrame = (delegate* unmanaged[Stdcall]<void*, uint, DXGI_OUTDUPL_FRAME_INFO*, void**, HRESULT>)Method(duplication, AcquireNextFrameSlot);
+                    acquired = acquireNextFrame(duplication, ReadTimeoutInMilliseconds, &frameInfo, &resource);
+                }
+                finally
+                {
+                    Marshal.Release((nint)duplication);
+                }
                 if (acquired.Value == DXGI_ERROR_WAIT_TIMEOUT)
                     _screenResource = null;
                 else
                     MediaUtils.Check(acquired);
+                if (acquired.Succeeded)
+                    _screenResource = ComObjects.Take<IDXGIResource>(resource);
 
                 // a frame of the pointer alone has the desktop's image as it was: nothing to copy
                 if (_screenResource != null && frameInfo.LastPresentTime != 0)
@@ -313,6 +345,13 @@ namespace SharpMediaFoundationInterop.Input
         }
 
         private const int DXGI_ERROR_WAIT_TIMEOUT = unchecked((int)0x887A0027);
+        // the methods' places in the tables of IDXGIOutput5 and IDXGIOutputDuplication, of what each extends: of the
+        // generated interop, their objects are cached of their pointer and let go of only as they are collected
+        private const int DuplicateOutput1Slot = 26;
+        private const int AcquireNextFrameSlot = 8;
+
+        private static unsafe void* Method(void* com, int slot) => (*(void***)com)[slot];
+
         // of an adapter or an output past the last
         private const int DXGI_ERROR_NOT_FOUND = unchecked((int)0x887A0002);
 
