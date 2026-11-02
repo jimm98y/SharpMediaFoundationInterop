@@ -29,6 +29,8 @@ namespace SharpMediaFoundationInterop.Input
         public const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
 
         private IMFSourceReader _pReader;
+        // the camera: shut down as the capture is let go of, its light off then, whatever still holds it
+        private IMFMediaSource _source;
         private bool _disposedValue;
         
         public uint Width { get; private set; }
@@ -72,6 +74,7 @@ namespace SharpMediaFoundationInterop.Input
         public void Initialize(string symbolicLink)
         {
             IMFMediaSource device = GetCaptureDevice(symbolicLink);
+            _source = device;
             _pReader = CreateSourceReader(device);
 
             // TODO: make configurable
@@ -209,8 +212,9 @@ namespace SharpMediaFoundationInterop.Input
         private static unsafe IMFSourceReader CreateSourceReader(IMFMediaSource device)
         {
             MediaUtils.Check(PInvoke.MFCreateAttributes(out IMFAttributes pSrcConfig, 1));
-            MediaUtils.Check(PInvoke.MFCreateSourceReaderFromMediaSource(device, pSrcConfig, out IMFSourceReader pReader));
-            return pReader;
+            // an object of its own, let go of as the capture is: the generated interop's, cached of its pointer, is let go of
+            // only as it is collected - the camera on till then
+            return MediaObjects.CreateSourceReader(device, pSrcConfig);
         }
 
         private static unsafe IMFMediaSource GetCaptureDevice(string symbolicLink)
@@ -274,6 +278,20 @@ namespace SharpMediaFoundationInterop.Input
                 {
                     ComObjects.Release(_pReader);
                     _pReader = null;
+                }
+                if (_source != null)
+                {
+                    try
+                    {
+                        _source.Shutdown();
+                    }
+                    catch (Exception ex)
+                    {
+                        // shut down already, by the reader let go of
+                        if (Log.DebugEnabled) Log.Debug(ex.Message, ex);
+                    }
+                    ComObjects.Release(_source);
+                    _source = null;
                 }
 
                 _disposedValue = true;

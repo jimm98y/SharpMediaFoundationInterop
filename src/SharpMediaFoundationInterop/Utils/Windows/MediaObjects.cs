@@ -59,6 +59,31 @@ namespace SharpMediaFoundationInterop.Utils
             }
         }
 
+        /// <summary>
+        /// A source reader of a media source - a camera's - let go of as soon as it is done with: one held on holds the
+        /// source, and the camera, on.
+        /// </summary>
+        public static IMFSourceReader CreateSourceReader(IMFMediaSource source, IMFAttributes attributes)
+        {
+            void* sourcePointer = ComObjects.PointerOf(source);
+            void* attributesPointer = ComObjects.PointerOf(attributes);
+            try
+            {
+                void* reader;
+                MediaUtils.Check(CreateSourceReaderRaw(sourcePointer, attributesPointer, &reader));
+                return ComObjects.Take<IMFSourceReader>(reader);
+            }
+            finally
+            {
+                if (attributesPointer != null)
+                    Marshal.Release((nint)attributesPointer);
+                Marshal.Release((nint)sourcePointer);
+            }
+        }
+
+        [LibraryImport("mfreadwrite.dll", EntryPoint = "MFCreateSourceReaderFromMediaSource")]
+        private static partial HRESULT CreateSourceReaderRaw(void* source, void* attributes, void** reader);
+
         [LibraryImport("mfplat.dll", EntryPoint = "MFCreateSample")]
         private static partial HRESULT CreateSampleRaw(IMFSample_unmanaged** sample);
 
