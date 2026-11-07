@@ -17,7 +17,7 @@ namespace SharpMediaFoundationInterop.WPF
 {
     public class RtspSource : RtpSourceBase
     {
-        private RtspClient _rtspClient;
+        private RTSPClient _rtspClient;
         private string _uri;
         private string _userName;
         private string _password;
@@ -53,7 +53,7 @@ namespace SharpMediaFoundationInterop.WPF
             // their data is told apart by the index of its track.
             int videoTrackIndex = -1, audioTrackIndex = -1;
 
-            _rtspClient = new RtspClient();
+            _rtspClient = new RTSPClient();
             _rtspClient.NewTrack += (o, e) =>
             {
                 if (e.Kind == TrackKind.Video && videoTrackIndex < 0)
@@ -118,7 +118,7 @@ namespace SharpMediaFoundationInterop.WPF
                     }
                 }
             };
-            _rtspClient.Connect(uri, RtpTransport.TCP, userName, password);
+            _rtspClient.Connect(uri, RTPTransport.TCP, userName, password);
 
             await tcsSetupCompleted.Task;
 
