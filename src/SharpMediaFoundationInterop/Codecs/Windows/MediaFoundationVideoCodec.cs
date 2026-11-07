@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Runtime.Versioning;
-using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.Codecs
 {
@@ -9,7 +8,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// this hands everything on to. <see cref="Transform"/> reaches what is of the codec alone.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public abstract class MediaFoundationVideoCodec : IMediaFoundationVideoTransform
+    public abstract class MediaFoundationVideoCodec : IGpuVideoTransform
     {
         private bool _disposedValue;
 
@@ -34,10 +33,10 @@ namespace SharpMediaFoundationInterop.Codecs
         public uint Width => Transform.Width;
         public uint Height => Transform.Height;
 
-        public IMFDXGIDeviceManager DeviceManager
+        public IntPtr GpuDevice
         {
-            get => Transform.DeviceManager;
-            set => Transform.DeviceManager = value;
+            get => Transform.GpuDevice;
+            set => Transform.GpuDevice = value;
         }
 
         public bool UsesDevice => Transform.UsesDevice;
@@ -55,7 +54,7 @@ namespace SharpMediaFoundationInterop.Codecs
             Transform.ProcessOutput(ref buffer, out length, out timestamp);
 
         /// <summary>The next frame as the transform hands it out, not copied; as <see cref="ProcessOutput(ref byte[], out uint, out long)"/>.</summary>
-        public virtual bool ProcessOutput(out IMFSample sample, out long timestamp) => Transform.ProcessOutput(out sample, out timestamp);
+        public virtual bool ProcessOutput(out DecodedFrame frame, out long timestamp) => Transform.ProcessOutput(out frame, out timestamp);
 
         public bool Drain() => Transform.Drain();
         public void BeginDrain() => Transform.BeginDrain();

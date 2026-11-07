@@ -74,7 +74,7 @@ namespace SharpMediaFoundationInterop.Codecs
         }
 
         /// <summary>The final stream info, which completes STREAMINFO's frame sizes, total samples and MD5.</summary>
-        protected override unsafe void OnOutputWithoutData(IMFSample sample)
+        private protected override unsafe void OnOutputWithoutData(IMFSample sample)
         {
             Guid key = FlacFinalStreamInfo;
             byte[] info;
@@ -113,7 +113,7 @@ namespace SharpMediaFoundationInterop.Codecs
             Buffer.BlockCopy(info, 36, s, p, 16);
         }
 
-        protected override IMFTransform Create()
+        private protected override IMFTransform Create()
         {
             const uint streamId = 0;
 

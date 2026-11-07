@@ -2,10 +2,8 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using Windows.Win32.Media.MediaFoundation;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Windows.Win32;
 using SharpMediaFoundationInterop.Codecs;
 using SharpMediaFoundationInterop.Utils;
 using System.Threading;
@@ -881,7 +879,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         // The decoder's output in hand, decoded on the GPU: a texture of its own, copied out into one of the pool before the
         // next is asked for. Null where the output is in the NV12 buffer, of the CPU's memory.
-        private IMFSample _gpuOutput;
+        private DecodedFrame _gpuOutput;
 
         /// <summary>Frames decoded on the GPU, where the decoder can: see <see cref="IVideoSource.TryUseDirect3D"/>.</summary>
         public bool TryUseDirect3D(Direct3DDevice device)
@@ -890,8 +888,8 @@ namespace SharpMediaFoundationInterop.WPF
             return device != null;
         }
 
-        /// <summary>The decoder, where it is of Media Foundation's, which alone decodes on the GPU here.</summary>
-        private IMediaFoundationVideoTransform GpuDecoder => _videoDecoder as IMediaFoundationVideoTransform;
+        /// <summary>The decoder, where it can decode on the GPU.</summary>
+        private IGpuVideoTransform GpuDecoder => _videoDecoder as IGpuVideoTransform;
 
         /// <summary>
         /// Whether the frames are decoded on the GPU, of the device given: NV12, handed out to a control that converts them,
@@ -907,7 +905,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             var gpu = GpuDecoder;
             if (DecodesOnGpu(info) && gpu != null)
-                gpu.DeviceManager = _direct3D.Manager;
+                gpu.GpuDevice = _direct3D.NativeDevice;
             _videoDecoder.Initialize();
             if (DecodesOnGpu(info) && gpu != null && gpu.UsesDevice && gpu.ProvidesSamples && _gpuPool == null)
                 _gpuPool = new GpuFramePool(_direct3D, info.Width, info.Height);
@@ -925,29 +923,19 @@ namespace SharpMediaFoundationInterop.WPF
             if (gpu == null || !gpu.ProvidesSamples)
                 return _videoDecoder.ProcessOutput(ref _nv12Buffer, out _, out frameTime);
 
-            if (!gpu.ProcessOutput(out IMFSample sample, out frameTime))
+            if (!gpu.ProcessOutput(out DecodedFrame frame, out frameTime))
                 return false;
 
-            sample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
-            try
+            if (_gpuPool != null && frame.IsOnGpu)
             {
-                if (_gpuPool != null && buffer is IMFDXGIBuffer)
-                {
-                    _gpuOutput = sample;
-                    return true;
-                }
-
-                // of the CPU's memory after all: into the buffer, as a decoder filling ours does
-                sample.ConvertToContiguousBuffer(out IMFMediaBuffer contiguous);
-                MediaUtils.CopyBuffer(contiguous, _nv12Buffer, out _);
-                Marshal.ReleaseComObject(contiguous);
-                Marshal.ReleaseComObject(sample);
+                _gpuOutput = frame;
                 return true;
             }
-            finally
-            {
-                Marshal.ReleaseComObject(buffer);
-            }
+
+            // of the CPU's memory after all: into the buffer, as a decoder filling ours does
+            using (frame)
+                frame.CopyTo(_nv12Buffer, out _);
+            return true;
         }
 
         /// <summary>Lets go of the output in hand, not shown.</summary>
@@ -955,7 +943,7 @@ namespace SharpMediaFoundationInterop.WPF
         {
             if (_gpuOutput != null)
             {
-                Marshal.ReleaseComObject(_gpuOutput);
+                _gpuOutput.Dispose();
                 _gpuOutput = null;
             }
         }
@@ -1086,7 +1074,7 @@ namespace SharpMediaFoundationInterop.WPF
                 Pcm = info.PcmFormat,
             });
             _audioDecoder.Initialize();
-            _audioConversion = _audioDecoder.OutputFormat == PInvoke.MFAudioFormat_Float ? AudioConversion.FloatToInt32
+            _audioConversion = _audioDecoder.OutputFormat == MediaFormats.Float ? AudioConversion.FloatToInt32
                 : _audioDecoder.BitsPerSample == 24 ? AudioConversion.Int24ToInt32 : AudioConversion.None;
             _decodedBytesPerSecond = (long)_audioDecoder.SampleRate * _audioDecoder.Channels * _audioDecoder.BitsPerSample / 8;
             _audioTrimBefore = AudioStart;

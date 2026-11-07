@@ -59,7 +59,7 @@ namespace SharpMediaFoundationInterop.Codecs
             return !ofMatrix || ColorFormats.Matrix(options) == own;
         }
 
-        protected override IMFTransform Create()
+        private protected override IMFTransform Create()
         {
             const int streamId = 0;
 

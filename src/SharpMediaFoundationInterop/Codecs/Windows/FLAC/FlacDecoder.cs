@@ -35,7 +35,7 @@ namespace SharpMediaFoundationInterop.Codecs
             MaxBlockSize = maxBlockSize;
         }
 
-        protected override IMFTransform Create()
+        private protected override IMFTransform Create()
         {
             const uint streamId = 0;
 

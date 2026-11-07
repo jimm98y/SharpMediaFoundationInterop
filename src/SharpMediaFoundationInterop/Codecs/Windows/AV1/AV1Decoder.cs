@@ -27,7 +27,7 @@ namespace SharpMediaFoundationInterop.Codecs
             _format = format;
         }
 
-        protected override IMFTransform Create()
+        private protected override IMFTransform Create()
         {
             const uint streamId = 0;
 

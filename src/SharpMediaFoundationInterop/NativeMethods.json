@@ -1,6 +1,6 @@
 ﻿{
   "$schema": "https://aka.ms/CsWin32.schema.json",
-  "public": true,
+  "public": false,
   "wideCharOnly": false,
   "allowMarshaling": true,
   "comInterop": {

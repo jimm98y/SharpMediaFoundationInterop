@@ -29,7 +29,7 @@ namespace SharpMediaFoundationInterop.Codecs
             Bitrate = bitrate;
         }
 
-        protected override IMFTransform Create()
+        private protected override IMFTransform Create()
         {
             const uint streamId = 0;
 

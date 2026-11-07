@@ -11,20 +11,20 @@ namespace SharpMediaFoundationInterop.Utils
     public static partial class MediaUtils
     {
         [SupportedOSPlatform("windows10.0.17763.0")]
-        public static void Check(HRESULT result)
+        internal static void Check(HRESULT result)
         {
             if (result.Failed)
                 Marshal.ThrowExceptionForHR(result.Value);
         }
 
         [SupportedOSPlatform("windows10.0.17763.0")]
-        public static IMFSample CreateSample(byte[] data, long sampleDuration, long timestamp)
+        internal static IMFSample CreateSample(byte[] data, long sampleDuration, long timestamp)
         {
             return CreateSample(ReadOnlySpan<byte>.Empty, data, sampleDuration, timestamp);
         }
 
         [SupportedOSPlatform("windows10.0.17763.0")]
-        public static IMFSample CreateSample(ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
+        internal static IMFSample CreateSample(ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
         {
             return CreateSample(ReadOnlySpan<byte>.Empty, data, sampleDuration, timestamp);
         }
@@ -34,7 +34,7 @@ namespace SharpMediaFoundationInterop.Utils
         /// a start code goes in front of a NAL unit without the two being put together in an array first.
         /// </summary>
         [SupportedOSPlatform("windows10.0.17763.0")]
-        public static unsafe IMFSample CreateSample(ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
+        internal static unsafe IMFSample CreateSample(ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
         {
             uint length = (uint)(prefix.Length + data.Length);
             Check(PInvoke.MFCreateMemoryBuffer(length, out IMFMediaBuffer buffer));
@@ -64,7 +64,7 @@ namespace SharpMediaFoundationInterop.Utils
         }
 
         [SupportedOSPlatform("windows10.0.17763.0")]
-        public static MFT_OUTPUT_DATA_BUFFER[] CreateOutputDataBuffer(uint size = 0)
+        internal static MFT_OUTPUT_DATA_BUFFER[] CreateOutputDataBuffer(uint size = 0)
         {
             MFT_OUTPUT_DATA_BUFFER[] result = new MFT_OUTPUT_DATA_BUFFER[1];
 
@@ -92,7 +92,7 @@ namespace SharpMediaFoundationInterop.Utils
         /// an odd width - what the buffer locks is more than it says its length is.
         /// </summary>
         [SupportedOSPlatform("windows10.0.17763.0")]
-        public static unsafe bool CopyBuffer(IMFMediaBuffer buffer, ref byte[] sampleBytes, out uint sampleSize)
+        internal static unsafe bool CopyBuffer(IMFMediaBuffer buffer, ref byte[] sampleBytes, out uint sampleSize)
         {
             bool ret = false;
             try
@@ -119,7 +119,7 @@ namespace SharpMediaFoundationInterop.Utils
         }
 
         [SupportedOSPlatform("windows10.0.17763.0")]
-        public static unsafe bool CopyBuffer(IMFMediaBuffer buffer, byte[] sampleBytes, out uint sampleSize)
+        internal static unsafe bool CopyBuffer(IMFMediaBuffer buffer, byte[] sampleBytes, out uint sampleSize)
         {
             bool ret = false;
             try

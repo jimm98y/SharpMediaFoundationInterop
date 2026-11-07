@@ -6,13 +6,12 @@ using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Direct3D;
 using Windows.Win32.Graphics.Direct3D10;
 using Windows.Win32.Graphics.Direct3D11;
-using Windows.Win32.Media.MediaFoundation;
 
 namespace SharpMediaFoundationInterop.WPF
 {
     /// <summary>
-    /// A Direct3D 11 device for video, and Media Foundation's manager of it: what a decoder decodes on, a source copies its
-    /// frames on and a control draws them with - one device, so that a frame decoded is drawn without leaving the GPU.
+    /// A Direct3D 11 device for video: what a decoder decodes on, a source copies its frames on and a control draws them
+    /// with - one device, so that a frame decoded is drawn without leaving the GPU.
     /// </summary>
     /// <remarks>
     /// Used on the video's thread and the UI's, which are of different COM apartments: a wrapper of a COM object is of the
@@ -24,23 +23,22 @@ namespace SharpMediaFoundationInterop.WPF
     {
         private IntPtr _device;
         private IntPtr _context;
-        private IntPtr _manager;
+        private IntPtr _nativeDevice;
 
         private readonly ThreadLocal<ID3D11Device> _threadDevice;
         private readonly ThreadLocal<ID3D11DeviceContext> _threadContext;
-        private readonly ThreadLocal<IMFDXGIDeviceManager> _threadManager;
 
         /// <summary>The device, wrapped for the calling thread.</summary>
-        public ID3D11Device Device => _threadDevice.Value;
+        internal ID3D11Device Device => _threadDevice.Value;
 
         /// <summary>Its immediate context, wrapped for the calling thread.</summary>
-        public ID3D11DeviceContext Context => _threadContext.Value;
+        internal ID3D11DeviceContext Context => _threadContext.Value;
 
         /// <summary>
-        /// What a decoder is given, wrapped for the calling thread: see
-        /// <see cref="SharpMediaFoundationInterop.Codecs.VideoTransformBase.DeviceManager"/>.
+        /// The device as a decoder is given it, an <c>ID3D11Device</c> pointer: see
+        /// <see cref="SharpMediaFoundationInterop.Codecs.IGpuVideoTransform.GpuDevice"/>.
         /// </summary>
-        public IMFDXGIDeviceManager Manager => _threadManager.Value;
+        internal IntPtr NativeDevice => _nativeDevice;
 
         public Direct3DDevice()
         {
@@ -52,20 +50,16 @@ namespace SharpMediaFoundationInterop.WPF
             // the decoder's thread, the source's and the UI's use it: one call at a time into it
             ((ID3D10Multithread)device).SetMultithreadProtected(true);
 
-            PInvoke.MFCreateDXGIDeviceManager(out uint resetToken, out IMFDXGIDeviceManager manager).ThrowOnFailure();
-            manager.ResetDevice(device, resetToken);
 
             _device = Marshal.GetIUnknownForObject(device);
             _context = Marshal.GetIUnknownForObject(context);
-            _manager = Marshal.GetIUnknownForObject(manager);
+            _nativeDevice = Marshal.GetComInterfaceForObject(device, typeof(ID3D11Device));
 
             // this thread's are the ones it was made with
             _threadDevice = new ThreadLocal<ID3D11Device>(() => (ID3D11Device)ForThisThread(_device));
             _threadContext = new ThreadLocal<ID3D11DeviceContext>(() => (ID3D11DeviceContext)ForThisThread(_context));
-            _threadManager = new ThreadLocal<IMFDXGIDeviceManager>(() => (IMFDXGIDeviceManager)ForThisThread(_manager));
             _threadDevice.Value = device;
             _threadContext.Value = context;
-            _threadManager.Value = manager;
         }
 
         /// <summary>A wrapper of the object, of the calling thread's apartment, whichever thread made the object.</summary>
@@ -80,7 +74,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// </summary>
         public void Dispose()
         {
-            Release(ref _manager);
+            Release(ref _nativeDevice);
             Release(ref _context);
             Release(ref _device);
         }

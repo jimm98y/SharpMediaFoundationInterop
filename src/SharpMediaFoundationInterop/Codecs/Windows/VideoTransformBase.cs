@@ -9,10 +9,10 @@ using Windows.Win32.Media.MediaFoundation;
 namespace SharpMediaFoundationInterop.Codecs
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public abstract class VideoTransformBase : MediaTransformBase, IMediaFoundationVideoTransform
+    public abstract class VideoTransformBase : MediaTransformBase, IGpuVideoTransform
     {
         protected long _sampleDuration = 1;
-        protected IMFTransform _transform;
+        private protected IMFTransform _transform;
         private MFT_OUTPUT_DATA_BUFFER[] _dataBuffer;
         private bool _disposedValue;
 
@@ -40,12 +40,16 @@ namespace SharpMediaFoundationInterop.Codecs
         public uint OutputSize { get; private set; }
 
         /// <summary>
-        /// The device to decode on, the GPU's: given before <see cref="Initialize"/>, to a transform that can use one. Its
-        /// output is then of the GPU's memory, handed out by <see cref="ProcessOutput(out IMFSample, out long)"/>.
+        /// The device to decode on, the GPU's: an <c>ID3D11Device</c> pointer, given before <see cref="Initialize"/> to a
+        /// transform that can use one. Its output is then of the GPU's memory, handed out by
+        /// <see cref="ProcessOutput(out DecodedFrame, out long)"/>.
         /// </summary>
-        public IMFDXGIDeviceManager DeviceManager { get; set; }
+        public IntPtr GpuDevice { get; set; }
 
-        /// <summary>Whether the transform took the <see cref="DeviceManager"/>: some cannot use one.</summary>
+        // Media Foundation's manager of the GpuDevice, made of it as the transform is: what a transform is given
+        private IMFDXGIDeviceManager _deviceManager;
+
+        /// <summary>Whether the transform took the <see cref="GpuDevice"/>: some cannot use one.</summary>
         public bool UsesDevice { get; private set; }
 
         /// <summary>
@@ -106,7 +110,7 @@ namespace SharpMediaFoundationInterop.Codecs
             OutputSize = Math.Max(size, MinimumOutputSize);
         }
 
-        protected override void OnOutputTypeChanged(IMFMediaType mediaType)
+        private protected override void OnOutputTypeChanged(IMFMediaType mediaType)
         {
             try
             {
@@ -126,14 +130,14 @@ namespace SharpMediaFoundationInterop.Codecs
         }
 
         /// <summary>
-        /// Gives the transform the <see cref="DeviceManager"/>, where there is one and the transform says it can use one: it
+        /// Gives the transform the <see cref="GpuDevice"/>, where there is one and the transform says it can use one: it
         /// decodes on the GPU from then on, where the GPU can decode its format, and on the CPU into the GPU's memory where it
         /// cannot. Called by a decoder as it is made, before its media types are set.
         /// </summary>
-        protected void AttachDeviceManager(IMFTransform transform)
+        private protected void AttachDeviceManager(IMFTransform transform)
         {
             UsesDevice = false;
-            if (DeviceManager == null)
+            if (GpuDevice == IntPtr.Zero)
                 return;
 
             transform.GetAttributes(out IMFAttributes attributes);
@@ -149,7 +153,22 @@ namespace SharpMediaFoundationInterop.Codecs
             if (aware == 0)
                 return;
 
-            nint manager = Marshal.GetIUnknownForObject(DeviceManager);
+            if (_deviceManager == null)
+            {
+                // of this thread's apartment, the transform's: a wrapper of the device made here, which the manager keeps
+                MediaUtils.Check(PInvoke.MFCreateDXGIDeviceManager(out uint resetToken, out _deviceManager));
+                object device = Marshal.GetObjectForIUnknown(GpuDevice);
+                try
+                {
+                    _deviceManager.ResetDevice(device, resetToken);
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(device);
+                }
+            }
+
+            nint manager = Marshal.GetIUnknownForObject(_deviceManager);
             try
             {
                 var result = transform.ProcessMessage(MFT_MESSAGE_TYPE.MFT_MESSAGE_SET_D3D_MANAGER, (nuint)manager);
@@ -167,7 +186,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// Applies the <see cref="CodecProperties"/> to the transform, noting each in <see cref="CodecPropertyResults"/>.
         /// Called by a codec as it is made, before its media types are set.
         /// </summary>
-        protected void ApplyCodecProperties(IMFTransform transform)
+        private protected void ApplyCodecProperties(IMFTransform transform)
         {
             CodecApi = transform as ICodecApi;
             CodecPropertyResults.Clear();
@@ -179,7 +198,7 @@ namespace SharpMediaFoundationInterop.Codecs
             }
         }
 
-        protected abstract IMFTransform Create();
+        private protected abstract IMFTransform Create();
 
         public bool ProcessInput(byte[] data, long timestamp)
         {
@@ -218,12 +237,16 @@ namespace SharpMediaFoundationInterop.Codecs
 
         /// <summary>
         /// The next frame as the transform hands it out, not copied - of the GPU's memory, decoding on a device - with its
-        /// time. The caller's to let go of. Of a transform that <see cref="ProvidesSamples"/>. Overridden by a decoder that
+        /// time. The caller's to dispose of. Of a transform that <see cref="ProvidesSamples"/>. Overridden by a decoder that
         /// hands out only some of the frames.
         /// </summary>
-        public virtual bool ProcessOutput(out IMFSample sample, out long timestamp)
+        public virtual bool ProcessOutput(out DecodedFrame frame, out long timestamp)
         {
-            return ProcessOutputSample(_transform, _dataBuffer, out sample, out timestamp);
+            frame = null;
+            if (!ProcessOutputSample(_transform, _dataBuffer, out IMFSample sample, out timestamp))
+                return false;
+            frame = new MediaFoundationFrame(sample);
+            return true;
         }
 
         public virtual bool Drain()
@@ -269,6 +292,11 @@ namespace SharpMediaFoundationInterop.Codecs
                     {
                         DestroyTransform(_transform);
                         _transform = null;
+                    }
+                    if (_deviceManager != null)
+                    {
+                        Marshal.ReleaseComObject(_deviceManager);
+                        _deviceManager = null;
                     }
                 }
 

@@ -20,7 +20,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 throw new NotSupportedException($"Windows' Opus decoder decodes mono and stereo alone, not {channels} channels");
         }
 
-        protected unsafe override IMFTransform Create()
+        private protected unsafe override IMFTransform Create()
         {
             const uint streamId = 0;
 

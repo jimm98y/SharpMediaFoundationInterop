@@ -22,7 +22,7 @@ namespace SharpMediaFoundationInterop.Codecs
             this.AvgBitrate = avgBitrate;
         }
 
-        protected override IMFTransform Create()
+        private protected override IMFTransform Create()
         {
             const uint streamId = 0;
 

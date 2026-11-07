@@ -2,7 +2,6 @@
 using SharpMediaFoundationInterop.Input;
 using SharpMediaFoundationInterop.Utils;
 using System.Buffers;
-using Windows.Win32;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -69,7 +68,7 @@ namespace SharpMediaFoundationInterop.WPF
                 _device.Initialize();
                 _yuy2Buffer = new byte[_device.OutputSize];
 
-                _converter = new ColorConverter(_device.OutputFormat, PInvoke.MFVideoFormat_RGB24, _device.Width, _device.Height);
+                _converter = new ColorConverter(_device.OutputFormat, MediaFormats.RGB24, _device.Width, _device.Height);
                 _converter.Initialize();
 
                 _bytesPerPixel = 3;

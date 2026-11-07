@@ -11,7 +11,7 @@ namespace SharpMediaFoundationInterop.Codecs
     {
         private bool _disposedValue;
         protected long _sampleDuration = 1;
-        protected IMFTransform _transform;
+        private protected IMFTransform _transform;
         private MFT_OUTPUT_DATA_BUFFER[] _dataBuffer;
 
         public uint OutputSize { get; private set; }
@@ -44,7 +44,7 @@ namespace SharpMediaFoundationInterop.Codecs
             _dataBuffer = MediaUtils.CreateOutputDataBuffer(OutputSize);
         }
 
-        protected abstract IMFTransform Create();
+        private protected abstract IMFTransform Create();
 
         public bool ProcessInput(byte[] data, long timestamp)
         {

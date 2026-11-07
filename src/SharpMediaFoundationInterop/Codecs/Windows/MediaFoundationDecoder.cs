@@ -6,7 +6,7 @@ namespace SharpMediaFoundationInterop.Codecs
 {
     /// <summary>
     /// A decoder of Media Foundation's, of any <see cref="VideoCodec"/>: the H264Decoder, H265Decoder and so on of the
-    /// codec, made for the <see cref="VideoDecoderOptions"/>. NV12 out, or of HEVC and AV1 any <see cref="VideoFrameFormat"/>. Given a <see cref="IMediaFoundationVideoTransform.DeviceManager"/>,
+    /// codec, made for the <see cref="VideoDecoderOptions"/>. NV12 out, or of HEVC and AV1 any <see cref="VideoFrameFormat"/>. Given a <see cref="IGpuVideoTransform.GpuDevice"/>,
     /// it decodes on the GPU as the codec's own decoder does. Derived from by a decoder that hands out only some of the
     /// frames, overriding ProcessOutput.
     /// </summary>

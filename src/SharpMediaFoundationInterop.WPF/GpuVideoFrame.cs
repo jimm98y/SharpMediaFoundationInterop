@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Graphics.Direct3D11;
 using Windows.Win32.Graphics.Dxgi.Common;
-using Windows.Win32.Media.MediaFoundation;
+using SharpMediaFoundationInterop.Codecs;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -27,7 +27,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// The texture, of the source's device: NV12, made to be read by a video processor. Wrapped for the thread that made
         /// it, the source's; see <see cref="TexturePointer"/> for another.
         /// </summary>
-        public ID3D11Texture2D Texture { get; }
+        internal ID3D11Texture2D Texture { get; }
 
         /// <summary>
         /// The texture itself, for a thread of another apartment to wrap for itself - the UI's, drawing it: see
@@ -61,32 +61,23 @@ namespace SharpMediaFoundationInterop.WPF
         }
 
         /// <summary>
-        /// A frame of the pool holding a copy of the picture a decoder handed out in <paramref name="sample"/>: of the slice of
-        /// the texture array its buffer is of.
+        /// A frame of the pool holding a copy of the picture a decoder handed out in <paramref name="decoded"/>: of the slice of
+        /// the texture array it is of.
         /// </summary>
-        public GpuVideoFrame CopyOf(IMFSample sample)
+        public GpuVideoFrame CopyOf(DecodedFrame decoded)
         {
-            sample.GetBufferByIndex(0, out IMFMediaBuffer buffer);
+            // the decoder's texture, wrapped for this thread
+            var source = (ID3D11Texture2D)Marshal.GetObjectForIUnknown(decoded.Texture);
             try
             {
-                var dxgi = (IMFDXGIBuffer)buffer;
-                dxgi.GetSubresourceIndex(out uint slice);
-                var source = TextureOf(dxgi);
-                try
-                {
-                    var frame = Rent();
-                    var box = new D3D11_BOX { left = 0, top = 0, front = 0, right = _width, bottom = _height, back = 1 };
-                    _device.Context.CopySubresourceRegion(frame.Texture, 0, 0, 0, 0, source, slice, &box);
-                    return frame;
-                }
-                finally
-                {
-                    Marshal.ReleaseComObject(source);
-                }
+                var frame = Rent();
+                var box = new D3D11_BOX { left = 0, top = 0, front = 0, right = _width, bottom = _height, back = 1 };
+                _device.Context.CopySubresourceRegion(frame.Texture, 0, 0, 0, 0, source, (uint)decoded.TextureIndex, &box);
+                return frame;
             }
             finally
             {
-                Marshal.ReleaseComObject(buffer);
+                Marshal.ReleaseComObject(source);
             }
         }
 
@@ -123,21 +114,6 @@ namespace SharpMediaFoundationInterop.WPF
         {
             if (!_disposed)
                 _spare.Add(frame);
-        }
-
-        private static ID3D11Texture2D TextureOf(IMFDXGIBuffer buffer)
-        {
-            Guid iid = typeof(ID3D11Texture2D).GUID;
-            void* resource;
-            buffer.GetResource(&iid, &resource);
-            try
-            {
-                return (ID3D11Texture2D)Marshal.GetObjectForIUnknown((nint)resource);
-            }
-            finally
-            {
-                Marshal.Release((nint)resource);
-            }
         }
 
         public void Dispose()

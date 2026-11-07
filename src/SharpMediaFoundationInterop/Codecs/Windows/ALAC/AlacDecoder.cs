@@ -36,7 +36,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 FrameLength = 4096;
         }
 
-        protected override IMFTransform Create()
+        private protected override IMFTransform Create()
         {
             const uint streamId = 0;
 

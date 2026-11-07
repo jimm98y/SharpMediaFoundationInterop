@@ -21,7 +21,7 @@ namespace SharpMediaFoundationInterop.Codecs
           : base(1152, channels, sampleRate, 16)
         { }
 
-        protected override IMFTransform Create()
+        private protected override IMFTransform Create()
         {
             const uint streamId = 0;
 

@@ -29,7 +29,7 @@ namespace SharpMediaFoundationInterop.Codecs
             MediaUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
         }
 
-        protected bool ProcessInput(IMFTransform transform, byte[] data, long sampleDuration, long timestamp)
+        private protected bool ProcessInput(IMFTransform transform, byte[] data, long sampleDuration, long timestamp)
         {
             return ProcessInput(transform, ReadOnlySpan<byte>.Empty, data, sampleDuration, timestamp);
         }
@@ -38,7 +38,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// One sample in, of <paramref name="prefix"/> and then <paramref name="data"/>, copied straight into the media
         /// buffer - nothing is allocated on the managed heap for it.
         /// </summary>
-        protected bool ProcessInput(IMFTransform transform, ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
+        private protected bool ProcessInput(IMFTransform transform, ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
         {
             bool ret = false;
             int length = prefix.Length + data.Length;
@@ -61,15 +61,15 @@ namespace SharpMediaFoundationInterop.Codecs
         }
 
         /// <summary>An output of no data, its sample's attributes alone: overridden by a codec that reads them.</summary>
-        protected virtual void OnOutputWithoutData(IMFSample sample)
+        private protected virtual void OnOutputWithoutData(IMFSample sample)
         { }
 
-        protected bool ProcessOutput(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length)
+        private protected bool ProcessOutput(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length)
         {
             return Output(0, transform, dataBuffer, ref buffer, out length, out _);
         }
 
-        protected bool ProcessOutput(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length, out long timestamp)
+        private protected bool ProcessOutput(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, ref byte[] buffer, out uint length, out long timestamp)
         {
             return Output(0, transform, dataBuffer, ref buffer, out length, out timestamp);
         }
@@ -142,7 +142,7 @@ namespace SharpMediaFoundationInterop.Codecs
         protected virtual void OnOutputSizeChanged(uint size) { }
 
         /// <summary>The type the transform hands out from now on, set at a stream change: of a video's, its frame's size.</summary>
-        protected virtual void OnOutputTypeChanged(IMFMediaType mediaType) { }
+        private protected virtual void OnOutputTypeChanged(IMFMediaType mediaType) { }
 
         /// <summary>
         /// The next output read into <paramref name="bytes"/>: from the sample of ours the output buffer holds, used again
@@ -210,7 +210,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// to let go of. Only of a transform that hands out samples of its own; one that fills the caller's is read with
         /// <see cref="ProcessOutput(IMFTransform, MFT_OUTPUT_DATA_BUFFER[], ref byte[], out uint, out long)"/>.
         /// </summary>
-        protected bool ProcessOutputSample(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, out IMFSample sample, out long timestamp)
+        private protected bool ProcessOutputSample(IMFTransform transform, MFT_OUTPUT_DATA_BUFFER[] dataBuffer, out IMFSample sample, out long timestamp)
         {
             if (dataBuffer[0].pSample != null)
                 throw new InvalidOperationException("The transform fills samples of its caller's: read its output into a buffer.");
@@ -405,7 +405,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// system knows it by. What a transform supports varies by vendor, so choosing between
         /// them - or reporting what is installed - needs more than the first match.
         /// </summary>
-        public static unsafe List<(string Name, IMFTransform Transform)> EnumerateTransforms(
+        internal static unsafe List<(string Name, IMFTransform Transform)> EnumerateTransforms(
             Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
         {
             var found = new List<(string, IMFTransform)>();
@@ -438,7 +438,7 @@ namespace SharpMediaFoundationInterop.Codecs
             return found;
         }
 
-        public static unsafe IMFTransform CreateTransform(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
+        internal static unsafe IMFTransform CreateTransform(Guid category, MFT_ENUM_FLAG flags, MFT_REGISTER_TYPE_INFO? input, MFT_REGISTER_TYPE_INFO? output)
         {
             IMFTransform transform = default;
 
@@ -469,7 +469,7 @@ namespace SharpMediaFoundationInterop.Codecs
             return transform;
         }
 
-        public static void DestroyTransform(IMFTransform transform)
+        internal static void DestroyTransform(IMFTransform transform)
         {
             Marshal.ReleaseComObject(transform);
         }
