@@ -1,0 +1,396 @@
+abstract SharpMediaFoundationInterop.WPF.MediaControlBase.CreateSurface(System.Windows.Controls.Image image, SharpMediaFoundationInterop.WPF.VideoInfo videoInfo) -> bool
+abstract SharpMediaFoundationInterop.WPF.MediaControlBase.HasSurface.get -> bool
+abstract SharpMediaFoundationInterop.WPF.MediaControlBase.Present(object frame, SharpMediaFoundationInterop.WPF.VideoInfo videoInfo) -> void
+abstract SharpMediaFoundationInterop.WPF.MediaControlBase.ReleaseSurface() -> void
+abstract SharpMediaFoundationInterop.WPF.MediaSourceBase.InitializeAsync() -> System.Threading.Tasks.Task
+abstract SharpMediaFoundationInterop.WPF.MediaSourceBase.ReadNextAudio() -> System.Collections.Generic.IList<System.ArraySegment<byte>>
+abstract SharpMediaFoundationInterop.WPF.MediaSourceBase.ReadNextVideo(out long timestamp) -> System.Collections.Generic.IList<System.ArraySegment<byte>>
+const SharpMediaFoundationInterop.WPF.GpuMediaControl.MaxViewPixels = 8294400 -> int
+const SharpMediaFoundationInterop.WPF.MediaSourceBase.ShownPerSecond = 60 -> int
+override SharpMediaFoundationInterop.WPF.GpuMediaControl.CanShowSpherical.get -> bool
+override SharpMediaFoundationInterop.WPF.GpuMediaControl.CreateSurface(System.Windows.Controls.Image image, SharpMediaFoundationInterop.WPF.VideoInfo videoInfo) -> bool
+override SharpMediaFoundationInterop.WPF.GpuMediaControl.Dispose(bool disposing) -> void
+override SharpMediaFoundationInterop.WPF.GpuMediaControl.HasSurface.get -> bool
+override SharpMediaFoundationInterop.WPF.GpuMediaControl.OnSourceInitializing(SharpMediaFoundationInterop.WPF.IVideoSource source) -> void
+override SharpMediaFoundationInterop.WPF.GpuMediaControl.Present(object frame, SharpMediaFoundationInterop.WPF.VideoInfo videoInfo) -> void
+override SharpMediaFoundationInterop.WPF.GpuMediaControl.RedrawView() -> bool
+override SharpMediaFoundationInterop.WPF.GpuMediaControl.ReleaseSurface() -> void
+override SharpMediaFoundationInterop.WPF.MediaControl.CreateSurface(System.Windows.Controls.Image image, SharpMediaFoundationInterop.WPF.VideoInfo videoInfo) -> bool
+override SharpMediaFoundationInterop.WPF.MediaControl.HasSurface.get -> bool
+override SharpMediaFoundationInterop.WPF.MediaControl.Present(object frame, SharpMediaFoundationInterop.WPF.VideoInfo videoInfo) -> void
+override SharpMediaFoundationInterop.WPF.MediaControl.ReleaseSurface() -> void
+override SharpMediaFoundationInterop.WPF.MediaControlBase.OnApplyTemplate() -> void
+override SharpMediaFoundationInterop.WPF.MediaControlBase.OnKeyDown(System.Windows.Input.KeyEventArgs e) -> void
+override SharpMediaFoundationInterop.WPF.MediaControlBase.OnLostMouseCapture(System.Windows.Input.MouseEventArgs e) -> void
+override SharpMediaFoundationInterop.WPF.MediaControlBase.OnMouseDown(System.Windows.Input.MouseButtonEventArgs e) -> void
+override SharpMediaFoundationInterop.WPF.MediaControlBase.OnMouseLeave(System.Windows.Input.MouseEventArgs e) -> void
+override SharpMediaFoundationInterop.WPF.MediaControlBase.OnMouseLeftButtonDown(System.Windows.Input.MouseButtonEventArgs e) -> void
+override SharpMediaFoundationInterop.WPF.MediaControlBase.OnMouseLeftButtonUp(System.Windows.Input.MouseButtonEventArgs e) -> void
+override SharpMediaFoundationInterop.WPF.MediaControlBase.OnMouseMove(System.Windows.Input.MouseEventArgs e) -> void
+override SharpMediaFoundationInterop.WPF.MediaControlBase.OnMouseWheel(System.Windows.Input.MouseWheelEventArgs e) -> void
+override SharpMediaFoundationInterop.WPF.Subtitle.ToString() -> string
+override SharpMediaFoundationInterop.WPF.SubtitleTrackInfo.ToString() -> string
+SharpMediaFoundationInterop.WPF.AudioInfo
+SharpMediaFoundationInterop.WPF.AudioInfo.AudioCodec.get -> string
+SharpMediaFoundationInterop.WPF.AudioInfo.AudioCodec.set -> void
+SharpMediaFoundationInterop.WPF.AudioInfo.AudioInfo() -> void
+SharpMediaFoundationInterop.WPF.AudioInfo.BitsPerSample.get -> uint
+SharpMediaFoundationInterop.WPF.AudioInfo.BitsPerSample.set -> void
+SharpMediaFoundationInterop.WPF.AudioInfo.ChannelConfiguration.get -> int
+SharpMediaFoundationInterop.WPF.AudioInfo.ChannelConfiguration.set -> void
+SharpMediaFoundationInterop.WPF.AudioInfo.ChannelCount.get -> uint
+SharpMediaFoundationInterop.WPF.AudioInfo.ChannelCount.set -> void
+SharpMediaFoundationInterop.WPF.AudioInfo.ChannelMask.get -> uint
+SharpMediaFoundationInterop.WPF.AudioInfo.ChannelMask.set -> void
+SharpMediaFoundationInterop.WPF.AudioInfo.IsAmbisonic.get -> bool
+SharpMediaFoundationInterop.WPF.AudioInfo.IsAmbisonic.set -> void
+SharpMediaFoundationInterop.WPF.AudioInfo.PcmFormat.get -> SharpMediaFoundationInterop.Codecs.PcmFormat
+SharpMediaFoundationInterop.WPF.AudioInfo.PcmFormat.set -> void
+SharpMediaFoundationInterop.WPF.AudioInfo.SampleRate.get -> uint
+SharpMediaFoundationInterop.WPF.AudioInfo.SampleRate.set -> void
+SharpMediaFoundationInterop.WPF.AudioInfo.SkipSamples.get -> uint
+SharpMediaFoundationInterop.WPF.AudioInfo.SkipSamples.set -> void
+SharpMediaFoundationInterop.WPF.AudioInfo.UserData.get -> byte[]
+SharpMediaFoundationInterop.WPF.AudioInfo.UserData.set -> void
+SharpMediaFoundationInterop.WPF.Direct3DDevice
+SharpMediaFoundationInterop.WPF.Direct3DDevice.Direct3DDevice() -> void
+SharpMediaFoundationInterop.WPF.Direct3DDevice.Dispose() -> void
+SharpMediaFoundationInterop.WPF.EyeView
+SharpMediaFoundationInterop.WPF.EyeView.Both = 0 -> SharpMediaFoundationInterop.WPF.EyeView
+SharpMediaFoundationInterop.WPF.EyeView.Left = 1 -> SharpMediaFoundationInterop.WPF.EyeView
+SharpMediaFoundationInterop.WPF.EyeView.Right = 2 -> SharpMediaFoundationInterop.WPF.EyeView
+SharpMediaFoundationInterop.WPF.GpuMediaControl
+SharpMediaFoundationInterop.WPF.GpuMediaControl.GpuMediaControl() -> void
+SharpMediaFoundationInterop.WPF.GpuVideoFrame
+SharpMediaFoundationInterop.WPF.GpuVideoFrame.Release() -> void
+SharpMediaFoundationInterop.WPF.GpuVideoFrame.TexturePointer.get -> nint
+SharpMediaFoundationInterop.WPF.IAudioSource
+SharpMediaFoundationInterop.WPF.IAudioSource.AudioInfo.get -> SharpMediaFoundationInterop.WPF.AudioInfo
+SharpMediaFoundationInterop.WPF.IAudioSource.GetAudioSample() -> byte[]
+SharpMediaFoundationInterop.WPF.IAudioSource.GetAudioSample(out long timestamp) -> byte[]
+SharpMediaFoundationInterop.WPF.IAudioSource.InitializeAsync() -> System.Threading.Tasks.Task
+SharpMediaFoundationInterop.WPF.IAudioSource.ReturnAudioSample(byte[] sample) -> void
+SharpMediaFoundationInterop.WPF.ISeekableVideoSource
+SharpMediaFoundationInterop.WPF.ISeekableVideoSource.CanSeek.get -> bool
+SharpMediaFoundationInterop.WPF.ISeekableVideoSource.Duration.get -> long
+SharpMediaFoundationInterop.WPF.ISeekableVideoSource.FrameAt(long time) -> long
+SharpMediaFoundationInterop.WPF.ISeekableVideoSource.FrameCount.get -> long
+SharpMediaFoundationInterop.WPF.ISeekableVideoSource.Rate.get -> int
+SharpMediaFoundationInterop.WPF.ISeekableVideoSource.Request.get -> long
+SharpMediaFoundationInterop.WPF.ISeekableVideoSource.Seek(long time, int rate) -> long
+SharpMediaFoundationInterop.WPF.ISeekableVideoSource.StartTime.get -> long
+SharpMediaFoundationInterop.WPF.ISeekableVideoSource.TimeOfFrame(long frame) -> long
+SharpMediaFoundationInterop.WPF.ISubtitleSource
+SharpMediaFoundationInterop.WPF.ISubtitleSource.GetSubtitles(int track) -> System.Collections.Generic.IReadOnlyList<SharpMediaFoundationInterop.WPF.Subtitle>
+SharpMediaFoundationInterop.WPF.ISubtitleSource.SubtitleTracks.get -> System.Collections.Generic.IReadOnlyList<SharpMediaFoundationInterop.WPF.SubtitleTrackInfo>
+SharpMediaFoundationInterop.WPF.IVideoSource
+SharpMediaFoundationInterop.WPF.IVideoSource.GetVideoFrame(out long timestamp) -> object
+SharpMediaFoundationInterop.WPF.IVideoSource.GetVideoSample(out long timestamp) -> byte[]
+SharpMediaFoundationInterop.WPF.IVideoSource.InitializeAsync() -> System.Threading.Tasks.Task
+SharpMediaFoundationInterop.WPF.IVideoSource.IsStill.get -> bool
+SharpMediaFoundationInterop.WPF.IVideoSource.ReturnVideoFrame(object frame) -> void
+SharpMediaFoundationInterop.WPF.IVideoSource.ReturnVideoSample(byte[] sample) -> void
+SharpMediaFoundationInterop.WPF.IVideoSource.SetSuspended(bool suspended) -> void
+SharpMediaFoundationInterop.WPF.IVideoSource.TrySetOutputFormat(SharpMediaFoundationInterop.WPF.PixelFormat format) -> bool
+SharpMediaFoundationInterop.WPF.IVideoSource.TryUseDirect3D(SharpMediaFoundationInterop.WPF.Direct3DDevice device) -> bool
+SharpMediaFoundationInterop.WPF.IVideoSource.VideoInfo.get -> SharpMediaFoundationInterop.WPF.VideoInfo
+SharpMediaFoundationInterop.WPF.MediaControl
+SharpMediaFoundationInterop.WPF.MediaControl.MediaControl() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase
+SharpMediaFoundationInterop.WPF.MediaControlBase.AreControlsVisible.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.AutoHideControls.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.AutoHideControls.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.AutoPlay.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.AutoPlay.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Binaural.get -> bool?
+SharpMediaFoundationInterop.WPF.MediaControlBase.Binaural.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.CanSeek.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.ControlsHideDelay.get -> System.TimeSpan
+SharpMediaFoundationInterop.WPF.MediaControlBase.ControlsHideDelay.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Dispose() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Duration.get -> System.TimeSpan
+SharpMediaFoundationInterop.WPF.MediaControlBase.EyeView.get -> SharpMediaFoundationInterop.WPF.EyeView
+SharpMediaFoundationInterop.WPF.MediaControlBase.EyeView.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.FastForward() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.FieldOfView.get -> double
+SharpMediaFoundationInterop.WPF.MediaControlBase.FieldOfView.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.FullScreenChanged -> System.Windows.RoutedPropertyChangedEventHandler<bool>
+SharpMediaFoundationInterop.WPF.MediaControlBase.GetView(SharpMediaFoundationInterop.WPF.VideoInfo info) -> SharpMediaFoundationInterop.WPF.VideoView
+SharpMediaFoundationInterop.WPF.MediaControlBase.HasAudio.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.HasSoundField.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.HasSubtitles.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsBinaural.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsFullScreen.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsFullScreen.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsOverlayEnabled.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsOverlayEnabled.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsPaused.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsPaused.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsPlaying.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsSpherical.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsStereo.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.IsStill.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.Looping.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.Looping.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.MediaControlBase() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Mute.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.Mute.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.NextEyeView() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.NextSubtitleTrack() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Pause() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Pitch.get -> double
+SharpMediaFoundationInterop.WPF.MediaControlBase.Pitch.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Play() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.PlaybackRate.get -> int
+SharpMediaFoundationInterop.WPF.MediaControlBase.Position.get -> System.TimeSpan
+SharpMediaFoundationInterop.WPF.MediaControlBase.PositionFormat.get -> SharpMediaFoundationInterop.WPF.PositionFormat
+SharpMediaFoundationInterop.WPF.MediaControlBase.PositionFormat.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Projection.get -> SharpMediaFoundationInterop.WPF.VideoProjection?
+SharpMediaFoundationInterop.WPF.MediaControlBase.Projection.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.ResetView() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Rewind() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Seek(System.TimeSpan position) -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.SeekBy(System.TimeSpan offset) -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.SetRate(int rate) -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.ShowControls.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.ShowControls.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.ShowsSideBySide.get -> bool
+SharpMediaFoundationInterop.WPF.MediaControlBase.Source.get -> SharpMediaFoundationInterop.WPF.IVideoSource
+SharpMediaFoundationInterop.WPF.MediaControlBase.Source.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.StepBackward() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.StepForward() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.StereoLayout.get -> SharpMediaFoundationInterop.WPF.StereoLayout?
+SharpMediaFoundationInterop.WPF.MediaControlBase.StereoLayout.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.SubtitleText.get -> string
+SharpMediaFoundationInterop.WPF.MediaControlBase.SubtitleTrack.get -> int
+SharpMediaFoundationInterop.WPF.MediaControlBase.SubtitleTrack.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.SubtitleTracks.get -> System.Collections.Generic.IReadOnlyList<SharpMediaFoundationInterop.WPF.SubtitleTrackInfo>
+SharpMediaFoundationInterop.WPF.MediaControlBase.TimeText.get -> string
+SharpMediaFoundationInterop.WPF.MediaControlBase.ToggleBinaural() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.ToggleFullScreen() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.TogglePlayPause() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.TogglePositionFormat() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.ToggleRepeat() -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Volume.get -> double
+SharpMediaFoundationInterop.WPF.MediaControlBase.Volume.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.Yaw.get -> double
+SharpMediaFoundationInterop.WPF.MediaControlBase.Yaw.set -> void
+SharpMediaFoundationInterop.WPF.MediaControlBase.~MediaControlBase() -> void
+SharpMediaFoundationInterop.WPF.MediaSourceBase
+SharpMediaFoundationInterop.WPF.MediaSourceBase.AudioInfo.get -> SharpMediaFoundationInterop.WPF.AudioInfo
+SharpMediaFoundationInterop.WPF.MediaSourceBase.AudioInfo.set -> void
+SharpMediaFoundationInterop.WPF.MediaSourceBase.Dispose() -> void
+SharpMediaFoundationInterop.WPF.MediaSourceBase.Empty.get -> byte[]
+SharpMediaFoundationInterop.WPF.MediaSourceBase.FrameSpacing.get -> long
+SharpMediaFoundationInterop.WPF.MediaSourceBase.GetAudioSample() -> byte[]
+SharpMediaFoundationInterop.WPF.MediaSourceBase.IsAudioEnded.get -> bool
+SharpMediaFoundationInterop.WPF.MediaSourceBase.IsSoundOnly.get -> bool
+SharpMediaFoundationInterop.WPF.MediaSourceBase.KeyFrameRate.get -> int
+SharpMediaFoundationInterop.WPF.MediaSourceBase.KeyFrameRate.set -> void
+SharpMediaFoundationInterop.WPF.MediaSourceBase.MediaSourceBase() -> void
+SharpMediaFoundationInterop.WPF.MediaSourceBase.Position.get -> long
+SharpMediaFoundationInterop.WPF.MediaSourceBase.Rate.get -> int
+SharpMediaFoundationInterop.WPF.MediaSourceBase.Request.get -> long
+SharpMediaFoundationInterop.WPF.MediaSourceBase.ReturnAudioSample(byte[] decoded) -> void
+SharpMediaFoundationInterop.WPF.MediaSourceBase.ReturnVideoFrame(object frame) -> void
+SharpMediaFoundationInterop.WPF.MediaSourceBase.ReturnVideoSample(byte[] decoded) -> void
+SharpMediaFoundationInterop.WPF.MediaSourceBase.Seek(long time, int rate) -> long
+SharpMediaFoundationInterop.WPF.MediaSourceBase.TrySetOutputFormat(SharpMediaFoundationInterop.WPF.PixelFormat format) -> bool
+SharpMediaFoundationInterop.WPF.MediaSourceBase.TryUseDirect3D(SharpMediaFoundationInterop.WPF.Direct3DDevice device) -> bool
+SharpMediaFoundationInterop.WPF.MediaSourceBase.VideoInfo.get -> SharpMediaFoundationInterop.WPF.VideoInfo
+SharpMediaFoundationInterop.WPF.MediaSourceBase.VideoInfo.set -> void
+SharpMediaFoundationInterop.WPF.MediaSourceBase._audioDecoder -> SharpMediaFoundationInterop.Codecs.IMediaAudioTransform
+SharpMediaFoundationInterop.WPF.MediaSourceBase._audioFrames -> long
+SharpMediaFoundationInterop.WPF.MediaSourceBase._audioRenderQueue -> System.Collections.Concurrent.ConcurrentQueue<(byte[] Pcm, long Timestamp)>
+SharpMediaFoundationInterop.WPF.MediaSourceBase._isLowLatency -> bool
+SharpMediaFoundationInterop.WPF.MediaSourceBase._nv12Buffer -> byte[]
+SharpMediaFoundationInterop.WPF.MediaSourceBase._videoDecoder -> SharpMediaFoundationInterop.Codecs.IMediaVideoTransform
+SharpMediaFoundationInterop.WPF.MediaSourceBase._videoFrames -> long
+SharpMediaFoundationInterop.WPF.MediaSourceBase._videoRenderQueue -> System.Collections.Concurrent.ConcurrentQueue<(object Frame, long Timestamp)>
+SharpMediaFoundationInterop.WPF.PixelFormat
+SharpMediaFoundationInterop.WPF.PixelFormat.BGR24 = 0 -> SharpMediaFoundationInterop.WPF.PixelFormat
+SharpMediaFoundationInterop.WPF.PixelFormat.BGRA32 = 1 -> SharpMediaFoundationInterop.WPF.PixelFormat
+SharpMediaFoundationInterop.WPF.PixelFormat.NV12 = 2 -> SharpMediaFoundationInterop.WPF.PixelFormat
+SharpMediaFoundationInterop.WPF.PixelFormat.Yuv = 3 -> SharpMediaFoundationInterop.WPF.PixelFormat
+SharpMediaFoundationInterop.WPF.PositionFormat
+SharpMediaFoundationInterop.WPF.PositionFormat.Frames = 1 -> SharpMediaFoundationInterop.WPF.PositionFormat
+SharpMediaFoundationInterop.WPF.PositionFormat.Time = 0 -> SharpMediaFoundationInterop.WPF.PositionFormat
+SharpMediaFoundationInterop.WPF.ProjectionBounds
+SharpMediaFoundationInterop.WPF.ProjectionBounds.Bottom.get -> double
+SharpMediaFoundationInterop.WPF.ProjectionBounds.Left.get -> double
+SharpMediaFoundationInterop.WPF.ProjectionBounds.ProjectionBounds() -> void
+SharpMediaFoundationInterop.WPF.ProjectionBounds.ProjectionBounds(double left, double top, double right, double bottom) -> void
+SharpMediaFoundationInterop.WPF.ProjectionBounds.Right.get -> double
+SharpMediaFoundationInterop.WPF.ProjectionBounds.Top.get -> double
+SharpMediaFoundationInterop.WPF.StereoLayout
+SharpMediaFoundationInterop.WPF.StereoLayout.Mono = 0 -> SharpMediaFoundationInterop.WPF.StereoLayout
+SharpMediaFoundationInterop.WPF.StereoLayout.SideBySide = 1 -> SharpMediaFoundationInterop.WPF.StereoLayout
+SharpMediaFoundationInterop.WPF.StereoLayout.TopBottom = 2 -> SharpMediaFoundationInterop.WPF.StereoLayout
+SharpMediaFoundationInterop.WPF.StereoMediaSource
+SharpMediaFoundationInterop.WPF.StereoMediaSource.AudioInfo.get -> SharpMediaFoundationInterop.WPF.AudioInfo
+SharpMediaFoundationInterop.WPF.StereoMediaSource.CanSeek.get -> bool
+SharpMediaFoundationInterop.WPF.StereoMediaSource.Dispose() -> void
+SharpMediaFoundationInterop.WPF.StereoMediaSource.Duration.get -> long
+SharpMediaFoundationInterop.WPF.StereoMediaSource.FrameAt(long time) -> long
+SharpMediaFoundationInterop.WPF.StereoMediaSource.FrameCount.get -> long
+SharpMediaFoundationInterop.WPF.StereoMediaSource.GetAudioSample() -> byte[]
+SharpMediaFoundationInterop.WPF.StereoMediaSource.GetAudioSample(out long timestamp) -> byte[]
+SharpMediaFoundationInterop.WPF.StereoMediaSource.GetSubtitles(int track) -> System.Collections.Generic.IReadOnlyList<SharpMediaFoundationInterop.WPF.Subtitle>
+SharpMediaFoundationInterop.WPF.StereoMediaSource.GetVideoFrame(out long timestamp) -> object
+SharpMediaFoundationInterop.WPF.StereoMediaSource.GetVideoSample(out long timestamp) -> byte[]
+SharpMediaFoundationInterop.WPF.StereoMediaSource.InitializeAsync() -> System.Threading.Tasks.Task
+SharpMediaFoundationInterop.WPF.StereoMediaSource.Left.get -> SharpMediaFoundationInterop.WPF.IVideoSource
+SharpMediaFoundationInterop.WPF.StereoMediaSource.Rate.get -> int
+SharpMediaFoundationInterop.WPF.StereoMediaSource.Request.get -> long
+SharpMediaFoundationInterop.WPF.StereoMediaSource.ReturnAudioSample(byte[] sample) -> void
+SharpMediaFoundationInterop.WPF.StereoMediaSource.ReturnVideoFrame(object frame) -> void
+SharpMediaFoundationInterop.WPF.StereoMediaSource.ReturnVideoSample(byte[] sample) -> void
+SharpMediaFoundationInterop.WPF.StereoMediaSource.Right.get -> SharpMediaFoundationInterop.WPF.IVideoSource
+SharpMediaFoundationInterop.WPF.StereoMediaSource.Seek(long time, int rate) -> long
+SharpMediaFoundationInterop.WPF.StereoMediaSource.StartTime.get -> long
+SharpMediaFoundationInterop.WPF.StereoMediaSource.StereoMediaSource(SharpMediaFoundationInterop.WPF.IVideoSource left, SharpMediaFoundationInterop.WPF.IVideoSource right, bool ownsSources = true) -> void
+SharpMediaFoundationInterop.WPF.StereoMediaSource.SubtitleTracks.get -> System.Collections.Generic.IReadOnlyList<SharpMediaFoundationInterop.WPF.SubtitleTrackInfo>
+SharpMediaFoundationInterop.WPF.StereoMediaSource.TimeOfFrame(long frame) -> long
+SharpMediaFoundationInterop.WPF.StereoMediaSource.TrySetOutputFormat(SharpMediaFoundationInterop.WPF.PixelFormat format) -> bool
+SharpMediaFoundationInterop.WPF.StereoMediaSource.TryUseDirect3D(SharpMediaFoundationInterop.WPF.Direct3DDevice device) -> bool
+SharpMediaFoundationInterop.WPF.StereoMediaSource.VideoInfo.get -> SharpMediaFoundationInterop.WPF.VideoInfo
+SharpMediaFoundationInterop.WPF.Subtitle
+SharpMediaFoundationInterop.WPF.Subtitle.End.get -> long
+SharpMediaFoundationInterop.WPF.Subtitle.Start.get -> long
+SharpMediaFoundationInterop.WPF.Subtitle.Subtitle() -> void
+SharpMediaFoundationInterop.WPF.Subtitle.Subtitle(long start, long end, string text) -> void
+SharpMediaFoundationInterop.WPF.Subtitle.Text.get -> string
+SharpMediaFoundationInterop.WPF.SubtitleParser
+SharpMediaFoundationInterop.WPF.SubtitleTrackInfo
+SharpMediaFoundationInterop.WPF.SubtitleTrackInfo.Forced.get -> bool
+SharpMediaFoundationInterop.WPF.SubtitleTrackInfo.Language.get -> string
+SharpMediaFoundationInterop.WPF.SubtitleTrackInfo.Name.get -> string
+SharpMediaFoundationInterop.WPF.SubtitleTrackInfo.SubtitleTrackInfo(string name, string language, bool forced) -> void
+SharpMediaFoundationInterop.WPF.VideoInfo
+SharpMediaFoundationInterop.WPF.VideoInfo.Color.get -> SharpMediaFoundationInterop.Codecs.VideoColor
+SharpMediaFoundationInterop.WPF.VideoInfo.Color.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.ColorOrDefault.get -> SharpMediaFoundationInterop.Codecs.VideoColor
+SharpMediaFoundationInterop.WPF.VideoInfo.FpsDenom.get -> uint
+SharpMediaFoundationInterop.WPF.VideoInfo.FpsDenom.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.FpsNom.get -> uint
+SharpMediaFoundationInterop.WPF.VideoInfo.FpsNom.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.FrameFormat.get -> SharpMediaFoundationInterop.Codecs.VideoFrameFormat
+SharpMediaFoundationInterop.WPF.VideoInfo.FrameFormat.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.Height.get -> uint
+SharpMediaFoundationInterop.WPF.VideoInfo.Height.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.Orientation.get -> SharpMediaFoundationInterop.Codecs.VideoOrientation
+SharpMediaFoundationInterop.WPF.VideoInfo.Orientation.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.OriginalHeight.get -> uint
+SharpMediaFoundationInterop.WPF.VideoInfo.OriginalHeight.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.OriginalWidth.get -> uint
+SharpMediaFoundationInterop.WPF.VideoInfo.OriginalWidth.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.PixelFormat.get -> SharpMediaFoundationInterop.WPF.PixelFormat
+SharpMediaFoundationInterop.WPF.VideoInfo.PixelFormat.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.Projection.get -> SharpMediaFoundationInterop.WPF.VideoProjection
+SharpMediaFoundationInterop.WPF.VideoInfo.Projection.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.ProjectionBounds.get -> SharpMediaFoundationInterop.WPF.ProjectionBounds
+SharpMediaFoundationInterop.WPF.VideoInfo.ProjectionBounds.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.ShownHeight.get -> uint
+SharpMediaFoundationInterop.WPF.VideoInfo.ShownWidth.get -> uint
+SharpMediaFoundationInterop.WPF.VideoInfo.StereoLayout.get -> SharpMediaFoundationInterop.WPF.StereoLayout
+SharpMediaFoundationInterop.WPF.VideoInfo.StereoLayout.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.VideoCodec.get -> string
+SharpMediaFoundationInterop.WPF.VideoInfo.VideoCodec.set -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.VideoInfo() -> void
+SharpMediaFoundationInterop.WPF.VideoInfo.Width.get -> uint
+SharpMediaFoundationInterop.WPF.VideoInfo.Width.set -> void
+SharpMediaFoundationInterop.WPF.VideoProjection
+SharpMediaFoundationInterop.WPF.VideoProjection.Equirectangular = 1 -> SharpMediaFoundationInterop.WPF.VideoProjection
+SharpMediaFoundationInterop.WPF.VideoProjection.Flat = 0 -> SharpMediaFoundationInterop.WPF.VideoProjection
+SharpMediaFoundationInterop.WPF.VideoView
+SharpMediaFoundationInterop.WPF.VideoView.Bounds.get -> SharpMediaFoundationInterop.WPF.ProjectionBounds
+SharpMediaFoundationInterop.WPF.VideoView.Eye.get -> SharpMediaFoundationInterop.WPF.EyeView
+SharpMediaFoundationInterop.WPF.VideoView.EyeRect(SharpMediaFoundationInterop.WPF.VideoInfo info, bool right) -> (uint X, uint Y, uint Width, uint Height)
+SharpMediaFoundationInterop.WPF.VideoView.FieldOfView.get -> double
+SharpMediaFoundationInterop.WPF.VideoView.IsBothSpherical.get -> bool
+SharpMediaFoundationInterop.WPF.VideoView.IsOneEye.get -> bool
+SharpMediaFoundationInterop.WPF.VideoView.IsWholeFrame.get -> bool
+SharpMediaFoundationInterop.WPF.VideoView.Layout.get -> SharpMediaFoundationInterop.WPF.StereoLayout
+SharpMediaFoundationInterop.WPF.VideoView.Pitch.get -> double
+SharpMediaFoundationInterop.WPF.VideoView.Projection.get -> SharpMediaFoundationInterop.WPF.VideoProjection
+SharpMediaFoundationInterop.WPF.VideoView.VideoView() -> void
+SharpMediaFoundationInterop.WPF.VideoView.VideoView(SharpMediaFoundationInterop.WPF.EyeView eye, SharpMediaFoundationInterop.WPF.StereoLayout layout, SharpMediaFoundationInterop.WPF.VideoProjection projection, SharpMediaFoundationInterop.WPF.ProjectionBounds bounds, double yaw, double pitch, double fieldOfView) -> void
+SharpMediaFoundationInterop.WPF.VideoView.Yaw.get -> double
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.AreControlsVisibleProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.AutoHideControlsProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.AutoPlayProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.BinauralProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.CanSeekProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.ControlsHideDelayProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.DurationProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.EyeViewProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.FieldOfViewProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.HasAudioProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.HasSoundFieldProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.HasSubtitlesProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.IsBinauralProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.IsFullScreenProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.IsOverlayEnabledProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.IsPausedProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.IsPlayingProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.IsSphericalProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.IsStereoProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.IsStillProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.LoopingProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.MuteProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.PitchProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.PlaybackRateProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.PositionFormatProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.PositionProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.ProjectionProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.ShowControlsProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.ShowsSideBySideProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.SourceProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.StereoLayoutProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.SubtitleTextProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.SubtitleTrackProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.SubtitleTracksProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.TimeTextProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.VolumeProperty -> System.Windows.DependencyProperty
+static readonly SharpMediaFoundationInterop.WPF.MediaControlBase.YawProperty -> System.Windows.DependencyProperty
+static SharpMediaFoundationInterop.WPF.MediaControlBase.ButtonStyleKey.get -> System.Windows.ComponentResourceKey
+static SharpMediaFoundationInterop.WPF.MediaControlBase.NextEyeViewCommand.get -> System.Windows.Input.RoutedUICommand
+static SharpMediaFoundationInterop.WPF.MediaControlBase.NextSubtitleTrackCommand.get -> System.Windows.Input.RoutedUICommand
+static SharpMediaFoundationInterop.WPF.MediaControlBase.ResetViewCommand.get -> System.Windows.Input.RoutedUICommand
+static SharpMediaFoundationInterop.WPF.MediaControlBase.SeekSliderStyleKey.get -> System.Windows.ComponentResourceKey
+static SharpMediaFoundationInterop.WPF.MediaControlBase.StepBackwardCommand.get -> System.Windows.Input.RoutedUICommand
+static SharpMediaFoundationInterop.WPF.MediaControlBase.StepForwardCommand.get -> System.Windows.Input.RoutedUICommand
+static SharpMediaFoundationInterop.WPF.MediaControlBase.SubtitleTemplateKey.get -> System.Windows.ComponentResourceKey
+static SharpMediaFoundationInterop.WPF.MediaControlBase.ToggleBinauralCommand.get -> System.Windows.Input.RoutedUICommand
+static SharpMediaFoundationInterop.WPF.MediaControlBase.ToggleFullScreenCommand.get -> System.Windows.Input.RoutedUICommand
+static SharpMediaFoundationInterop.WPF.MediaControlBase.TogglePositionFormatCommand.get -> System.Windows.Input.RoutedUICommand
+static SharpMediaFoundationInterop.WPF.MediaControlBase.ToggleRepeatCommand.get -> System.Windows.Input.RoutedUICommand
+static SharpMediaFoundationInterop.WPF.ProjectionBounds.Full.get -> SharpMediaFoundationInterop.WPF.ProjectionBounds
+static SharpMediaFoundationInterop.WPF.ProjectionBounds.Half.get -> SharpMediaFoundationInterop.WPF.ProjectionBounds
+static SharpMediaFoundationInterop.WPF.SubtitleParser.ParseSrtOrWebVtt(string text) -> System.Collections.Generic.List<SharpMediaFoundationInterop.WPF.Subtitle>
+static SharpMediaFoundationInterop.WPF.SubtitleParser.ParseTtml(string document, long sampleStart, long sampleEnd) -> System.Collections.Generic.IEnumerable<SharpMediaFoundationInterop.WPF.Subtitle>
+static SharpMediaFoundationInterop.WPF.SubtitleParser.ToPlainText(string text) -> string
+virtual SharpMediaFoundationInterop.WPF.MediaControlBase.CanShowSpherical.get -> bool
+virtual SharpMediaFoundationInterop.WPF.MediaControlBase.Dispose(bool disposing) -> void
+virtual SharpMediaFoundationInterop.WPF.MediaControlBase.OnSourceInitializing(SharpMediaFoundationInterop.WPF.IVideoSource source) -> void
+virtual SharpMediaFoundationInterop.WPF.MediaControlBase.RedrawView() -> bool
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.AudioStart.get -> long
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.CanSeek.get -> bool
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.CompletedAudio() -> void
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.CompletedVideo() -> void
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.CreateCustomVideoDecoder(SharpMediaFoundationInterop.WPF.VideoInfo info) -> SharpMediaFoundationInterop.Codecs.IMediaVideoTransform
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.CreateVideoDecoder(SharpMediaFoundationInterop.WPF.VideoInfo info) -> void
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.Dispose(bool disposing) -> void
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.Duration.get -> long
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.FrameAt(long time) -> long
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.FrameCount.get -> long
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.GetAudioSample(out long timestamp) -> byte[]
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.GetVideoFrame(out long timestamp) -> object
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.GetVideoSample(out long timestamp) -> byte[]
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.IsStreaming.get -> bool
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.OnVideoDecoderDrained() -> void
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.ReadNextAudio(out long timestamp) -> System.Collections.Generic.IList<System.ArraySegment<byte>>
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.SeekAudio(long time) -> void
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.SeekVideoToSync(long time, bool after) -> long
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.StartTime.get -> long
+virtual SharpMediaFoundationInterop.WPF.MediaSourceBase.TimeOfFrame(long frame) -> long
