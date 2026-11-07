@@ -29,7 +29,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    public sealed unsafe class VideoToolboxDecoder : IMediaVideoTransform
+    internal sealed unsafe class VideoToolboxDecoder : IMediaVideoTransform
     {
         /// <summary>
         /// The multiple the frames' width and height are rounded up to: 2, for NV12's chroma, whatever the codec - the

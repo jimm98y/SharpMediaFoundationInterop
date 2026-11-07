@@ -11,7 +11,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// float of Opus, interleaved, of more than two channels in the order WAVE has them, which is GStreamer's own.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    public sealed class GStreamerAudioDecoder : IMediaAudioTransform
+    internal sealed class GStreamerAudioDecoder : IMediaAudioTransform
     {
         private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(10);
 

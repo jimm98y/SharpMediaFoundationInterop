@@ -14,7 +14,7 @@ namespace SharpMediaFoundationInterop.Output
     /// counting no silence: the pipeline plays on, and what comes after is timed from then, the gap left out of the position.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    public sealed class GStreamerAudioOutput : IAudioOutput
+    internal sealed class GStreamerAudioOutput : IAudioOutput
     {
         private readonly string _deviceId;
         private readonly object _lock = new object();

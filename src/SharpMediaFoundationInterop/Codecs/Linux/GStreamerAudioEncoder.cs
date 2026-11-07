@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// Opus, interleaved, of more than two channels in WAVE's order - of any length, and hands out a packet at a time.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    public sealed class GStreamerAudioEncoder : IMediaAudioEncoder
+    internal sealed class GStreamerAudioEncoder : IMediaAudioEncoder
     {
         private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(10);
         private static readonly int[] AacRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];

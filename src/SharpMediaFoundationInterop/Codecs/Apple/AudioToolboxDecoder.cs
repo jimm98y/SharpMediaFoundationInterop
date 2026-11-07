@@ -15,7 +15,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    public sealed unsafe class AudioToolboxDecoder : IMediaAudioTransform
+    internal sealed unsafe class AudioToolboxDecoder : IMediaAudioTransform
     {
         /// <summary>What the input callback answers once its packet is taken: nothing more yet, rather than the stream's end.</summary>
         private static readonly int NoMoreDataNow = (int)FourCC("nmdn");

@@ -11,7 +11,7 @@ namespace SharpMediaFoundationInterop.Input
     /// autoaudiosrc, the system's default, converted to the format asked for, in buffers of a second each, as waveIn's are.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    public sealed class GStreamerAudioInput : IAudioInput
+    internal sealed class GStreamerAudioInput : IAudioInput
     {
         private readonly string _deviceId;
         private GstAppPipeline _pipeline;

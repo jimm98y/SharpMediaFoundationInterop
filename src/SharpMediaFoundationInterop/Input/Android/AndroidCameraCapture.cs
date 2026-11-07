@@ -17,7 +17,7 @@ namespace SharpMediaFoundationInterop.Input
     /// has none.
     /// </summary>
     [SupportedOSPlatform("android26.0")]
-    public sealed unsafe class AndroidCameraCapture : IMediaVideoSource
+    internal sealed unsafe class AndroidCameraCapture : IMediaVideoSource
     {
         /// <summary>How long <see cref="ReadSample"/> waits for a frame before it gives up and returns false.</summary>
         public int ReadTimeoutInMilliseconds { get; set; } = 2000;

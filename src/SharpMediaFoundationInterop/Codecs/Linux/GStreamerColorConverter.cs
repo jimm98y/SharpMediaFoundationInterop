@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// they are bottom-up.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    public sealed class GStreamerColorConverter : IMediaVideoTransform
+    internal sealed class GStreamerColorConverter : IMediaVideoTransform
     {
         private static readonly TimeSpan ConvertTimeout = TimeSpan.FromSeconds(5);
 

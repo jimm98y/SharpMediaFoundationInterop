@@ -22,6 +22,14 @@ a platform's is a native pointer in a type of their own: a decoder that decodes 
 `DecodedFrame` (a texture pointer and its slice, or a copy to memory). `InternalsVisibleTo` is for
 tests alone.
 
+The bindings of the other platforms are internal too - Android's NDK, Apple's Objective-C, GStreamer
+- and so are the classes made of them: the codecs, captures and audio inputs and outputs of Android,
+Apple's systems and Linux are made by `MediaCodecs` and `MediaDevices`, and handed out as the
+interfaces they implement (`IMediaVideoTransform`, `IMediaVideoSource`, `IAudioInput`, ...). Windows'
+own classes - the Media Foundation codecs, `DeviceCapture`, `ScreenCapture`, `WaveIn`, `WaveOut` and
+the rest - are public still, and are to follow them. A class of one platform is not to be added to
+the public API: what it offers is to be offered by an interface, made by one of the factories.
+
 ## Adding to the API
 
 Build, and accept the RS0016 fix in the IDE ("Add to public API"), or from the command line:

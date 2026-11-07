@@ -15,7 +15,7 @@ namespace SharpMediaFoundationInterop.Input
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    public sealed unsafe class AudioQueueInput : IAudioInput
+    internal sealed unsafe class AudioQueueInput : IAudioInput
     {
         private const int BufferCount = 3;
 

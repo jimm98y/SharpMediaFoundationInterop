@@ -16,7 +16,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// packet at a time.
     /// </summary>
     [SupportedOSPlatform("android26.0")]
-    public sealed unsafe class AndroidAudioEncoder : IMediaAudioEncoder
+    internal sealed unsafe class AndroidAudioEncoder : IMediaAudioEncoder
     {
         private static readonly int[] AacRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
         private static readonly Dictionary<AudioCodec, bool> Supported = new Dictionary<AudioCodec, bool>();

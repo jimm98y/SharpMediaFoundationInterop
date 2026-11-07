@@ -13,7 +13,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios16.0")]
-    public sealed unsafe class VideoToolboxColorConverter : IMediaVideoTransform
+    internal sealed unsafe class VideoToolboxColorConverter : IMediaVideoTransform
     {
         private readonly ColorConverterOptions _options;
         private IntPtr _session;

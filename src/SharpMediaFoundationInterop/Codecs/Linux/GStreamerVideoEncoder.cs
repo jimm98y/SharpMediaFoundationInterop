@@ -15,7 +15,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// time of its frame. The options become the encoder's properties: what it has none of is in <see cref="UnappliedSettings"/>.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    public sealed class GStreamerVideoEncoder : IMediaVideoEncoder
+    internal sealed class GStreamerVideoEncoder : IMediaVideoEncoder
     {
         private static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(30);
 

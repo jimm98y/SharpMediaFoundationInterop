@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop.Input
     /// frames handed out as NV12. The first frame is waited for as it is initialized, which tells the size.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    public sealed class GStreamerCameraCapture : IMediaVideoSource
+    internal sealed class GStreamerCameraCapture : IMediaVideoSource
     {
         /// <summary>How long <see cref="ReadSample"/> waits for a frame before it gives up and returns false.</summary>
         public int ReadTimeoutInMilliseconds { get; set; } = 2000;

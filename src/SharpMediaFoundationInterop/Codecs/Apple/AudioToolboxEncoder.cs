@@ -16,7 +16,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    public sealed unsafe class AudioToolboxEncoder : IMediaAudioEncoder
+    internal sealed unsafe class AudioToolboxEncoder : IMediaAudioEncoder
     {
         private static readonly int NoMoreDataNow = (int)FourCC("nmdn");
         private static readonly uint kAudioConverterInputChannelLayout = FourCC("icl ");

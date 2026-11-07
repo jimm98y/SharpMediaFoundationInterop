@@ -17,7 +17,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    public sealed unsafe class VideoToolboxEncoder : IMediaVideoEncoder
+    internal sealed unsafe class VideoToolboxEncoder : IMediaVideoEncoder
     {
         private static readonly byte[] StartCode = [0, 0, 0, 1];
 

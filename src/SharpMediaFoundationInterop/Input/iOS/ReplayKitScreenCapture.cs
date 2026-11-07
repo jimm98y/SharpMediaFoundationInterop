@@ -18,7 +18,7 @@ namespace SharpMediaFoundationInterop.Input
     /// answer and the first frame, and throws <see cref="UnauthorizedAccessException"/> where they say no.
     /// </summary>
     [SupportedOSPlatform("ios16.0")]
-    public sealed unsafe class ReplayKitScreenCapture : IMediaVideoSource
+    internal sealed unsafe class ReplayKitScreenCapture : IMediaVideoSource
     {
         /// <summary>How long <see cref="ReadSample(byte[], out long)"/> waits for a new frame before it returns false.</summary>
         public int ReadTimeoutInMilliseconds { get; set; } = 40;

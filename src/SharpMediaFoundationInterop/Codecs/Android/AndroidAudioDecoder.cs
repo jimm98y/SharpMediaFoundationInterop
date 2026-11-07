@@ -16,7 +16,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// two channels in WAVE's order, which is Android's own. Opus is of 48 kHz on Android, whatever was asked.
     /// </summary>
     [SupportedOSPlatform("android26.0")]
-    public sealed unsafe class AndroidAudioDecoder : IMediaAudioTransform
+    internal sealed unsafe class AndroidAudioDecoder : IMediaAudioTransform
     {
         private static readonly Dictionary<AudioCodec, bool> Supported = new Dictionary<AudioCodec, bool>();
 

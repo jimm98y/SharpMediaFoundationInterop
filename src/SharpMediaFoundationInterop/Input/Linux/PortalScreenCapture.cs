@@ -13,7 +13,7 @@ namespace SharpMediaFoundationInterop.Input
     /// changed. Throws <see cref="UnauthorizedAccessException"/> where the user cancels the dialog.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    public sealed class PortalScreenCapture : IMediaVideoSource
+    internal sealed class PortalScreenCapture : IMediaVideoSource
     {
         /// <summary>How long <see cref="ReadSample(byte[], out long)"/> waits for the screen to change before it returns false.</summary>
         public int ReadTimeoutInMilliseconds { get; set; } = 40;

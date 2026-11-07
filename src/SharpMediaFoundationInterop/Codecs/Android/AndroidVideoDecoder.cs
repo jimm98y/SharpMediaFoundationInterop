@@ -18,7 +18,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// before the first MPEG-4 picture; what comes before that is dropped.
     /// </summary>
     [SupportedOSPlatform("android26.0")]
-    public sealed unsafe class AndroidVideoDecoder : IMediaVideoTransform
+    internal sealed unsafe class AndroidVideoDecoder : IMediaVideoTransform
     {
         public const uint ResMultiple = 2;
 

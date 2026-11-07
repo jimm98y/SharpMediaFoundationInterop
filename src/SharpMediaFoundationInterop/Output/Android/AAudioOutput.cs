@@ -13,7 +13,7 @@ namespace SharpMediaFoundationInterop.Output
     /// played, and its position stands still where they run out: the silence AAudio plays on is left out of it.
     /// </summary>
     [SupportedOSPlatform("android26.0")]
-    public sealed unsafe class AAudioOutput : IAudioOutput
+    internal sealed unsafe class AAudioOutput : IAudioOutput
     {
         private readonly object _lock = new object();
         private readonly Queue<byte[]> _pending = new Queue<byte[]>();

@@ -19,7 +19,7 @@ namespace SharpMediaFoundationInterop.Input
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    public sealed unsafe class AVFoundationCapture : IMediaVideoSource
+    internal sealed unsafe class AVFoundationCapture : IMediaVideoSource
     {
         /// <summary>How long <see cref="ReadSample"/> waits for a frame before it gives up and returns false.</summary>
         public int ReadTimeoutInMilliseconds { get; set; } = 2000;

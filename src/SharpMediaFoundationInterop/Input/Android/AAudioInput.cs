@@ -11,7 +11,7 @@ namespace SharpMediaFoundationInterop.Input
     /// are. The app must hold the RECORD_AUDIO permission, granted by the user - which only its Java side can ask for.
     /// </summary>
     [SupportedOSPlatform("android26.0")]
-    public sealed unsafe class AAudioInput : IAudioInput
+    internal sealed unsafe class AAudioInput : IAudioInput
     {
         private IntPtr _stream;
         private Thread _reader;

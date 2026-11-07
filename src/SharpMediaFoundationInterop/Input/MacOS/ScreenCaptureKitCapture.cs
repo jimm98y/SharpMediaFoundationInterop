@@ -19,7 +19,7 @@ namespace SharpMediaFoundationInterop.Input
     /// <see cref="UnauthorizedAccessException"/>.
     /// </summary>
     [SupportedOSPlatform("macos12.3")]
-    public sealed unsafe class ScreenCaptureKitCapture : IMediaVideoSource
+    internal sealed unsafe class ScreenCaptureKitCapture : IMediaVideoSource
     {
         /// <summary>How long <see cref="ReadSample(byte[], out long)"/> waits for the screen to change before it returns false.</summary>
         public int ReadTimeoutInMilliseconds { get; set; } = 40;

@@ -15,7 +15,7 @@ namespace SharpMediaFoundationInterop.Output
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    public sealed unsafe class AudioQueueOutput : IAudioOutput
+    internal sealed unsafe class AudioQueueOutput : IAudioOutput
     {
         private readonly string _deviceUid;
         private readonly object _lock = new object();

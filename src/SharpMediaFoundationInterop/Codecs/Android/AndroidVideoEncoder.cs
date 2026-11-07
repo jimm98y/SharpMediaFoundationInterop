@@ -16,7 +16,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// encodes no B-frames, so the units come out in the order the frames went in, each with the time of its frame.
     /// </summary>
     [SupportedOSPlatform("android26.0")]
-    public sealed unsafe class AndroidVideoEncoder : IMediaVideoEncoder
+    internal sealed unsafe class AndroidVideoEncoder : IMediaVideoEncoder
     {
         // MediaCodecInfo.EncoderCapabilities' bitrate modes
         private const int BITRATE_MODE_CQ = 0;

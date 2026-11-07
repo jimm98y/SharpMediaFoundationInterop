@@ -16,7 +16,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// </para>
     /// </summary>
     [SupportedOSPlatform("linux")]
-    public sealed class GStreamerVideoDecoder : IMediaVideoTransform
+    internal sealed class GStreamerVideoDecoder : IMediaVideoTransform
     {
         /// <summary>The multiple the frames' width and height are rounded up to: 2, for NV12's chroma, whatever the codec.</summary>
         public const uint ResMultiple = 2;
