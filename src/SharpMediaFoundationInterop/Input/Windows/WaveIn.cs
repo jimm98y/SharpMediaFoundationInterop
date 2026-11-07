@@ -9,7 +9,7 @@ using Windows.Win32.Media.Audio;
 namespace SharpMediaFoundationInterop.Input
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class WaveIn : IAudioInput
+    internal class WaveIn : IAudioInput
     {
         public const int MM_WIM_DATA = 0x3C0;
         public const uint MMSYSERR_NOERROR = 0;

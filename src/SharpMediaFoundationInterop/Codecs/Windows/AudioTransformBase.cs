@@ -7,7 +7,7 @@ using Windows.Win32.Media.MediaFoundation;
 namespace SharpMediaFoundationInterop.Codecs
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public abstract class AudioTransformBase : MediaTransformBase, IMediaAudioTransform
+    internal abstract class AudioTransformBase : MediaTransformBase, IMediaAudioTransform
     {
         private bool _disposedValue;
         protected long _sampleDuration = 1;

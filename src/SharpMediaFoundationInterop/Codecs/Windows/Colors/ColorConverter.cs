@@ -15,7 +15,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// of itself: see <see cref="Supports"/>.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class ColorConverter : VideoTransformBase
+    internal class ColorConverter : VideoTransformBase
     {
         private Guid _inputFormat;
         private Guid _outputFormat;

@@ -22,7 +22,7 @@ namespace SharpMediaFoundationInterop.Utils
             return (long)((Int128)time * TicksPerSecond / clockRate);
         }
 
-        public static ulong EncodeAttributeValue(uint highValue, uint lowValue)
+        internal static ulong EncodeAttributeValue(uint highValue, uint lowValue)
         {
             return ((ulong)highValue << 32) + lowValue;
         }

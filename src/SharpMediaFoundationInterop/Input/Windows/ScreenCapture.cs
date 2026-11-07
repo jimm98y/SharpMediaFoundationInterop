@@ -15,7 +15,7 @@ using System.Runtime.Versioning;
 namespace SharpMediaFoundationInterop.Input
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class ScreenDevice
+    internal class ScreenDevice
     {
         public uint AdapterID { get; private set; }
         public uint OutputID { get; private set; }
@@ -42,7 +42,7 @@ namespace SharpMediaFoundationInterop.Input
     }
 
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class ScreenCapture : IMediaVideoSource
+    internal class ScreenCapture : IMediaVideoSource
     {
         private const uint BYTES_PER_PIXEL = 4;
         private readonly Stopwatch _stopwatch = new Stopwatch();

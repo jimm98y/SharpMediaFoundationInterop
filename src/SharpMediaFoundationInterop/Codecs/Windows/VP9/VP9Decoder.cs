@@ -11,7 +11,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// from a GPU vendor's driver.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class VP9Decoder : VideoTransformBase
+    internal class VP9Decoder : VideoTransformBase
     {
         public const uint VP9_RES_MULTIPLE = 2;
 

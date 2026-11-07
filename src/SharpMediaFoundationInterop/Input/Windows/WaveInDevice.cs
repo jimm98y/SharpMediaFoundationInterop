@@ -3,7 +3,7 @@
 namespace SharpMediaFoundationInterop.Input
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class WaveInDevice
+    internal class WaveInDevice
     {
         public uint DeviceID { get; }
         public uint Formats { get; }

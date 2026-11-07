@@ -11,7 +11,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// goes in. NV12 out, or YUY2 - of a picture of 4:2:2, as cameras' are, its chroma as it is.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class MjpegDecoder : VideoTransformBase
+    internal class MjpegDecoder : VideoTransformBase
     {
         /// <summary>Its frames are of the pictures' own size.</summary>
         public const uint MJPEG_RES_MULTIPLE = 1;

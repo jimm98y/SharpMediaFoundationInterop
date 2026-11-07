@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// waits: it is given one of a frame's PCM.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class AlacDecoder : AudioTransformBase
+    internal class AlacDecoder : AudioTransformBase
     {
         public override Guid InputFormat => PInvoke.MFAudioFormat_ALAC;
         public override Guid OutputFormat => PInvoke.MFAudioFormat_PCM;

@@ -13,7 +13,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// final STREAMINFO - its total samples, frame sizes and MD5 - which completes it.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class FlacEncoder : AudioTransformBase
+    internal class FlacEncoder : AudioTransformBase
     {
         public const uint FLAC_BLOCK_SIZE = 4096;
 

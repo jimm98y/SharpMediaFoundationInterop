@@ -9,7 +9,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// made for the <see cref="VideoEncoderOptions"/>, which go to it as ICodecAPI properties. NV12 in.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public sealed class MediaFoundationEncoder : MediaFoundationVideoCodec, IMediaVideoEncoder
+    internal sealed class MediaFoundationEncoder : MediaFoundationVideoCodec, IMediaVideoEncoder
     {
         private readonly Dictionary<Guid, string> _settings = new Dictionary<Guid, string>();
         private readonly List<string> _unapplied = new List<string>();

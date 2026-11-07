@@ -7,7 +7,7 @@ using Windows.Win32.Media.MediaFoundation;
 namespace SharpMediaFoundationInterop.Codecs
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class OpusDecoder : AudioTransformBase
+    internal class OpusDecoder : AudioTransformBase
     {
         public override Guid InputFormat => PInvoke.MFAudioFormat_Opus;
         public override Guid OutputFormat => PInvoke.MFAudioFormat_Float;

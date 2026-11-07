@@ -7,7 +7,7 @@ using Windows.Win32.Media.MediaFoundation;
 namespace SharpMediaFoundationInterop.Codecs
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class H265Decoder : VideoTransformBase
+    internal class H265Decoder : VideoTransformBase
     {
         public const uint H265_RES_MULTIPLE = 8;
 

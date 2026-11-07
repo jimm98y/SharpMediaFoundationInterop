@@ -17,7 +17,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         public byte[] Empty { get; private set; } = new byte[0];
 
-        private ColorConverter _converter;
+        private IMediaVideoTransform _converter;
 
         public VideoInfo VideoInfo { get; private set; }
 
@@ -68,7 +68,8 @@ namespace SharpMediaFoundationInterop.WPF
                 _device.Initialize();
                 _yuy2Buffer = new byte[_device.OutputSize];
 
-                _converter = new ColorConverter(_device.OutputFormat, MediaFormats.RGB24, _device.Width, _device.Height);
+                _converter = MediaCodecs.CreateColorConverter(_device.OutputFormat, MediaFormats.RGB24,
+                    new ColorConverterOptions { Width = _device.Width, Height = _device.Height });
                 _converter.Initialize();
 
                 _bytesPerPixel = 3;

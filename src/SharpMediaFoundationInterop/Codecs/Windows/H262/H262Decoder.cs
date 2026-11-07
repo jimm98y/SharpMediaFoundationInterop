@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// before the first picture.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class H262Decoder : VideoTransformBase
+    internal class H262Decoder : VideoTransformBase
     {
         /// <summary>Its pictures are coded in macroblocks of 16 by 16.</summary>
         public const uint H262_RES_MULTIPLE = 16;

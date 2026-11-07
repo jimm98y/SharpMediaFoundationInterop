@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// 48000 Hz, and MPEG-2's lower rates - and its PCM only then.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class Mp3Encoder : AudioTransformBase
+    internal class Mp3Encoder : AudioTransformBase
     {
         public override Guid InputFormat => PInvoke.MFAudioFormat_PCM;
         public override Guid OutputFormat => PInvoke.MFAudioFormat_MP3;

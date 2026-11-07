@@ -11,7 +11,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// its own: it comes with the VP9 Video Extensions from the Store, or from a GPU vendor's driver.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class VP9Encoder : VideoTransformBase
+    internal class VP9Encoder : VideoTransformBase
     {
         public const uint VP9_RES_MULTIPLE = 2;
 

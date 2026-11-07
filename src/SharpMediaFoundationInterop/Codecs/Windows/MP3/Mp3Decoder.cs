@@ -11,7 +11,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// integer type is chosen.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class Mp3Decoder : AudioTransformBase
+    internal class Mp3Decoder : AudioTransformBase
     {
         public override Guid InputFormat => PInvoke.MFAudioFormat_MP3;
         public override Guid OutputFormat => PInvoke.MFAudioFormat_PCM;

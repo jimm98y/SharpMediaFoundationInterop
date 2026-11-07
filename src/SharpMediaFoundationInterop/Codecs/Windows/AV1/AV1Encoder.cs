@@ -7,7 +7,7 @@ using Windows.Win32.Media.MediaFoundation;
 namespace SharpMediaFoundationInterop.Codecs
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class AV1Encoder : VideoTransformBase
+    internal class AV1Encoder : VideoTransformBase
     {
         public const uint AV1_RES_MULTIPLE = 1;
 

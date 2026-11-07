@@ -17,7 +17,7 @@ namespace SharpMediaFoundationInterop.Codecs
     [Guid("901db4c7-31ce-41a2-85dc-8fa0bf41b8da")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public interface ICodecApi
+    internal interface ICodecApi
     {
         [PreserveSig] int IsSupported(ref Guid api);
         [PreserveSig] int IsModifiable(ref Guid api);
@@ -44,7 +44,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// The encoder properties this library asks about. The values come from codecapi.h in the
     /// Windows SDK; the generated interop does not surface them.
     /// </summary>
-    public static class CodecApiProperties
+    internal static class CodecApiProperties
     {
         /// <summary>
         /// Number of temporal sub-layers (UINT32). A picture may only reference pictures whose
@@ -74,7 +74,7 @@ namespace SharpMediaFoundationInterop.Codecs
             new Guid("1c0608e9-370c-4710-8a58-cb6181c42423");
 
         /// <summary>Values for <see cref="RateControlMode"/>, from eAVEncCommonRateControlMode.</summary>
-        public static class RateControlModes
+        internal static class RateControlModes
         {
             public const uint Cbr = 0;
             public const uint PeakConstrainedVbr = 1;
@@ -123,7 +123,7 @@ namespace SharpMediaFoundationInterop.Codecs
 
     /// <summary>Asking an encoder what it supports, without an exception per unsupported property.</summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public static class CodecApiExtensions
+    internal static class CodecApiExtensions
     {
         /// <summary>True when the encoder implements this property at all.</summary>
         public static bool IsPropertySupported(this ICodecApi codec, Guid property) =>

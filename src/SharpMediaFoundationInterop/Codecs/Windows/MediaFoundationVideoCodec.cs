@@ -8,7 +8,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// this hands everything on to. <see cref="Transform"/> reaches what is of the codec alone.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public abstract class MediaFoundationVideoCodec : IGpuVideoTransform
+    internal abstract class MediaFoundationVideoCodec : IGpuVideoTransform
     {
         private bool _disposedValue;
 

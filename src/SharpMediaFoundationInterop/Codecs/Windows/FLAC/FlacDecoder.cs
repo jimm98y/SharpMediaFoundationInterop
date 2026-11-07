@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// mftrace - and, given none, never decodes: it waits on a decoding thread it did not start.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class FlacDecoder : AudioTransformBase
+    internal class FlacDecoder : AudioTransformBase
     {
         /// <summary>The stream's metadata blocks, each with its header, STREAMINFO first: what the 'dfLa' box holds.</summary>
         public static readonly Guid MF_MT_AUDIO_FLAC_METADATA = new Guid("3eadb782-73df-4c6c-bf3a-e31977954435");

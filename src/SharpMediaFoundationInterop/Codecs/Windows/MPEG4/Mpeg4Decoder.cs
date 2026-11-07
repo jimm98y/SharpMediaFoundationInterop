@@ -12,7 +12,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// picture.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class Mpeg4Decoder : VideoTransformBase
+    internal class Mpeg4Decoder : VideoTransformBase
     {
         /// <summary>Its pictures are coded in macroblocks of 16 by 16.</summary>
         public const uint MPEG4_RES_MULTIPLE = 16;

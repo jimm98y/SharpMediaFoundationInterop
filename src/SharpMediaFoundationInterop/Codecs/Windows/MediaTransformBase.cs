@@ -19,7 +19,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// To trace Media Foundation, run: mftrace -v SharpMediaPlayer_x86.exe
     /// </remarks>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public abstract class MediaTransformBase
+    internal abstract class MediaTransformBase
     {
         public abstract Guid InputFormat { get; }
         public abstract Guid OutputFormat { get; }

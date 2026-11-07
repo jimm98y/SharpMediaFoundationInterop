@@ -7,7 +7,7 @@ using Windows.Win32.Media.MediaFoundation;
 namespace SharpMediaFoundationInterop.Codecs
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class AACEncoder : AudioTransformBase
+    internal class AACEncoder : AudioTransformBase
     {
         public override Guid InputFormat => PInvoke.MFAudioFormat_PCM;
         public override Guid OutputFormat => PInvoke.MFAudioFormat_AAC;

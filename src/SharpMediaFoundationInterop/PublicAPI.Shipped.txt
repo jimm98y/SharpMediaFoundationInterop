@@ -1,117 +1,12 @@
 abstract SharpMediaFoundationInterop.Codecs.DecodedFrame.IsOnGpu.get -> bool
 abstract SharpMediaFoundationInterop.Codecs.DecodedFrame.Texture.get -> nint
 abstract SharpMediaFoundationInterop.Codecs.DecodedFrame.TextureIndex.get -> int
-abstract SharpMediaFoundationInterop.Codecs.MediaTransformBase.InputFormat.get -> System.Guid
-abstract SharpMediaFoundationInterop.Codecs.MediaTransformBase.OutputFormat.get -> System.Guid
-const SharpMediaFoundationInterop.Codecs.AlacEncoder.ALAC_FRAME_LENGTH = 4096 -> uint
-const SharpMediaFoundationInterop.Codecs.AV1Decoder.AV1_RES_MULTIPLE = 1 -> uint
-const SharpMediaFoundationInterop.Codecs.AV1Encoder.AV1_RES_MULTIPLE = 1 -> uint
-const SharpMediaFoundationInterop.Codecs.CodecApiProperties.RateControlModes.Cbr = 0 -> uint
-const SharpMediaFoundationInterop.Codecs.CodecApiProperties.RateControlModes.PeakConstrainedVbr = 1 -> uint
-const SharpMediaFoundationInterop.Codecs.CodecApiProperties.RateControlModes.Quality = 3 -> uint
-const SharpMediaFoundationInterop.Codecs.CodecApiProperties.RateControlModes.UnconstrainedVbr = 2 -> uint
-const SharpMediaFoundationInterop.Codecs.FlacEncoder.FLAC_BLOCK_SIZE = 4096 -> uint
-const SharpMediaFoundationInterop.Codecs.H262Decoder.H262_RES_MULTIPLE = 16 -> uint
-const SharpMediaFoundationInterop.Codecs.H263Decoder.H263_RES_MULTIPLE = 16 -> uint
-const SharpMediaFoundationInterop.Codecs.H264Decoder.H264_RES_MULTIPLE = 16 -> uint
-const SharpMediaFoundationInterop.Codecs.H264Encoder.H264_RES_MULTIPLE = 16 -> uint
-const SharpMediaFoundationInterop.Codecs.H265Decoder.H265_RES_MULTIPLE = 8 -> uint
-const SharpMediaFoundationInterop.Codecs.H265Encoder.H265_RES_MULTIPLE = 8 -> uint
-const SharpMediaFoundationInterop.Codecs.MjpegDecoder.MJPEG_RES_MULTIPLE = 1 -> uint
-const SharpMediaFoundationInterop.Codecs.Mpeg4Decoder.MPEG4_RES_MULTIPLE = 16 -> uint
 const SharpMediaFoundationInterop.Codecs.VideoColor.TableSize = 65 -> int
-const SharpMediaFoundationInterop.Codecs.VP9Decoder.VP9_RES_MULTIPLE = 2 -> uint
-const SharpMediaFoundationInterop.Codecs.VP9Encoder.VP9_RES_MULTIPLE = 2 -> uint
-const SharpMediaFoundationInterop.Input.DeviceCapture.MF_SOURCE_READER_FIRST_VIDEO_STREAM = 4294967292 -> uint
-const SharpMediaFoundationInterop.Input.WaveIn.MMSYSERR_NOERROR = 0 -> uint
-const SharpMediaFoundationInterop.Input.WaveIn.MM_WIM_DATA = 960 -> int
-const SharpMediaFoundationInterop.Input.WaveIn.WAVE_MAPPER = 4294967295 -> uint
-const SharpMediaFoundationInterop.Output.WaveOut.MMSYSERR_NOERROR = 0 -> uint
-const SharpMediaFoundationInterop.Output.WaveOut.MM_WOM_DONE = 957 -> int
-const SharpMediaFoundationInterop.Output.WaveOut.WAVE_MAPPER = 4294967295 -> uint
 const SharpMediaFoundationInterop.Utils.MediaUtils.TicksPerSecond = 10000000 -> long
-override SharpMediaFoundationInterop.Codecs.AACDecoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AACDecoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AACEncoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AACEncoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AlacDecoder.DefaultOutputSize.get -> uint
-override SharpMediaFoundationInterop.Codecs.AlacDecoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AlacDecoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AlacEncoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AlacEncoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AV1Decoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AV1Decoder.MinimumOutputSize.get -> uint
-override SharpMediaFoundationInterop.Codecs.AV1Decoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AV1Encoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.AV1Encoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.ColorConverter.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.ColorConverter.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.FlacDecoder.DefaultOutputSize.get -> uint
-override SharpMediaFoundationInterop.Codecs.FlacDecoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.FlacDecoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.FlacEncoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.FlacEncoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.FlacEncoder.ProcessOutput(ref byte[] buffer, out uint length) -> bool
-override SharpMediaFoundationInterop.Codecs.H262Decoder.EndDrain() -> void
-override SharpMediaFoundationInterop.Codecs.H262Decoder.Flush() -> void
-override SharpMediaFoundationInterop.Codecs.H262Decoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H262Decoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H263Decoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H263Decoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H264Decoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H264Decoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H264Decoder.ProcessInput(System.ReadOnlySpan<byte> data, long timestamp) -> bool
-override SharpMediaFoundationInterop.Codecs.H264Encoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H264Encoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H265Decoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H265Decoder.MinimumOutputSize.get -> uint
-override SharpMediaFoundationInterop.Codecs.H265Decoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H265Decoder.ProcessInput(System.ReadOnlySpan<byte> data, long timestamp) -> bool
-override SharpMediaFoundationInterop.Codecs.H265Encoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.H265Encoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.MediaFoundationAudioDecoder.Flush() -> void
-override SharpMediaFoundationInterop.Codecs.MediaFoundationAudioDecoder.Initialize() -> void
-override SharpMediaFoundationInterop.Codecs.MediaFoundationAudioDecoder.ProcessOutput(ref byte[] buffer, out uint length) -> bool
-override SharpMediaFoundationInterop.Codecs.MediaFoundationAudioEncoder.Initialize() -> void
-override SharpMediaFoundationInterop.Codecs.MediaFoundationEncoder.Initialize() -> void
-override SharpMediaFoundationInterop.Codecs.MjpegDecoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.MjpegDecoder.MinimumOutputSize.get -> uint
-override SharpMediaFoundationInterop.Codecs.MjpegDecoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.Mp2Decoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.Mp2Decoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.Mp3Decoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.Mp3Decoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.Mp3Encoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.Mp3Encoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.Mpeg4Decoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.Mpeg4Decoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.Mpeg4Decoder.ProcessInput(System.ReadOnlySpan<byte> data, long timestamp) -> bool
-override SharpMediaFoundationInterop.Codecs.OpusDecoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.OpusDecoder.OutputFormat.get -> System.Guid
 override SharpMediaFoundationInterop.Codecs.VideoOrientation.Equals(object obj) -> bool
 override SharpMediaFoundationInterop.Codecs.VideoOrientation.GetHashCode() -> int
 override SharpMediaFoundationInterop.Codecs.VideoOrientation.ToString() -> string
-override SharpMediaFoundationInterop.Codecs.VideoTransformBase.OnOutputSizeChanged(uint size) -> void
-override SharpMediaFoundationInterop.Codecs.VP9Decoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.VP9Decoder.OutputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.VP9Encoder.InputFormat.get -> System.Guid
-override SharpMediaFoundationInterop.Codecs.VP9Encoder.OutputFormat.get -> System.Guid
 override SharpMediaFoundationInterop.MediaDevice.ToString() -> string
-SharpMediaFoundationInterop.Codecs.AACDecoder
-SharpMediaFoundationInterop.Codecs.AACDecoder.AACDecoder(uint channels, uint sampleRate, byte[] userData, int channelConfiguration) -> void
-SharpMediaFoundationInterop.Codecs.AACDecoder.ChannelConfiguration.get -> int
-SharpMediaFoundationInterop.Codecs.AACDecoder.ChannelConfiguration.set -> void
-SharpMediaFoundationInterop.Codecs.AACDecoder.UserData.get -> byte[]
-SharpMediaFoundationInterop.Codecs.AACEncoder
-SharpMediaFoundationInterop.Codecs.AACEncoder.AACEncoder(uint channels, uint sampleRate) -> void
-SharpMediaFoundationInterop.Codecs.AACEncoder.UserData.get -> byte[]
-SharpMediaFoundationInterop.Codecs.AlacDecoder
-SharpMediaFoundationInterop.Codecs.AlacDecoder.AlacDecoder(uint channels, uint sampleRate, uint bitsPerSample, byte[] magicCookie) -> void
-SharpMediaFoundationInterop.Codecs.AlacDecoder.FrameLength.get -> uint
-SharpMediaFoundationInterop.Codecs.AlacDecoder.MagicCookie.get -> byte[]
-SharpMediaFoundationInterop.Codecs.AlacEncoder
-SharpMediaFoundationInterop.Codecs.AlacEncoder.AlacEncoder(uint channels, uint sampleRate, uint bitsPerSample = 16) -> void
-SharpMediaFoundationInterop.Codecs.AlacEncoder.MagicCookie.get -> byte[]
 SharpMediaFoundationInterop.Codecs.AudioCodec
 SharpMediaFoundationInterop.Codecs.AudioCodec.AAC = 0 -> SharpMediaFoundationInterop.Codecs.AudioCodec
 SharpMediaFoundationInterop.Codecs.AudioCodec.Alac = 5 -> SharpMediaFoundationInterop.Codecs.AudioCodec
@@ -142,27 +37,6 @@ SharpMediaFoundationInterop.Codecs.AudioEncoderOptions.Channels.get -> uint
 SharpMediaFoundationInterop.Codecs.AudioEncoderOptions.Channels.set -> void
 SharpMediaFoundationInterop.Codecs.AudioEncoderOptions.SampleRate.get -> uint
 SharpMediaFoundationInterop.Codecs.AudioEncoderOptions.SampleRate.set -> void
-SharpMediaFoundationInterop.Codecs.AudioTransformBase
-SharpMediaFoundationInterop.Codecs.AudioTransformBase.AudioTransformBase(long sampleDuration, uint channels, uint sampleRate, uint bitsPerSample) -> void
-SharpMediaFoundationInterop.Codecs.AudioTransformBase.BitsPerSample.get -> uint
-SharpMediaFoundationInterop.Codecs.AudioTransformBase.Channels.get -> uint
-SharpMediaFoundationInterop.Codecs.AudioTransformBase.Dispose() -> void
-SharpMediaFoundationInterop.Codecs.AudioTransformBase.Initialize() -> void
-SharpMediaFoundationInterop.Codecs.AudioTransformBase.OutputSize.get -> uint
-SharpMediaFoundationInterop.Codecs.AudioTransformBase.ProcessInput(byte[] data, long timestamp) -> bool
-SharpMediaFoundationInterop.Codecs.AudioTransformBase.SampleRate.get -> uint
-SharpMediaFoundationInterop.Codecs.AudioTransformBase._sampleDuration -> long
-SharpMediaFoundationInterop.Codecs.AV1Decoder
-SharpMediaFoundationInterop.Codecs.AV1Decoder.AV1Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false, SharpMediaFoundationInterop.Codecs.VideoFrameFormat format = SharpMediaFoundationInterop.Codecs.VideoFrameFormat.NV12) -> void
-SharpMediaFoundationInterop.Codecs.AV1Encoder
-SharpMediaFoundationInterop.Codecs.AV1Encoder.AV1Encoder(uint width, uint height, uint fpsNom, uint fpsDenom, uint avgBitrate = 8000000) -> void
-SharpMediaFoundationInterop.Codecs.AV1Encoder.AvgBitrate.get -> uint
-SharpMediaFoundationInterop.Codecs.CodecApiExtensions
-SharpMediaFoundationInterop.Codecs.CodecApiProperties
-SharpMediaFoundationInterop.Codecs.CodecApiProperties.RateControlModes
-SharpMediaFoundationInterop.Codecs.ColorConverter
-SharpMediaFoundationInterop.Codecs.ColorConverter.ColorConverter(System.Guid inputFormat, System.Guid outputFormat, SharpMediaFoundationInterop.Codecs.ColorConverterOptions options) -> void
-SharpMediaFoundationInterop.Codecs.ColorConverter.ColorConverter(System.Guid inputFormat, System.Guid outputFormat, uint width, uint height) -> void
 SharpMediaFoundationInterop.Codecs.ColorConverterOptions
 SharpMediaFoundationInterop.Codecs.ColorConverterOptions.ColorConverterOptions() -> void
 SharpMediaFoundationInterop.Codecs.ColorConverterOptions.FullRange.get -> bool
@@ -183,13 +57,6 @@ SharpMediaFoundationInterop.Codecs.ColorMatrix.Default = 0 -> SharpMediaFoundati
 SharpMediaFoundationInterop.Codecs.DecodedFrame
 SharpMediaFoundationInterop.Codecs.DecodedFrame.CopyTo(byte[] buffer, out uint length) -> bool
 SharpMediaFoundationInterop.Codecs.DecodedFrame.Dispose() -> void
-SharpMediaFoundationInterop.Codecs.FlacDecoder
-SharpMediaFoundationInterop.Codecs.FlacDecoder.FlacDecoder(uint channels, uint sampleRate, uint bitsPerSample, byte[] metadataBlocks, uint maxBlockSize) -> void
-SharpMediaFoundationInterop.Codecs.FlacDecoder.MaxBlockSize.get -> uint
-SharpMediaFoundationInterop.Codecs.FlacDecoder.MetadataBlocks.get -> byte[]
-SharpMediaFoundationInterop.Codecs.FlacEncoder
-SharpMediaFoundationInterop.Codecs.FlacEncoder.FlacEncoder(uint channels, uint sampleRate, uint bitsPerSample = 16) -> void
-SharpMediaFoundationInterop.Codecs.FlacEncoder.MetadataBlocks.get -> byte[]
 SharpMediaFoundationInterop.Codecs.FramePlacement
 SharpMediaFoundationInterop.Codecs.FramePlacement.FramePlacement() -> void
 SharpMediaFoundationInterop.Codecs.FramePlacement.FramePlacement(int left, int top, int pictureWidth, int pictureHeight, SharpMediaFoundationInterop.Codecs.VideoOrientation orientation = default(SharpMediaFoundationInterop.Codecs.VideoOrientation), int targetX = 0, int targetY = 0) -> void
@@ -200,32 +67,10 @@ SharpMediaFoundationInterop.Codecs.FramePlacement.PictureWidth.get -> int
 SharpMediaFoundationInterop.Codecs.FramePlacement.TargetX.get -> int
 SharpMediaFoundationInterop.Codecs.FramePlacement.TargetY.get -> int
 SharpMediaFoundationInterop.Codecs.FramePlacement.Top.get -> int
-SharpMediaFoundationInterop.Codecs.H262Decoder
-SharpMediaFoundationInterop.Codecs.H262Decoder.H262Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false) -> void
-SharpMediaFoundationInterop.Codecs.H263Decoder
-SharpMediaFoundationInterop.Codecs.H263Decoder.H263Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false) -> void
-SharpMediaFoundationInterop.Codecs.H264Decoder
-SharpMediaFoundationInterop.Codecs.H264Decoder.H264Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false) -> void
-SharpMediaFoundationInterop.Codecs.H264Encoder
-SharpMediaFoundationInterop.Codecs.H264Encoder.AvgBitrate.get -> uint
-SharpMediaFoundationInterop.Codecs.H264Encoder.H264Encoder(uint width, uint height, uint fpsNom, uint fpsDenom, uint avgBitrate = 8000000) -> void
-SharpMediaFoundationInterop.Codecs.H265Decoder
-SharpMediaFoundationInterop.Codecs.H265Decoder.H265Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false, SharpMediaFoundationInterop.Codecs.VideoFrameFormat format = SharpMediaFoundationInterop.Codecs.VideoFrameFormat.NV12) -> void
-SharpMediaFoundationInterop.Codecs.H265Encoder
-SharpMediaFoundationInterop.Codecs.H265Encoder.AvgBitrate.get -> uint
-SharpMediaFoundationInterop.Codecs.H265Encoder.H265Encoder(uint width, uint height, uint fpsNom, uint fpsDenom, uint avgBitrate = 8000000) -> void
 SharpMediaFoundationInterop.Codecs.IAudioDescriptor
 SharpMediaFoundationInterop.Codecs.IAudioDescriptor.BitsPerSample.get -> uint
 SharpMediaFoundationInterop.Codecs.IAudioDescriptor.Channels.get -> uint
 SharpMediaFoundationInterop.Codecs.IAudioDescriptor.SampleRate.get -> uint
-SharpMediaFoundationInterop.Codecs.ICodecApi
-SharpMediaFoundationInterop.Codecs.ICodecApi.GetDefaultValue(ref System.Guid api, out object value) -> int
-SharpMediaFoundationInterop.Codecs.ICodecApi.GetParameterRange(ref System.Guid api, out object min, out object max, out object steppingDelta) -> int
-SharpMediaFoundationInterop.Codecs.ICodecApi.GetParameterValues(ref System.Guid api, out nint values, out int count) -> int
-SharpMediaFoundationInterop.Codecs.ICodecApi.GetValue(ref System.Guid api, out object value) -> int
-SharpMediaFoundationInterop.Codecs.ICodecApi.IsModifiable(ref System.Guid api) -> int
-SharpMediaFoundationInterop.Codecs.ICodecApi.IsSupported(ref System.Guid api) -> int
-SharpMediaFoundationInterop.Codecs.ICodecApi.SetValue(ref System.Guid api, ref object value) -> int
 SharpMediaFoundationInterop.Codecs.IGpuVideoTransform
 SharpMediaFoundationInterop.Codecs.IGpuVideoTransform.GpuDevice.get -> nint
 SharpMediaFoundationInterop.Codecs.IGpuVideoTransform.GpuDevice.set -> void
@@ -281,72 +126,6 @@ SharpMediaFoundationInterop.Codecs.ManagedColorConverter.ProcessOutput(ref byte[
 SharpMediaFoundationInterop.Codecs.ManagedColorConverter.Width.get -> uint
 SharpMediaFoundationInterop.Codecs.MediaCodecs
 SharpMediaFoundationInterop.Codecs.MediaFormats
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.BeginDrain() -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.BitsPerSample.get -> uint
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.Channels.get -> uint
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.Codec.get -> SharpMediaFoundationInterop.Codecs.AudioCodec
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.Dispose() -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.Drain() -> bool
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.EndDrain() -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.InputFormat.get -> System.Guid
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.MediaFoundationAudioCodec(SharpMediaFoundationInterop.Codecs.AudioCodec codec, SharpMediaFoundationInterop.Codecs.AudioTransformBase transform) -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.OutputFormat.get -> System.Guid
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.OutputSize.get -> uint
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.ProcessInput(byte[] data, long timestamp) -> bool
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.ProcessInput(System.ReadOnlySpan<byte> data, long timestamp) -> bool
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.SampleRate.get -> uint
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.Transform.get -> SharpMediaFoundationInterop.Codecs.AudioTransformBase
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioDecoder
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioDecoder.MediaFoundationAudioDecoder(SharpMediaFoundationInterop.Codecs.AudioCodec codec, SharpMediaFoundationInterop.Codecs.AudioDecoderOptions options) -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioEncoder
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioEncoder.Config.get -> byte[]
-SharpMediaFoundationInterop.Codecs.MediaFoundationAudioEncoder.MediaFoundationAudioEncoder(SharpMediaFoundationInterop.Codecs.AudioCodec codec, SharpMediaFoundationInterop.Codecs.AudioEncoderOptions options) -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationDecoder
-SharpMediaFoundationInterop.Codecs.MediaFoundationDecoder.MediaFoundationDecoder(SharpMediaFoundationInterop.Codecs.VideoCodec codec, SharpMediaFoundationInterop.Codecs.VideoDecoderOptions options) -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationEncoder
-SharpMediaFoundationInterop.Codecs.MediaFoundationEncoder.MediaFoundationEncoder(SharpMediaFoundationInterop.Codecs.VideoCodec codec, SharpMediaFoundationInterop.Codecs.VideoEncoderOptions options) -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationEncoder.UnappliedSettings.get -> System.Collections.Generic.IReadOnlyList<string>
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.BeginDrain() -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.Codec.get -> SharpMediaFoundationInterop.Codecs.VideoCodec
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.Dispose() -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.Drain() -> bool
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.EndDrain() -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.Flush() -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.GpuDevice.get -> nint
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.GpuDevice.set -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.Height.get -> uint
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.InputFormat.get -> System.Guid
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.MediaFoundationVideoCodec(SharpMediaFoundationInterop.Codecs.VideoCodec codec, SharpMediaFoundationInterop.Codecs.VideoTransformBase transform) -> void
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.OriginalHeight.get -> uint
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.OriginalWidth.get -> uint
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.OutputFormat.get -> System.Guid
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.OutputSize.get -> uint
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.ProcessInput(byte[] data, long timestamp) -> bool
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.ProcessInput(System.ReadOnlySpan<byte> data, long timestamp) -> bool
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.ProvidesSamples.get -> bool
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.Transform.get -> SharpMediaFoundationInterop.Codecs.VideoTransformBase
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.UsesDevice.get -> bool
-SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.Width.get -> uint
-SharpMediaFoundationInterop.Codecs.MediaTransformBase
-SharpMediaFoundationInterop.Codecs.MediaTransformBase.MediaTransformBase() -> void
-SharpMediaFoundationInterop.Codecs.MjpegDecoder
-SharpMediaFoundationInterop.Codecs.MjpegDecoder.MjpegDecoder(uint width, uint height, uint fpsNom, uint fpsDenom, SharpMediaFoundationInterop.Codecs.VideoFrameFormat format = SharpMediaFoundationInterop.Codecs.VideoFrameFormat.NV12) -> void
-SharpMediaFoundationInterop.Codecs.Mp2Decoder
-SharpMediaFoundationInterop.Codecs.Mp2Decoder.Mp2Decoder(uint channels, uint sampleRate) -> void
-SharpMediaFoundationInterop.Codecs.Mp3Decoder
-SharpMediaFoundationInterop.Codecs.Mp3Decoder.Mp3Decoder(uint channels, uint sampleRate) -> void
-SharpMediaFoundationInterop.Codecs.Mp3Encoder
-SharpMediaFoundationInterop.Codecs.Mp3Encoder.AvgBitrate.get -> uint
-SharpMediaFoundationInterop.Codecs.Mp3Encoder.Bitrate.get -> uint
-SharpMediaFoundationInterop.Codecs.Mp3Encoder.Mp3Encoder(uint channels, uint sampleRate, uint bitrate = 192000) -> void
-SharpMediaFoundationInterop.Codecs.Mpeg4Decoder
-SharpMediaFoundationInterop.Codecs.Mpeg4Decoder.Mpeg4Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false) -> void
-SharpMediaFoundationInterop.Codecs.Mpeg4Decoder.SkipBVops.get -> bool
-SharpMediaFoundationInterop.Codecs.Mpeg4Decoder.SkipBVops.set -> void
-SharpMediaFoundationInterop.Codecs.OpusDecoder
-SharpMediaFoundationInterop.Codecs.OpusDecoder.OpusDecoder(long sampleDuration = 960, uint channels = 2, uint sampleRate = 48000, uint bitsPerSample = 32) -> void
 SharpMediaFoundationInterop.Codecs.OpusMultistreamDecoder
 SharpMediaFoundationInterop.Codecs.OpusMultistreamDecoder.BeginDrain() -> void
 SharpMediaFoundationInterop.Codecs.OpusMultistreamDecoder.BitsPerSample.get -> uint
@@ -511,56 +290,9 @@ SharpMediaFoundationInterop.Codecs.VideoOrientation.SwapsAxes.get -> bool
 SharpMediaFoundationInterop.Codecs.VideoOrientation.Then(SharpMediaFoundationInterop.Codecs.VideoOrientation next) -> SharpMediaFoundationInterop.Codecs.VideoOrientation
 SharpMediaFoundationInterop.Codecs.VideoOrientation.VideoOrientation() -> void
 SharpMediaFoundationInterop.Codecs.VideoOrientation.VideoOrientation(int a, int b, int c, int d) -> void
-SharpMediaFoundationInterop.Codecs.VideoTransformBase
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.CodecApi.get -> SharpMediaFoundationInterop.Codecs.ICodecApi
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.CodecProperties.get -> System.Collections.Generic.IDictionary<System.Guid, object>
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.CodecPropertyResults.get -> System.Collections.Generic.IList<(System.Guid Property, bool Supported, bool Applied)>
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.Dispose() -> void
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.FpsDenom.get -> uint
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.FpsNom.get -> uint
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.GpuDevice.get -> nint
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.GpuDevice.set -> void
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.HasFrameRate.get -> bool
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.Height.get -> uint
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.Initialize() -> void
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.OriginalHeight.get -> uint
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.OriginalWidth.get -> uint
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.OutputSize.get -> uint
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.ProcessInput(byte[] data, long timestamp) -> bool
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.ProcessInput(System.ReadOnlySpan<byte> prefix, System.ReadOnlySpan<byte> data, long timestamp) -> bool
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.ProcessOutput(ref byte[] buffer, out uint length) -> bool
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.ProvidesSamples.get -> bool
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.UsesDevice.get -> bool
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.VideoTransformBase(uint resMultiple, uint width, uint height, uint fpsNom, uint fpsDenom) -> void
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.VideoTransformBase(uint width, uint height) -> void
-SharpMediaFoundationInterop.Codecs.VideoTransformBase.Width.get -> uint
-SharpMediaFoundationInterop.Codecs.VideoTransformBase._sampleDuration -> long
-SharpMediaFoundationInterop.Codecs.VP9Decoder
-SharpMediaFoundationInterop.Codecs.VP9Decoder.VP9Decoder(uint width, uint height, uint fpsNom, uint fpsDenom, bool isLowLatency = false) -> void
-SharpMediaFoundationInterop.Codecs.VP9Encoder
-SharpMediaFoundationInterop.Codecs.VP9Encoder.AvgBitrate.get -> uint
-SharpMediaFoundationInterop.Codecs.VP9Encoder.VP9Encoder(uint width, uint height, uint fpsNom, uint fpsDenom, uint avgBitrate = 8000000) -> void
 SharpMediaFoundationInterop.Input.AudioInputEventArgs
 SharpMediaFoundationInterop.Input.AudioInputEventArgs.AudioInputEventArgs(byte[] data) -> void
 SharpMediaFoundationInterop.Input.AudioInputEventArgs.Data.get -> byte[]
-SharpMediaFoundationInterop.Input.CaptureDevice
-SharpMediaFoundationInterop.Input.CaptureDevice.CaptureDevice(string name, string id) -> void
-SharpMediaFoundationInterop.Input.CaptureDevice.ID.get -> string
-SharpMediaFoundationInterop.Input.CaptureDevice.Name.get -> string
-SharpMediaFoundationInterop.Input.DeviceCapture
-SharpMediaFoundationInterop.Input.DeviceCapture.DeviceCapture() -> void
-SharpMediaFoundationInterop.Input.DeviceCapture.DeviceCapture(string symbolicLink) -> void
-SharpMediaFoundationInterop.Input.DeviceCapture.Dispose() -> void
-SharpMediaFoundationInterop.Input.DeviceCapture.Height.get -> uint
-SharpMediaFoundationInterop.Input.DeviceCapture.Initialize() -> void
-SharpMediaFoundationInterop.Input.DeviceCapture.Initialize(SharpMediaFoundationInterop.Input.CaptureDevice device) -> void
-SharpMediaFoundationInterop.Input.DeviceCapture.Initialize(string symbolicLink) -> void
-SharpMediaFoundationInterop.Input.DeviceCapture.OriginalHeight.get -> uint
-SharpMediaFoundationInterop.Input.DeviceCapture.OriginalWidth.get -> uint
-SharpMediaFoundationInterop.Input.DeviceCapture.OutputFormat.get -> System.Guid
-SharpMediaFoundationInterop.Input.DeviceCapture.OutputSize.get -> uint
-SharpMediaFoundationInterop.Input.DeviceCapture.ReadSample(byte[] sampleBytes, out long timestamp) -> bool
-SharpMediaFoundationInterop.Input.DeviceCapture.Width.get -> uint
 SharpMediaFoundationInterop.Input.IAudioInput
 SharpMediaFoundationInterop.Input.IAudioInput.FrameReceived -> System.EventHandler<SharpMediaFoundationInterop.Input.AudioInputEventArgs>
 SharpMediaFoundationInterop.Input.IAudioInput.Initialize() -> void
@@ -570,62 +302,6 @@ SharpMediaFoundationInterop.Input.IMediaSource
 SharpMediaFoundationInterop.Input.IMediaSource.Initialize() -> void
 SharpMediaFoundationInterop.Input.IMediaSource.ReadSample(byte[] sampleBytes, out long timestamp) -> bool
 SharpMediaFoundationInterop.Input.IMediaVideoSource
-SharpMediaFoundationInterop.Input.ScreenCapture
-SharpMediaFoundationInterop.Input.ScreenCapture.BottomUp.get -> bool
-SharpMediaFoundationInterop.Input.ScreenCapture.BottomUp.set -> void
-SharpMediaFoundationInterop.Input.ScreenCapture.Dispose() -> void
-SharpMediaFoundationInterop.Input.ScreenCapture.Height.get -> uint
-SharpMediaFoundationInterop.Input.ScreenCapture.Initialize() -> void
-SharpMediaFoundationInterop.Input.ScreenCapture.Initialize(SharpMediaFoundationInterop.Input.ScreenDevice device) -> void
-SharpMediaFoundationInterop.Input.ScreenCapture.Initialize(uint adapterID, uint outputID) -> void
-SharpMediaFoundationInterop.Input.ScreenCapture.OriginalHeight.get -> uint
-SharpMediaFoundationInterop.Input.ScreenCapture.OriginalWidth.get -> uint
-SharpMediaFoundationInterop.Input.ScreenCapture.OutputFormat.get -> System.Guid
-SharpMediaFoundationInterop.Input.ScreenCapture.OutputSize.get -> uint
-SharpMediaFoundationInterop.Input.ScreenCapture.ReadSample(byte[] buffer, bool bottomUp, out long timestamp) -> bool
-SharpMediaFoundationInterop.Input.ScreenCapture.ReadSample(byte[] buffer, out long timestamp) -> bool
-SharpMediaFoundationInterop.Input.ScreenCapture.ReadTimeoutInMilliseconds.get -> uint
-SharpMediaFoundationInterop.Input.ScreenCapture.ReadTimeoutInMilliseconds.set -> void
-SharpMediaFoundationInterop.Input.ScreenCapture.ScreenCapture() -> void
-SharpMediaFoundationInterop.Input.ScreenCapture.ScreenCapture(uint adapterID, uint outputID) -> void
-SharpMediaFoundationInterop.Input.ScreenCapture.Width.get -> uint
-SharpMediaFoundationInterop.Input.ScreenCapture.~ScreenCapture() -> void
-SharpMediaFoundationInterop.Input.ScreenDevice
-SharpMediaFoundationInterop.Input.ScreenDevice.AdapterID.get -> uint
-SharpMediaFoundationInterop.Input.ScreenDevice.DeviceName.get -> string
-SharpMediaFoundationInterop.Input.ScreenDevice.Height.get -> int
-SharpMediaFoundationInterop.Input.ScreenDevice.OutputID.get -> uint
-SharpMediaFoundationInterop.Input.ScreenDevice.Rotation.get -> int
-SharpMediaFoundationInterop.Input.ScreenDevice.ScreenDevice(uint adapterID, uint outputID, int x, int y, int width, int height, int rotation, string deviceName) -> void
-SharpMediaFoundationInterop.Input.ScreenDevice.Width.get -> int
-SharpMediaFoundationInterop.Input.ScreenDevice.X.get -> int
-SharpMediaFoundationInterop.Input.ScreenDevice.Y.get -> int
-SharpMediaFoundationInterop.Input.WaveIn
-SharpMediaFoundationInterop.Input.WaveIn.BitsPerSample.get -> uint
-SharpMediaFoundationInterop.Input.WaveIn.Channels.get -> uint
-SharpMediaFoundationInterop.Input.WaveIn.Close() -> void
-SharpMediaFoundationInterop.Input.WaveIn.DeviceID.get -> uint
-SharpMediaFoundationInterop.Input.WaveIn.Dispose() -> void
-SharpMediaFoundationInterop.Input.WaveIn.FrameReceived -> System.EventHandler<SharpMediaFoundationInterop.Input.WaveInEventArgs>
-SharpMediaFoundationInterop.Input.WaveIn.Initialize() -> void
-SharpMediaFoundationInterop.Input.WaveIn.Initialize(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample) -> void
-SharpMediaFoundationInterop.Input.WaveIn.Initialize(uint samplesPerSecond, uint channels, uint bitsPerSample) -> void
-SharpMediaFoundationInterop.Input.WaveIn.Reset() -> void
-SharpMediaFoundationInterop.Input.WaveIn.SampleRate.get -> uint
-SharpMediaFoundationInterop.Input.WaveIn.WaveIn() -> void
-SharpMediaFoundationInterop.Input.WaveIn.WaveIn(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample) -> void
-SharpMediaFoundationInterop.Input.WaveIn.~WaveIn() -> void
-SharpMediaFoundationInterop.Input.WaveInDevice
-SharpMediaFoundationInterop.Input.WaveInDevice.Channels.get -> ushort
-SharpMediaFoundationInterop.Input.WaveInDevice.DeviceID.get -> uint
-SharpMediaFoundationInterop.Input.WaveInDevice.DriverVersion.get -> uint
-SharpMediaFoundationInterop.Input.WaveInDevice.Formats.get -> uint
-SharpMediaFoundationInterop.Input.WaveInDevice.Mid.get -> ushort
-SharpMediaFoundationInterop.Input.WaveInDevice.Name.get -> string
-SharpMediaFoundationInterop.Input.WaveInDevice.Pid.get -> ushort
-SharpMediaFoundationInterop.Input.WaveInDevice.WaveInDevice(uint deviceID, uint formats, string name, ushort channels, uint driverVersion, ushort mid, ushort pid) -> void
-SharpMediaFoundationInterop.Input.WaveInEventArgs
-SharpMediaFoundationInterop.Input.WaveInEventArgs.WaveInEventArgs(byte[] data) -> void
 SharpMediaFoundationInterop.Log
 SharpMediaFoundationInterop.MediaDevice
 SharpMediaFoundationInterop.MediaDevice.Id.get -> string
@@ -652,55 +328,9 @@ SharpMediaFoundationInterop.Output.IAudioOutput.QueuedFrames.get -> int
 SharpMediaFoundationInterop.Output.IAudioOutput.Reset() -> void
 SharpMediaFoundationInterop.Output.IAudioOutput.Resume() -> void
 SharpMediaFoundationInterop.Output.SpeakerLayout
-SharpMediaFoundationInterop.Output.WaveOut
-SharpMediaFoundationInterop.Output.WaveOut.BitsPerSample.get -> uint
-SharpMediaFoundationInterop.Output.WaveOut.ChannelMaskOfChannels.get -> uint
-SharpMediaFoundationInterop.Output.WaveOut.Channels.get -> uint
-SharpMediaFoundationInterop.Output.WaveOut.Close() -> void
-SharpMediaFoundationInterop.Output.WaveOut.DeviceID.get -> uint
-SharpMediaFoundationInterop.Output.WaveOut.Dispose() -> void
-SharpMediaFoundationInterop.Output.WaveOut.Enqueue(byte[] data, uint length) -> void
-SharpMediaFoundationInterop.Output.WaveOut.GetPosition() -> uint
-SharpMediaFoundationInterop.Output.WaveOut.Initialize() -> void
-SharpMediaFoundationInterop.Output.WaveOut.Initialize(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample) -> void
-SharpMediaFoundationInterop.Output.WaveOut.Initialize(uint samplesPerSecond, uint channels, uint bitsPerSample) -> void
-SharpMediaFoundationInterop.Output.WaveOut.IsOpen.get -> bool
-SharpMediaFoundationInterop.Output.WaveOut.OnPlaybackCompleted -> System.EventHandler<System.EventArgs>
-SharpMediaFoundationInterop.Output.WaveOut.Pause() -> void
-SharpMediaFoundationInterop.Output.WaveOut.QueuedFrames.get -> int
-SharpMediaFoundationInterop.Output.WaveOut.Reset() -> void
-SharpMediaFoundationInterop.Output.WaveOut.Resume() -> void
-SharpMediaFoundationInterop.Output.WaveOut.SampleRate.get -> uint
-SharpMediaFoundationInterop.Output.WaveOut.WaveOut() -> void
-SharpMediaFoundationInterop.Output.WaveOut.WaveOut(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample) -> void
-SharpMediaFoundationInterop.Output.WaveOut.WaveOut(uint deviceID, uint samplesPerSecond, uint channels, uint bitsPerSample, uint channelMask) -> void
-SharpMediaFoundationInterop.Output.WaveOut.~WaveOut() -> void
-SharpMediaFoundationInterop.Output.WaveOutDevice
-SharpMediaFoundationInterop.Output.WaveOutDevice.Channels.get -> ushort
-SharpMediaFoundationInterop.Output.WaveOutDevice.DeviceID.get -> uint
-SharpMediaFoundationInterop.Output.WaveOutDevice.DriverVersion.get -> uint
-SharpMediaFoundationInterop.Output.WaveOutDevice.Formats.get -> uint
-SharpMediaFoundationInterop.Output.WaveOutDevice.Mid.get -> ushort
-SharpMediaFoundationInterop.Output.WaveOutDevice.Name.get -> string
-SharpMediaFoundationInterop.Output.WaveOutDevice.Pid.get -> ushort
-SharpMediaFoundationInterop.Output.WaveOutDevice.WaveOutDevice(uint deviceID, uint formats, string name, ushort channels, uint driverVersion, ushort mid, ushort pid) -> void
 SharpMediaFoundationInterop.Utils.AnnexBUtils
 SharpMediaFoundationInterop.Utils.BitmapUtils
 SharpMediaFoundationInterop.Utils.MediaUtils
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.BPictureCount -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.DecoderWorkerThreads -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.EncodeFrameTypeQp -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.EncodeQp -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.GopSize -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.LtrBufferControl -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.MarkLtrFrame -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.MaxNumRefFrame -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.NumWorkerThreads -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.Quality -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.RateControlMode -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.TemporalLayerCount -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.CodecApiProperties.UseLtrFrame -> System.Guid
-static readonly SharpMediaFoundationInterop.Codecs.FlacDecoder.MF_MT_AUDIO_FLAC_METADATA -> System.Guid
 static readonly SharpMediaFoundationInterop.Codecs.MediaFormats.AAC -> System.Guid
 static readonly SharpMediaFoundationInterop.Codecs.MediaFormats.ALAC -> System.Guid
 static readonly SharpMediaFoundationInterop.Codecs.MediaFormats.ARGB32 -> System.Guid
@@ -725,12 +355,6 @@ static readonly SharpMediaFoundationInterop.Codecs.MediaFormats.UYVY -> System.G
 static readonly SharpMediaFoundationInterop.Codecs.MediaFormats.VP90 -> System.Guid
 static readonly SharpMediaFoundationInterop.Codecs.MediaFormats.YUY2 -> System.Guid
 static readonly SharpMediaFoundationInterop.Utils.AnnexBUtils.AnnexB -> byte[]
-static SharpMediaFoundationInterop.Codecs.AACDecoder.CreateUserData(byte[] audioSpecificConfig) -> byte[]
-static SharpMediaFoundationInterop.Codecs.CodecApiExtensions.IsPropertyModifiable(this SharpMediaFoundationInterop.Codecs.ICodecApi codec, System.Guid property) -> bool
-static SharpMediaFoundationInterop.Codecs.CodecApiExtensions.IsPropertySupported(this SharpMediaFoundationInterop.Codecs.ICodecApi codec, System.Guid property) -> bool
-static SharpMediaFoundationInterop.Codecs.CodecApiExtensions.TryGetProperty(this SharpMediaFoundationInterop.Codecs.ICodecApi codec, System.Guid property, out object value) -> bool
-static SharpMediaFoundationInterop.Codecs.CodecApiExtensions.TrySetProperty(this SharpMediaFoundationInterop.Codecs.ICodecApi codec, System.Guid property, object value) -> bool
-static SharpMediaFoundationInterop.Codecs.ColorConverter.Supports(System.Guid inputFormat, System.Guid outputFormat, SharpMediaFoundationInterop.Codecs.ColorConverterOptions options) -> bool
 static SharpMediaFoundationInterop.Codecs.FramePlacement.Whole(int width, int height, SharpMediaFoundationInterop.Codecs.VideoOrientation orientation = default(SharpMediaFoundationInterop.Codecs.VideoOrientation)) -> SharpMediaFoundationInterop.Codecs.FramePlacement
 static SharpMediaFoundationInterop.Codecs.ManagedColorConverter.Supports(System.Guid inputFormat, System.Guid outputFormat) -> bool
 static SharpMediaFoundationInterop.Codecs.MediaCodecs.CanConvert(System.Guid inputFormat, System.Guid outputFormat, SharpMediaFoundationInterop.Codecs.ColorConverterOptions options = null) -> bool
@@ -748,14 +372,6 @@ static SharpMediaFoundationInterop.Codecs.MediaFormats.Of(SharpMediaFoundationIn
 static SharpMediaFoundationInterop.Codecs.MediaFormats.Of(SharpMediaFoundationInterop.Codecs.ProResProfile profile) -> System.Guid
 static SharpMediaFoundationInterop.Codecs.MediaFormats.Of(SharpMediaFoundationInterop.Codecs.VideoCodec codec) -> System.Guid
 static SharpMediaFoundationInterop.Codecs.MediaFormats.ProResFourCC(SharpMediaFoundationInterop.Codecs.ProResProfile profile) -> string
-static SharpMediaFoundationInterop.Codecs.MediaFoundationAudioDecoder.Supports(SharpMediaFoundationInterop.Codecs.AudioCodec codec) -> bool
-static SharpMediaFoundationInterop.Codecs.MediaFoundationAudioEncoder.Supports(SharpMediaFoundationInterop.Codecs.AudioCodec codec) -> bool
-static SharpMediaFoundationInterop.Codecs.MediaFoundationDecoder.Alignment(SharpMediaFoundationInterop.Codecs.VideoCodec codec) -> uint
-static SharpMediaFoundationInterop.Codecs.MediaFoundationDecoder.SubtypeOf(SharpMediaFoundationInterop.Codecs.VideoFrameFormat format) -> System.Guid
-static SharpMediaFoundationInterop.Codecs.MediaFoundationDecoder.Supports(SharpMediaFoundationInterop.Codecs.VideoCodec codec) -> bool
-static SharpMediaFoundationInterop.Codecs.MediaFoundationEncoder.Supports(SharpMediaFoundationInterop.Codecs.VideoCodec codec) -> bool
-static SharpMediaFoundationInterop.Codecs.Mpeg4Decoder.IsBVop(System.ReadOnlySpan<byte> sample) -> bool
-static SharpMediaFoundationInterop.Codecs.OpusDecoder.ChannelMask(uint channels) -> uint
 static SharpMediaFoundationInterop.Codecs.OpusMultistreamDecoder.IsMultistream(SharpMediaFoundationInterop.Codecs.AudioDecoderOptions options) -> bool
 static SharpMediaFoundationInterop.Codecs.PcmDecoder.ExpandALaw(byte a) -> short
 static SharpMediaFoundationInterop.Codecs.PcmDecoder.ExpandMuLaw(byte u) -> short
@@ -772,9 +388,6 @@ static SharpMediaFoundationInterop.Codecs.VideoOrientation.Identity.get -> Sharp
 static SharpMediaFoundationInterop.Codecs.VideoOrientation.Of(int degrees, bool mirrored = false) -> SharpMediaFoundationInterop.Codecs.VideoOrientation
 static SharpMediaFoundationInterop.Codecs.VideoOrientation.operator !=(SharpMediaFoundationInterop.Codecs.VideoOrientation left, SharpMediaFoundationInterop.Codecs.VideoOrientation right) -> bool
 static SharpMediaFoundationInterop.Codecs.VideoOrientation.operator ==(SharpMediaFoundationInterop.Codecs.VideoOrientation left, SharpMediaFoundationInterop.Codecs.VideoOrientation right) -> bool
-static SharpMediaFoundationInterop.Input.DeviceCapture.Enumerate() -> SharpMediaFoundationInterop.Input.CaptureDevice[]
-static SharpMediaFoundationInterop.Input.ScreenCapture.Enumerate() -> SharpMediaFoundationInterop.Input.ScreenDevice[]
-static SharpMediaFoundationInterop.Input.WaveIn.Enumerate() -> SharpMediaFoundationInterop.Input.WaveInDevice[]
 static SharpMediaFoundationInterop.Log.Debug(string message, System.Exception ex = null) -> void
 static SharpMediaFoundationInterop.Log.DebugEnabled.get -> bool
 static SharpMediaFoundationInterop.Log.DebugEnabled.set -> void
@@ -809,10 +422,6 @@ static SharpMediaFoundationInterop.Output.AmbisonicRenderer.Binaural(uint channe
 static SharpMediaFoundationInterop.Output.AmbisonicRenderer.IsAmbisonic(uint channels, out int order, out bool headLocked) -> bool
 static SharpMediaFoundationInterop.Output.SpeakerLayout.ChannelMask(uint channels) -> uint
 static SharpMediaFoundationInterop.Output.SpeakerLayout.Directions(uint mask) -> (double Azimuth, double Elevation)?[]
-static SharpMediaFoundationInterop.Output.WaveOut.ChannelMask(uint channels) -> uint
-static SharpMediaFoundationInterop.Output.WaveOut.DefaultChannels() -> uint
-static SharpMediaFoundationInterop.Output.WaveOut.DefaultIsHeadphones() -> bool
-static SharpMediaFoundationInterop.Output.WaveOut.Enumerate() -> SharpMediaFoundationInterop.Output.WaveOutDevice[]
 static SharpMediaFoundationInterop.Utils.AnnexBUtils.HasStartCode(System.ReadOnlySpan<byte> nalu) -> bool
 static SharpMediaFoundationInterop.Utils.AnnexBUtils.ParseNalu(byte[] bytes, uint length) -> System.Collections.Generic.IEnumerable<byte[]>
 static SharpMediaFoundationInterop.Utils.AnnexBUtils.PrefixNalu(byte[] nalu) -> byte[]
@@ -821,38 +430,5 @@ static SharpMediaFoundationInterop.Utils.BitmapUtils.CopyBitmap(byte[] source, i
 static SharpMediaFoundationInterop.Utils.BitmapUtils.CopyBitmap(byte[] source, int sourceWidth, int sourceHeight, nint target, int targetWidth, int targetHeight, int bytesPerPixel = 3, bool flip = true) -> void
 static SharpMediaFoundationInterop.Utils.BitmapUtils.CopyBitmap(nint source, int sourceWidth, int sourceHeight, byte[] target, int targetWidth, int targetHeight, int bytesPerPixel = 3, bool flip = true) -> void
 static SharpMediaFoundationInterop.Utils.BitmapUtils.CopyNV12Bitmap(byte[] source, int sourceWidth, int sourceHeight, byte[] target, int targetWidth, int targetHeight, bool flip = false) -> void
-static SharpMediaFoundationInterop.Utils.MediaUtils.CalculateSampleDuration(uint fpsNom, uint fpsDenom) -> long
-static SharpMediaFoundationInterop.Utils.MediaUtils.EncodeAttributeValue(uint highValue, uint lowValue) -> ulong
 static SharpMediaFoundationInterop.Utils.MediaUtils.RoundToMultipleOf(uint value, uint multiple) -> uint
 static SharpMediaFoundationInterop.Utils.MediaUtils.ToTicks(long time, long clockRate) -> long
-virtual SharpMediaFoundationInterop.Codecs.AudioTransformBase.BeginDrain() -> void
-virtual SharpMediaFoundationInterop.Codecs.AudioTransformBase.DefaultOutputSize.get -> uint
-virtual SharpMediaFoundationInterop.Codecs.AudioTransformBase.Dispose(bool disposing) -> void
-virtual SharpMediaFoundationInterop.Codecs.AudioTransformBase.Drain() -> bool
-virtual SharpMediaFoundationInterop.Codecs.AudioTransformBase.EndDrain() -> void
-virtual SharpMediaFoundationInterop.Codecs.AudioTransformBase.Flush() -> void
-virtual SharpMediaFoundationInterop.Codecs.AudioTransformBase.ProcessInput(System.ReadOnlySpan<byte> data, long timestamp) -> bool
-virtual SharpMediaFoundationInterop.Codecs.AudioTransformBase.ProcessOutput(ref byte[] buffer, out uint length) -> bool
-virtual SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.Dispose(bool disposing) -> void
-virtual SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.Flush() -> void
-virtual SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.Initialize() -> void
-virtual SharpMediaFoundationInterop.Codecs.MediaFoundationAudioCodec.ProcessOutput(ref byte[] buffer, out uint length) -> bool
-virtual SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.Dispose(bool disposing) -> void
-virtual SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.Initialize() -> void
-virtual SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.ProcessOutput(out SharpMediaFoundationInterop.Codecs.DecodedFrame frame, out long timestamp) -> bool
-virtual SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.ProcessOutput(ref byte[] buffer, out uint length) -> bool
-virtual SharpMediaFoundationInterop.Codecs.MediaFoundationVideoCodec.ProcessOutput(ref byte[] buffer, out uint length, out long timestamp) -> bool
-virtual SharpMediaFoundationInterop.Codecs.MediaTransformBase.OnOutputSizeChanged(uint size) -> void
-virtual SharpMediaFoundationInterop.Codecs.VideoTransformBase.BeginDrain() -> void
-virtual SharpMediaFoundationInterop.Codecs.VideoTransformBase.Dispose(bool disposing) -> void
-virtual SharpMediaFoundationInterop.Codecs.VideoTransformBase.Drain() -> bool
-virtual SharpMediaFoundationInterop.Codecs.VideoTransformBase.EndDrain() -> void
-virtual SharpMediaFoundationInterop.Codecs.VideoTransformBase.Flush() -> void
-virtual SharpMediaFoundationInterop.Codecs.VideoTransformBase.MinimumOutputSize.get -> uint
-virtual SharpMediaFoundationInterop.Codecs.VideoTransformBase.ProcessInput(System.ReadOnlySpan<byte> data, long timestamp) -> bool
-virtual SharpMediaFoundationInterop.Codecs.VideoTransformBase.ProcessOutput(out SharpMediaFoundationInterop.Codecs.DecodedFrame frame, out long timestamp) -> bool
-virtual SharpMediaFoundationInterop.Codecs.VideoTransformBase.ProcessOutput(ref byte[] buffer, out uint length, out long timestamp) -> bool
-virtual SharpMediaFoundationInterop.Input.DeviceCapture.Dispose(bool disposing) -> void
-virtual SharpMediaFoundationInterop.Input.ScreenCapture.Dispose(bool disposing) -> void
-virtual SharpMediaFoundationInterop.Input.WaveIn.Dispose(bool disposing) -> void
-virtual SharpMediaFoundationInterop.Output.WaveOut.Dispose(bool disposing) -> void

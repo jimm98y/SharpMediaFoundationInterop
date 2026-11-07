@@ -13,7 +13,7 @@ using Windows.Win32.UI.Shell.PropertiesSystem;
 namespace SharpMediaFoundationInterop.Output
 {   
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class WaveOut : IAudioOutput
+    internal class WaveOut : IAudioOutput
     {
         const int TIME_MS = 0x0001;
         const int TIME_SAMPLES = 0x0002;

@@ -8,7 +8,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// for the <see cref="AudioEncoderOptions"/>.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public sealed class MediaFoundationAudioEncoder : MediaFoundationAudioCodec, IMediaAudioEncoder
+    internal sealed class MediaFoundationAudioEncoder : MediaFoundationAudioCodec, IMediaAudioEncoder
     {
         /// <summary>
         /// Of AAC, the bytes Media Foundation's user data holds before the AudioSpecificConfig: what is left of a

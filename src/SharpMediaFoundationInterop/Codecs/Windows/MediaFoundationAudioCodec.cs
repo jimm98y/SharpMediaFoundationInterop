@@ -8,7 +8,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// this hands everything on to. <see cref="Transform"/> reaches what is of the codec alone.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public abstract class MediaFoundationAudioCodec : IMediaAudioTransform
+    internal abstract class MediaFoundationAudioCodec : IMediaAudioTransform
     {
         private bool _disposedValue;
 

@@ -11,7 +11,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// frames, overriding ProcessOutput.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class MediaFoundationDecoder : MediaFoundationVideoCodec
+    internal class MediaFoundationDecoder : MediaFoundationVideoCodec
     {
         public MediaFoundationDecoder(VideoCodec codec, VideoDecoderOptions options)
             : base(codec, Create(codec, options ?? throw new ArgumentNullException(nameof(options))))

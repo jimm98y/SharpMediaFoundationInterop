@@ -11,7 +11,7 @@ using Windows.Win32.System.Com;
 namespace SharpMediaFoundationInterop.Input
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class CaptureDevice
+    internal class CaptureDevice
     {
         public string ID { get; private set; }
         public string Name { get; private set; }
@@ -24,7 +24,7 @@ namespace SharpMediaFoundationInterop.Input
     }
 
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class DeviceCapture : IMediaVideoSource
+    internal class DeviceCapture : IMediaVideoSource
     {
         public const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
 

@@ -9,7 +9,7 @@ using Windows.Win32.Media.MediaFoundation;
 namespace SharpMediaFoundationInterop.Codecs
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public abstract class VideoTransformBase : MediaTransformBase, IGpuVideoTransform
+    internal abstract class VideoTransformBase : MediaTransformBase, IGpuVideoTransform
     {
         protected long _sampleDuration = 1;
         private protected IMFTransform _transform;

@@ -8,7 +8,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// for the <see cref="AudioDecoderOptions"/>.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public sealed class MediaFoundationAudioDecoder : MediaFoundationAudioCodec
+    internal sealed class MediaFoundationAudioDecoder : MediaFoundationAudioCodec
     {
         private readonly uint _skipSamples;
 

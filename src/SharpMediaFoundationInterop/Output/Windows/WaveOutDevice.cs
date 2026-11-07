@@ -3,7 +3,7 @@
 namespace SharpMediaFoundationInterop.Output
 {
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class WaveOutDevice
+    internal class WaveOutDevice
     {
         public uint DeviceID { get; }
         public uint Formats { get; }

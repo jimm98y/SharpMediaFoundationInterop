@@ -13,7 +13,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// frame says again for itself.
     /// </summary>
     [SupportedOSPlatform("windows10.0.17763.0")]
-    public class AlacEncoder : AudioTransformBase
+    internal class AlacEncoder : AudioTransformBase
     {
         public const uint ALAC_FRAME_LENGTH = 4096;
 

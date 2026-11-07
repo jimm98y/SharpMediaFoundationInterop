@@ -3,6 +3,34 @@
 <Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SharpMediaFoundationInterop.Input.CaptureDevice</Target>
+    <Left>lib/net10.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net10.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SharpMediaFoundationInterop.Input.DeviceCapture</Target>
+    <Left>lib/net10.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net10.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SharpMediaFoundationInterop.Input.ScreenCapture</Target>
+    <Left>lib/net10.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net10.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SharpMediaFoundationInterop.Input.ScreenDevice</Target>
+    <Left>lib/net10.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net10.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:SharpMediaFoundationInterop.Transforms.AAC.AACDecoder</Target>
     <Left>lib/net10.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
     <Right>lib/net10.0/SharpMediaFoundationInterop.dll</Right>
@@ -5407,6 +5435,34 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SharpMediaFoundationInterop.Input.CaptureDevice</Target>
+    <Left>lib/net8.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net8.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SharpMediaFoundationInterop.Input.DeviceCapture</Target>
+    <Left>lib/net8.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net8.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SharpMediaFoundationInterop.Input.ScreenCapture</Target>
+    <Left>lib/net8.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net8.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:SharpMediaFoundationInterop.Input.ScreenDevice</Target>
+    <Left>lib/net8.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net8.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
     <Target>T:SharpMediaFoundationInterop.Transforms.AAC.AACDecoder</Target>
     <Left>lib/net8.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
     <Right>lib/net8.0/SharpMediaFoundationInterop.dll</Right>
@@ -10811,6 +10867,13 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SharpMediaFoundationInterop.Utils.MediaUtils.CalculateSampleDuration(System.UInt32,System.UInt32)</Target>
+    <Left>lib/net10.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net10.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:SharpMediaFoundationInterop.Utils.MediaUtils.Check(Windows.Win32.Foundation.HRESULT)</Target>
     <Left>lib/net10.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
     <Right>lib/net10.0/SharpMediaFoundationInterop.dll</Right>
@@ -10839,6 +10902,20 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SharpMediaFoundationInterop.Utils.MediaUtils.EncodeAttributeValue(System.UInt32,System.UInt32)</Target>
+    <Left>lib/net10.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net10.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SharpMediaFoundationInterop.Utils.MediaUtils.CalculateSampleDuration(System.UInt32,System.UInt32)</Target>
+    <Left>lib/net8.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
+    <Right>lib/net8.0/SharpMediaFoundationInterop.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:SharpMediaFoundationInterop.Utils.MediaUtils.Check(Windows.Win32.Foundation.HRESULT)</Target>
     <Left>lib/net8.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
     <Right>lib/net8.0/SharpMediaFoundationInterop.dll</Right>
@@ -10866,29 +10943,8 @@
     <IsBaselineSuppression>true</IsBaselineSuppression>
   </Suppression>
   <Suppression>
-    <DiagnosticId>CP0008</DiagnosticId>
-    <Target>T:SharpMediaFoundationInterop.Input.DeviceCapture</Target>
-    <Left>lib/net10.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
-    <Right>lib/net10.0/SharpMediaFoundationInterop.dll</Right>
-    <IsBaselineSuppression>true</IsBaselineSuppression>
-  </Suppression>
-  <Suppression>
-    <DiagnosticId>CP0008</DiagnosticId>
-    <Target>T:SharpMediaFoundationInterop.Input.ScreenCapture</Target>
-    <Left>lib/net10.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
-    <Right>lib/net10.0/SharpMediaFoundationInterop.dll</Right>
-    <IsBaselineSuppression>true</IsBaselineSuppression>
-  </Suppression>
-  <Suppression>
-    <DiagnosticId>CP0008</DiagnosticId>
-    <Target>T:SharpMediaFoundationInterop.Input.DeviceCapture</Target>
-    <Left>lib/net8.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
-    <Right>lib/net8.0/SharpMediaFoundationInterop.dll</Right>
-    <IsBaselineSuppression>true</IsBaselineSuppression>
-  </Suppression>
-  <Suppression>
-    <DiagnosticId>CP0008</DiagnosticId>
-    <Target>T:SharpMediaFoundationInterop.Input.ScreenCapture</Target>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:SharpMediaFoundationInterop.Utils.MediaUtils.EncodeAttributeValue(System.UInt32,System.UInt32)</Target>
     <Left>lib/net8.0-windows10.0.17763/SharpMediaFoundationInterop.dll</Left>
     <Right>lib/net8.0/SharpMediaFoundationInterop.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>

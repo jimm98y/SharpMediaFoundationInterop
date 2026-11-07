@@ -23,12 +23,14 @@ a platform's is a native pointer in a type of their own: a decoder that decodes 
 tests alone.
 
 The bindings of the other platforms are internal too - Android's NDK, Apple's Objective-C, GStreamer
-- and so are the classes made of them: the codecs, captures and audio inputs and outputs of Android,
-Apple's systems and Linux are made by `MediaCodecs` and `MediaDevices`, and handed out as the
-interfaces they implement (`IMediaVideoTransform`, `IMediaVideoSource`, `IAudioInput`, ...). Windows'
-own classes - the Media Foundation codecs, `DeviceCapture`, `ScreenCapture`, `WaveIn`, `WaveOut` and
-the rest - are public still, and are to follow them. A class of one platform is not to be added to
-the public API: what it offers is to be offered by an interface, made by one of the factories.
+- and so are the classes of every platform made of them: the codecs, captures and audio inputs and
+outputs of Windows (Media Foundation, `DeviceCapture`, `ScreenCapture`, `WaveIn`, `WaveOut`),
+Android, Apple's systems and Linux are made by `MediaCodecs` and `MediaDevices`, and handed out as the
+interfaces they implement (`IMediaVideoTransform`, `IGpuVideoTransform`, `IMediaVideoSource`,
+`IAudioInput`, ...). A class of one platform is not to be added to the public API: what it offers is
+to be offered by an interface, made by one of the factories. A caller that needs a decoder of its own
+- one handing out some of the frames, say - wraps the one a factory makes, implementing the same
+interfaces.
 
 ## Adding to the API
 
@@ -70,7 +72,11 @@ rebuild and validates whatever binaries are already in `bin`.
 Against 0.3.1, `CompatibilitySuppressions.xml` records:
 
 - **The Win32 interop made internal**: the 745 `Windows.Win32` types 0.3.1 made public, and
-  `MediaUtils`' helpers of Media Foundation's samples (`CreateSample`, `CreateOutputDataBuffer`).
+  `MediaUtils`' helpers of Media Foundation (`CreateSample`, `CreateOutputDataBuffer`,
+  `CalculateSampleDuration`, `EncodeAttributeValue`).
+- **Windows' classes made internal**: `DeviceCapture`, `ScreenCapture`, `CaptureDevice` and
+  `ScreenDevice`, made by `MediaDevices` now. (0.3.1's codecs were of the `Transforms` namespace,
+  below.)
 - **What changed shape since 0.3.1**: the `Transforms` namespace that is `Codecs` now, the `Wave`
   types, the base types of `DeviceCapture` and `ScreenCapture`, and in the WPF library `VideoControl`,
   `VideoSourceBase` and `IVideoSource.GetVideoSample`.

@@ -145,7 +145,7 @@ namespace SharpMediaFoundationInterop.Utils
         }
 
         [SupportedOSPlatform("windows10.0.17763.0")]
-        public static long CalculateSampleDuration(uint fpsNom, uint fpsDenom)
+        internal static long CalculateSampleDuration(uint fpsNom, uint fpsDenom)
         {
             Check(PInvoke.MFFrameRateToAverageTimePerFrame(fpsNom, fpsDenom, out ulong sampleDuration));
             return (long)sampleDuration;
