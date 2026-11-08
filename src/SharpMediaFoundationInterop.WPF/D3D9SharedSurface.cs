@@ -8,7 +8,7 @@ namespace SharpMediaFoundationInterop.WPF
     /// the few methods of it this needs, by their place in its interfaces' tables: its bindings are generated only for one
     /// CPU architecture at a time, and this library is built for any.
     /// </summary>
-    internal sealed unsafe class D3D9SharedSurface : IDisposable
+    internal sealed unsafe partial class D3D9SharedSurface : IDisposable
     {
         private const uint D3D_SDK_VERSION = 32;
         private const int D3DDEVTYPE_HAL = 1;
@@ -101,6 +101,8 @@ namespace SharpMediaFoundationInterop.WPF
                 var getSurfaceLevel = (delegate* unmanaged[Stdcall]<IntPtr, uint, IntPtr*, int>)Slot(_texture, GetSurfaceLevelSlot);
                 Marshal.ThrowExceptionForHR(getSurfaceLevel(_texture, 0, &surface));
                 _surface = surface;
+
+                WorkAroundParallels(adapter);
             }
             catch
             {
@@ -129,6 +131,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         public void Dispose()
         {
+            ReleaseParallelsWorkaround();
             Release(ref _surface);
             Release(ref _texture);
             Release(ref _device);
