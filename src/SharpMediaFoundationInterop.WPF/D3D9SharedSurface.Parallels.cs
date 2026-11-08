@@ -8,8 +8,9 @@ namespace SharpMediaFoundationInterop.WPF
     /// <summary>
     /// A workaround of Parallels' display driver. WPF opens its front buffer on the surface's device every frame - D3DImage's
     /// present calls CreateTexture of that device with the front buffer's shared handle, copies into it, and releases it -
-    /// and Parallels' driver leaks each such open: a surface's worth of GPU memory a frame, which nothing frees until the
-    /// process ends. On a Parallels adapter alone, CreateTexture is hooked for that: a texture this device opened of a handle
+    /// and Parallels' driver never lets go of such an open: the process's GPU shared memory - what Windows budgets its GPU
+    /// memory by - grows by the front buffer's size a frame, the same front buffer counted again for every open kept, until
+    /// the process ends. On a Parallels adapter alone, CreateTexture is hooked for that: a texture this device opened of a handle
     /// is kept, and handed out again for the same handle instead of opened again; a new handle - WPF's front buffer made
     /// again - is opened, and the one kept before released.
     /// </summary>
