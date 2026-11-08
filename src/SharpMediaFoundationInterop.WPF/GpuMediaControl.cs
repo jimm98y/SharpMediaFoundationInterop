@@ -138,16 +138,22 @@ namespace SharpMediaFoundationInterop.WPF
             return !_renderer.IsWholeFrame && _renderer.Width == output.Value.Width && _renderer.Height == output.Value.Height;
         }
 
+        /// <summary>
+        /// The surface given to the D3DImage, with software fallback: where WPF has no device of its own to show it by -
+        /// rendering in software, as over Remote Desktop or of <see cref="System.Windows.Media.RenderOptions.ProcessRenderMode"/>,
+        /// or its device lost - WPF reads each frame back from it instead, and the control is drawn into as ever. Without
+        /// it, WPF would show nothing new there.
+        /// </summary>
         private void SetBackBuffer()
         {
             _d3dImage.Lock();
-            _d3dImage.SetBackBuffer(D3DResourceType.IDirect3DSurface9, _surface.Surface);
+            _d3dImage.SetBackBuffer(D3DResourceType.IDirect3DSurface9, _surface.Surface, true);
             _d3dImage.Unlock();
         }
 
         /// <summary>
-        /// WPF lets go of the surface as its device is lost - the screen locked, the display changed - and says when it can
-        /// have it again: it is given it again.
+        /// WPF says when its device is lost - the screen locked, the display changed - and when it has one again: the surface
+        /// is given it again.
         /// </summary>
         private void D3DImage_IsFrontBufferAvailableChanged(object sender, DependencyPropertyChangedEventArgs e)
         {
@@ -176,7 +182,7 @@ namespace SharpMediaFoundationInterop.WPF
                 FollowMonitor();
 
             var d3dImage = _d3dImage;
-            if (d3dImage == null || !d3dImage.IsFrontBufferAvailable)
+            if (d3dImage == null)
                 return;
 
             d3dImage.Lock();
@@ -203,7 +209,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (_renderer != null)
                 FollowMonitor();
             var d3dImage = _d3dImage;
-            if (_renderer == null || _videoInfo == null || d3dImage == null || !d3dImage.IsFrontBufferAvailable)
+            if (_renderer == null || _videoInfo == null || d3dImage == null)
                 return false;
             var view = GetView(_videoInfo);
             if (_renderer.IsWholeFrame || !RendererFits(OutputSize(view, _videoInfo)))
