@@ -7,6 +7,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	<UseWPF>true</UseWPF>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+	<!-- one target framework at a time: built side by side on one node, WPF's markup compilation of the one loses the other's
+	     _MarkupCompile.lref, skips its second pass and fails with CS2001 on GeneratedInternalTypeHelper.g.cs -->
+	<BuildInParallel>false</BuildInParallel>
   </PropertyGroup>
 
 	<ItemGroup>
