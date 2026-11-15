@@ -37,9 +37,9 @@
             <TabItem Header="Camera">
                 <ctrl:MediaControl Source="{Binding CameraSource}" Looping="True" />
             </TabItem>
-            <!--<TabItem Header="HEIC">
+            <TabItem Header="HEIC">
                 <ctrl:MediaControl Source="{Binding HeicSource}" Looping="True" />
-            </TabItem>-->
+            </TabItem>
             <!--<TabItem Header="RTSP">
                 <ctrl:MediaControl Source="{Binding RtspSource}" Looping="True" />
             </TabItem>-->
