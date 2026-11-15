@@ -1,7 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net472;net8.0;net10.0</TargetFrameworks>
+	<LangVersion>latest</LangVersion>
 	<GenerateAssemblyInfo>true</GenerateAssemblyInfo>
 	<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
@@ -33,4 +34,31 @@
 		<PackageValidationBaselineVersion>0.3.1</PackageValidationBaselineVersion>
 	</PropertyGroup>
 
+	<!-- .NET Framework and .NET Standard: Windows' alone, as the other platforms' interop is of .NET's of 8 (UnmanagedCallersOnly,
+	     NativeLibrary, UTF-8 strings); what they lack of .NET's of Meziantou.Polyfill and Utils/Polyfills.cs -->
+	<PropertyGroup Condition="'$(TargetFramework)' == 'netstandard2.0' Or '$(TargetFramework)' == 'net472'">
+		<IsLegacyTarget>true</IsLegacyTarget>
+		<!-- CsWin32 makes the first two of its own; Utils/Polyfills.cs the version check, of RtlGetVersion: of Environment.OSVersion,
+		     the polyfill's, .NET Framework says Windows 8 to an app not manifested for 10 -->
+		<MeziantouPolyfill_ExcludedPolyfills>
+			T:System.Runtime.CompilerServices.OverloadResolutionPriorityAttribute;
+			T:System.Diagnostics.CodeAnalysis.UnscopedRefAttribute;
+			M:System.OperatingSystem.IsWindowsVersionAtLeast(System.Int32,System.Int32,System.Int32,System.Int32)
+		</MeziantouPolyfill_ExcludedPolyfills>
+		<!-- the API is listed of .NET's of 8 and 10, where nint is nint, not IntPtr; package validation holds these to it -->
+		<NoWarn>$(NoWarn);RS0016;RS0017</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup Condition="'$(IsLegacyTarget)' == 'true'">
+		<Compile Remove="**/Android/**;**/Apple/**;**/Linux/**;**/MacOS/**;**/iOS/**" />
+		<PackageReference Include="System.Memory" Version="4.6.3" />
+		<PackageReference Include="Meziantou.Polyfill" Version="1.0.169">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+		<PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+	</ItemGroup>
 </Project>

@@ -173,42 +173,36 @@ namespace SharpMediaFoundationInterop.WPF
         /// frames for itself would rather have. <see cref="VideoInfo.PixelFormat"/> says what the frames are.
         /// </summary>
         /// <returns>Whether the source gives frames of it.</returns>
-        bool TrySetOutputFormat(PixelFormat format) => false;
+        bool TrySetOutputFormat(PixelFormat format);
 
         /// <summary>
         /// Whether it is a picture, not a video: of one frame, shown and held, of no time - an image. A control shows no
         /// position, nor a bar to seek with.
         /// </summary>
-        bool IsStill => false;
+        bool IsStill { get; }
 
         /// <summary>
         /// The control out of sight - on another tab, collapsed, unloaded - or in sight again: a live source lets go of
         /// what it captures with - a camera, its light off - and opens it again. Of a file, nothing: it waits where it was.
         /// Called on the thread frames are read on, between reads.
         /// </summary>
-        void SetSuspended(bool suspended) { }
+        void SetSuspended(bool suspended);
 
         /// <summary>
         /// Asks for frames decoded on a device, before the source is initialized: where its decoder can decode on the GPU,
         /// <see cref="GetVideoFrame"/> hands them out as textures of it, <see cref="GpuVideoFrame"/>s, never leaving the GPU.
         /// </summary>
         /// <returns>Whether the source can: that it decodes on the GPU depends on the GPU, and the format.</returns>
-        bool TryUseDirect3D(Direct3DDevice device) => false;
+        bool TryUseDirect3D(Direct3DDevice device);
 
         /// <summary>
         /// The next frame, as <see cref="GetVideoSample"/>, or a <see cref="GpuVideoFrame"/> - decoded on the GPU, where
         /// <see cref="TryUseDirect3D"/> was asked for. Given back with <see cref="ReturnVideoFrame"/>.
         /// </summary>
-        object GetVideoFrame(out long timestamp) => GetVideoSample(out timestamp);
+        object GetVideoFrame(out long timestamp);
 
         /// <summary>Gives a frame of <see cref="GetVideoFrame"/> back.</summary>
-        void ReturnVideoFrame(object frame)
-        {
-            if (frame is GpuVideoFrame gpu)
-                gpu.Release();
-            else if (frame is byte[] bytes)
-                ReturnVideoSample(bytes);
-        }
+        void ReturnVideoFrame(object frame);
         /// <summary>
         /// The next frame - empty when none is ready yet, null when there are no more - and when it is shown.
         /// </summary>
@@ -255,13 +249,13 @@ namespace SharpMediaFoundationInterop.WPF
         long Request { get; }
 
         /// <summary>How many frames there are, of a source that indexes them - a file; -1 of one that does not.</summary>
-        long FrameCount => -1;
+        long FrameCount { get; }
 
         /// <summary>The number of the frame shown at a time, from 0 - the last at or before it; -1 where frames are not indexed.</summary>
-        long FrameAt(long time) => -1;
+        long FrameAt(long time);
 
         /// <summary>The time a frame is shown at, of its number; -1 where frames are not indexed, or there is no such frame.</summary>
-        long TimeOfFrame(long frame) => -1;
+        long TimeOfFrame(long frame);
     }
 
     public interface IAudioSource : IDisposable
@@ -274,11 +268,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// The next frame of sound, as <see cref="GetAudioSample()"/>, and the time it starts at, on the clock of the
         /// video's frames: what a player keeps them in step by. -1 where the source does not know it.
         /// </summary>
-        byte[] GetAudioSample(out long timestamp)
-        {
-            timestamp = -1;
-            return GetAudioSample();
-        }
+        byte[] GetAudioSample(out long timestamp);
         void ReturnAudioSample(byte[] sample);
     }
 }

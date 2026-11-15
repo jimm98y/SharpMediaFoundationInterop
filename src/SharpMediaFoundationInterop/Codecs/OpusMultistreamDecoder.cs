@@ -332,7 +332,7 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             foreach (var stream in _streams)
                 stream.Flush();
-            Array.Clear(_decodedCount);
+            Array.Clear(_decodedCount, 0, _decodedCount.Length);
         }
 
         public void Dispose()

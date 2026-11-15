@@ -19,7 +19,12 @@ namespace SharpMediaFoundationInterop.Utils
         /// </summary>
         public static long ToTicks(long time, long clockRate)
         {
+#if NETCOREAPP
             return (long)((Int128)time * TicksPerSecond / clockRate);
+#else
+            // no Int128 here: the whole clock periods and the rest apart, which comes to the same, truncated alike
+            return time / clockRate * TicksPerSecond + time % clockRate * TicksPerSecond / clockRate;
+#endif
         }
 
         internal static ulong EncodeAttributeValue(uint highValue, uint lowValue)

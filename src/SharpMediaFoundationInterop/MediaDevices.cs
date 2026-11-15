@@ -43,6 +43,7 @@ namespace SharpMediaFoundationInterop
         [SupportedOSPlatformGuard("windows10.0.17763.0")]
         private static bool IsSupported => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763);
 
+#if NETCOREAPP // of .NET Framework and .NET Standard, Windows' alone
         [SupportedOSPlatformGuard("macos11.0")]
         private static bool IsMacOS => OperatingSystem.IsMacOSVersionAtLeast(11);
 
@@ -73,10 +74,12 @@ namespace SharpMediaFoundationInterop
         /// portal's dialog as the capture starts.
         /// </summary>
         private const string PortalScreenId = "portal";
+#endif
 
         /// <summary>What can play sound.</summary>
         public static MediaDevice[] GetAudioOutputs()
         {
+#if NETCOREAPP
             if (IsMacOS)
                 return ToDevices(CoreAudio.Enumerate(CoreAudio.kAudioObjectPropertyScopeOutput));
             if (IsIOS)
@@ -85,6 +88,7 @@ namespace SharpMediaFoundationInterop
                 return AAudio.IsAvailable ? [new MediaDevice(DefaultId, "Default output")] : Array.Empty<MediaDevice>();
             if (IsLinux)
                 return ToDevices(GstDevices.List("Audio/Sink"));
+#endif
             if (!IsSupported)
                 return Array.Empty<MediaDevice>();
             var devices = WaveOut.Enumerate();
@@ -97,6 +101,7 @@ namespace SharpMediaFoundationInterop
         /// <summary>What can record sound.</summary>
         public static MediaDevice[] GetAudioInputs()
         {
+#if NETCOREAPP
             if (IsMacOS)
                 return ToDevices(CoreAudio.Enumerate(CoreAudio.kAudioObjectPropertyScopeInput));
             if (IsIOS)
@@ -105,6 +110,7 @@ namespace SharpMediaFoundationInterop
                 return AAudio.IsAvailable ? [new MediaDevice(DefaultId, "Default input")] : Array.Empty<MediaDevice>();
             if (IsLinux)
                 return ToDevices(GstDevices.List("Audio/Source"));
+#endif
             if (!IsSupported)
                 return Array.Empty<MediaDevice>();
             var devices = WaveIn.Enumerate();
@@ -117,6 +123,7 @@ namespace SharpMediaFoundationInterop
         /// <summary>The cameras.</summary>
         public static MediaDevice[] GetCameras()
         {
+#if NETCOREAPP
             if (IsMacOS || IsIOS)
             {
                 var cameras = AVFoundationCapture.Enumerate();
@@ -126,6 +133,7 @@ namespace SharpMediaFoundationInterop
                 return ToDevices(CameraNdk.List());
             if (IsLinux)
                 return ToDevices(GstDevices.List("Video/Source"));
+#endif
             if (!IsSupported)
                 return Array.Empty<MediaDevice>();
             var devices = DeviceCapture.Enumerate();
@@ -138,6 +146,7 @@ namespace SharpMediaFoundationInterop
         /// <summary>The screens, the primary first.</summary>
         public static MediaDevice[] GetScreens()
         {
+#if NETCOREAPP
             if (IsMacOSScreenCapture)
             {
                 var screens = ScreenCaptureKitCapture.Enumerate();
@@ -149,6 +158,7 @@ namespace SharpMediaFoundationInterop
                 return Array.Empty<MediaDevice>();
             if (IsLinux)
                 return Gst.IsAvailable ? [new MediaDevice(PortalScreenId, "Screen chosen in the desktop portal")] : Array.Empty<MediaDevice>();
+#endif
             if (!IsSupported)
                 return Array.Empty<MediaDevice>();
             var devices = ScreenCapture.Enumerate();
@@ -179,12 +189,14 @@ namespace SharpMediaFoundationInterop
         {
             if (IsSupported)
                 return new WaveOut(device == null ? WaveOut.WAVE_MAPPER : uint.Parse(device.Id), sampleRate, channels, bitsPerSample, channelMask);
+#if NETCOREAPP
             if (IsMacOS || IsIOS)
                 return new AudioQueueOutput(device?.Id, sampleRate, channels, bitsPerSample);
             if (IsAndroid)
                 return new AAudioOutput(sampleRate, channels, bitsPerSample);
             if (IsLinux)
                 return new GStreamerAudioOutput(device?.Id, sampleRate, channels, bitsPerSample);
+#endif
 
             throw new PlatformNotSupportedException(NoDevice("sound output"));
         }
@@ -194,12 +206,14 @@ namespace SharpMediaFoundationInterop
         {
             if (IsSupported)
                 return new WaveIn(device == null ? WaveIn.WAVE_MAPPER : uint.Parse(device.Id), sampleRate, channels, bitsPerSample);
+#if NETCOREAPP
             if (IsMacOS || IsIOS)
                 return new AudioQueueInput(device?.Id, sampleRate, channels, bitsPerSample);
             if (IsAndroid)
                 return new AAudioInput(sampleRate, channels, bitsPerSample);
             if (IsLinux)
                 return new GStreamerAudioInput(device?.Id, sampleRate, channels, bitsPerSample);
+#endif
 
             throw new PlatformNotSupportedException(NoDevice("sound input"));
         }
@@ -212,12 +226,14 @@ namespace SharpMediaFoundationInterop
         {
             if (IsSupported)
                 return new DeviceCapture(device?.Id);
+#if NETCOREAPP
             if (IsMacOS || IsIOS)
                 return new AVFoundationCapture(device?.Id);
             if (IsAndroid)
                 return new AndroidCameraCapture(device?.Id);
             if (IsLinux)
                 return new GStreamerCameraCapture(device?.Id);
+#endif
 
             throw new PlatformNotSupportedException(NoDevice("camera capture"));
         }
@@ -240,6 +256,7 @@ namespace SharpMediaFoundationInterop
                 }
                 return new ScreenCapture(adapter, output) { BottomUp = !topDown };
             }
+#if NETCOREAPP
             if (IsMacOSScreenCapture)
                 return new ScreenCaptureKitCapture(device == null ? 0 : uint.Parse(device.Id, CultureInfo.InvariantCulture)) { BottomUp = !topDown };
             if (IsIOSScreenCapture)
@@ -248,12 +265,15 @@ namespace SharpMediaFoundationInterop
                 throw new PlatformNotSupportedException("No screen capture on Android: it is of Java's MediaProjection alone, whose consent only the app's activity can ask for");
             if (IsLinux)
                 return new PortalScreenCapture { BottomUp = !topDown };
+#endif
 
             throw new PlatformNotSupportedException(NoDevice("screen capture"));
         }
 
+#if NETCOREAPP
         [SupportedOSPlatform("macos11.0")]
         private static MediaDevice[] ToDevices(CoreAudioDevice[] devices) => Array.ConvertAll(devices, d => new MediaDevice(d.Uid, d.Name));
+#endif
 
         private static MediaDevice[] ToDevices((string Id, string Name)[] devices) => Array.ConvertAll(devices, d => new MediaDevice(d.Id, d.Name));
 

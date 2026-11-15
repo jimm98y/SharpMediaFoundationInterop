@@ -39,7 +39,7 @@ namespace SharpMediaFoundationInterop.Output
         public int QueuedFrames {  get { return _queuedFrames; } }
 
         private const int _audioBufferSize = 1024 * 1024; 
-        private nint _audioBuffer = nint.Zero;   
+        private nint _audioBuffer = IntPtr.Zero;   
         private uint _audioBufferIndex = 0;
 
         private bool _disposedValue;
@@ -93,7 +93,7 @@ namespace SharpMediaFoundationInterop.Output
             Channels = channels;
             BitsPerSample = bitsPerSample;
 
-            if (_audioBuffer == nint.Zero)
+            if (_audioBuffer == IntPtr.Zero)
             { 
                 _audioBuffer = Marshal.AllocHGlobal(_audioBufferSize);
             }
@@ -123,7 +123,7 @@ namespace SharpMediaFoundationInterop.Output
 
             // a device refused leaves no handle: none is kept, and nothing is played - not a handle of whatever was there
             HWAVEOUT device = default;
-            uint result = PInvoke.waveOutOpen(&device, deviceID, (WAVEFORMATEX*)&format, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
+            uint result = PInvoke.waveOutOpen(&device, deviceID, (WAVEFORMATEX*)&format, (nuint)(nint)Marshal.GetFunctionPointerForDelegate(_callback), UIntPtr.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
             if (result != MMSYSERR_NOERROR)
             {
                 device = default;
@@ -258,7 +258,7 @@ namespace SharpMediaFoundationInterop.Output
 
         public unsafe void Enqueue(byte[] data, uint length)
         {
-            if (_audioBuffer == nint.Zero)
+            if (_audioBuffer == IntPtr.Zero)
                 throw new InvalidOperationException("You must first call Initialize!");
             if (!IsOpen)
                 return; // a device that refused the format: nothing plays
@@ -274,7 +274,7 @@ namespace SharpMediaFoundationInterop.Output
                 WAVEHDR* waveHdr = (WAVEHDR*)&pAudioBuffer[_audioBufferIndex];
                 waveHdr->lpData = pAudioData;
                 waveHdr->dwBufferLength = length;
-                waveHdr->dwUser = nuint.Zero;
+                waveHdr->dwUser = UIntPtr.Zero;
                 waveHdr->dwFlags = 0;
                 waveHdr->dwLoops = 0;
 
@@ -342,10 +342,10 @@ namespace SharpMediaFoundationInterop.Output
                     Close();
                 }
 
-                if (_audioBuffer != nint.Zero)
+                if (_audioBuffer != IntPtr.Zero)
                 {
                     Marshal.FreeHGlobal(_audioBuffer);
-                    _audioBuffer = nint.Zero;
+                    _audioBuffer = IntPtr.Zero;
                 }
 
                 _disposedValue = true;

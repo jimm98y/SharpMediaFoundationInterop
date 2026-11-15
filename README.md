@@ -4,7 +4,7 @@ Simple Windows Media Foundation interop written in C#. No native dependencies, o
 [![NuGet version](https://img.shields.io/nuget/v/SharpMediaFoundationInterop.svg?style=flat-square)](https://www.nuget.org/packages/SharpMediaFoundationInterop)
 
 ## Platforms and codecs
-The library is a single `net8.0`/`net10.0` DLL with no native dependencies. `MediaCodecs` and `MediaDevices` pick whatever the current system has. On an unsupported system, `CanDecode`/`CanEncode` return false, the device lists are empty, and creating a codec or device throws `PlatformNotSupportedException`.
+The library is a single `net8.0`/`net10.0` DLL with no native dependencies. It also builds for `net472` and `netstandard2.0`, but those are Windows-only: the other platforms' interop needs .NET 8. The WPF library targets `net472` too. `MediaCodecs` and `MediaDevices` pick whatever the current system has. On an unsupported system, `CanDecode`/`CanEncode` return false, the device lists are empty, and creating a codec or device throws `PlatformNotSupportedException`.
 
 D = decode, E = encode, — = not available.
 

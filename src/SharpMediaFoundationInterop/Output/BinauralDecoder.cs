@@ -71,10 +71,10 @@ namespace SharpMediaFoundationInterop.Output
         public void Reset()
         {
             _gathered = 0;
-            Array.Clear(_left);
-            Array.Clear(_right);
-            Array.Clear(_tailLeft);
-            Array.Clear(_tailRight);
+            Array.Clear(_left, 0, _left.Length);
+            Array.Clear(_right, 0, _right.Length);
+            Array.Clear(_tailLeft, 0, _tailLeft.Length);
+            Array.Clear(_tailRight, 0, _tailRight.Length);
             _read = 0;
         }
 
@@ -100,8 +100,8 @@ namespace SharpMediaFoundationInterop.Output
         /// <summary>The block gathered, heard: of each channel, its spectrum by its HRIR's, summed of either ear's sign.</summary>
         private void Convolve()
         {
-            Array.Clear(_same);
-            Array.Clear(_opposite);
+            Array.Clear(_same, 0, _same.Length);
+            Array.Clear(_opposite, 0, _opposite.Length);
             for (int k = 0; k < _channels; k++)
             {
                 var input = _input[k];

@@ -18,6 +18,10 @@ namespace SharpMediaFoundationInterop.WPF
     /// uploaded as it is, a BGR24 one widened to BGRA on the way. That is the whole frame; or, of a <see cref="VideoView"/>, one eye's half of it copied out, or a
     /// view into a spherical video drawn from it by a pixel shader - into a texture of the view's own size.
     /// </summary>
+    // The video processor is Windows 8's or later, and the analyzer counts from 7, of net8.0-windows - which cannot say more:
+    // its least version is its target's, 7.0. .NET 8 and 10 run on Windows 10 or later alone, and frames decoded on the
+    // GPU, that the video processor converts, are of the core's decoders of Windows 10 1809 or later.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "Windows 8 or later wherever this runs: see above")]
     internal sealed unsafe class D3D11FrameRenderer : IDisposable
     {
         private readonly VideoInfo _info;

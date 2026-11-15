@@ -5,7 +5,9 @@ warns until it is. Two checks do this, both on every
 `dotnet build` of each:
 
 - **The API files.** `PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt` next to each project list
-  its public types and members, the same on both of its target frameworks. Shipped is the API as
+  its public types and members, as of `net8.0` and `net10.0`. `net472` and `netstandard2.0` are not
+  checked against them (RS0016/RS0017 are off there): their API is the same, but a native int is
+  `IntPtr` there, not `nint`, so the listed signatures don't match. Shipped is the API as
   released; Unshipped is what changed since. A public symbol missing from them is a warning, RS0016, until it is
   listed - an addition breaks no one - and a listed one that is gone fails the build with RS0017.
 - **Package validation.** Each package being built is compared with the last release

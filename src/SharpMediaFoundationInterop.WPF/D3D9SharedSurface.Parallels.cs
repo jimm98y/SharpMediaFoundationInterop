@@ -81,14 +81,27 @@ namespace SharpMediaFoundationInterop.WPF
                 if (OriginalCreateTexture.ContainsKey((IntPtr)vtable))
                     return;
                 OriginalCreateTexture[(IntPtr)vtable] = vtable[CreateTextureSlot];
+#if NETCOREAPP
                 IntPtr hook = (IntPtr)(delegate* unmanaged[Stdcall]<IntPtr, uint, uint, uint, uint, int, int, IntPtr*, IntPtr*, int>)&CreateTextureHook;
+#else
+                IntPtr hook = Marshal.GetFunctionPointerForDelegate(CreateTextureHookDelegate);
+#endif
                 VirtualProtect((IntPtr)(vtable + CreateTextureSlot), (nuint)IntPtr.Size, 0x04 /* PAGE_READWRITE */, out uint old);
                 vtable[CreateTextureSlot] = hook;
                 VirtualProtect((IntPtr)(vtable + CreateTextureSlot), (nuint)IntPtr.Size, old, out _);
             }
         }
 
+#if NETCOREAPP
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvStdcall) })]
+#else
+        // .NET Framework calls no UnmanagedCallersOnly method from native code: a delegate's thunk instead, held for as long as
+        // the process is, as the device's vtable calls it to its end
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int CreateTextureFunction(IntPtr self, uint width, uint height, uint levels, uint usage, int format, int pool, IntPtr* texture, IntPtr* sharedHandle);
+
+        private static readonly CreateTextureFunction CreateTextureHookDelegate = CreateTextureHook;
+#endif
         private static int CreateTextureHook(IntPtr self, uint width, uint height, uint levels, uint usage, int format, int pool, IntPtr* texture, IntPtr* sharedHandle)
         {
             IntPtr original;

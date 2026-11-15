@@ -158,7 +158,7 @@ namespace SharpMediaFoundationInterop.Input
                 PInvoke.D3D11CreateDevice(
                     adapter,
                     D3D_DRIVER_TYPE.D3D_DRIVER_TYPE_UNKNOWN,
-                    (HMODULE)nint.Zero,
+                    (HMODULE)System.IntPtr.Zero,
                     0,
                     pFeatureLevel,
                     (uint)_featureLevels.Length,
@@ -357,7 +357,7 @@ namespace SharpMediaFoundationInterop.Input
                     PInvoke.D3D11CreateDevice(
                         adapter,
                         D3D_DRIVER_TYPE.D3D_DRIVER_TYPE_UNKNOWN,
-                        (HMODULE)nint.Zero,
+                        (HMODULE)System.IntPtr.Zero,
                         0,
                         pFeatureLevel,
                         (uint)_featureLevels.Length,

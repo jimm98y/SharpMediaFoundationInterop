@@ -56,6 +56,14 @@ namespace SharpMediaFoundationInterop.WPF
             ArrayPool<byte>.Shared.Return(decoded);
         }
 
+        // the screen's frames as captured, on the CPU; nothing to let go of out of sight
+        public bool TrySetOutputFormat(PixelFormat format) => false;
+        public bool TryUseDirect3D(Direct3DDevice device) => false;
+        public bool IsStill => false;
+        public void SetSuspended(bool suspended) { }
+        public object GetVideoFrame(out long timestamp) => GetVideoSample(out timestamp);
+        public void ReturnVideoFrame(object frame) => ReturnVideoSample((byte[])frame);
+
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposedValue)

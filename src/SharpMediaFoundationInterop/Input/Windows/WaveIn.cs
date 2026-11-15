@@ -25,7 +25,7 @@ namespace SharpMediaFoundationInterop.Input
         public uint BitsPerSample { get; private set; } = 16;
 
         private const int _audioBufferSize = 1024 * 1024;
-        private nint _audioBuffer = nint.Zero;
+        private nint _audioBuffer = IntPtr.Zero;
         private uint _audioBufferIndex = 0;
 
         public event EventHandler<WaveInEventArgs> FrameReceived;
@@ -78,7 +78,7 @@ namespace SharpMediaFoundationInterop.Input
             Channels = channels;
             BitsPerSample = bitsPerSample;
 
-            if(_audioBuffer == nint.Zero)
+            if(_audioBuffer == IntPtr.Zero)
             {
                 _audioBuffer = Marshal.AllocHGlobal(_audioBufferSize);
             }
@@ -94,7 +94,7 @@ namespace SharpMediaFoundationInterop.Input
 
             HWAVEIN device;
             _callback = DoneCallback;
-            PInvoke.waveInOpen(&device, deviceID, &waveFormat, (nuint)Marshal.GetFunctionPointerForDelegate(_callback), nuint.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
+            PInvoke.waveInOpen(&device, deviceID, &waveFormat, (nuint)(nint)Marshal.GetFunctionPointerForDelegate(_callback), UIntPtr.Zero, MIDI_WAVE_OPEN_TYPE.CALLBACK_FUNCTION);
             this._hDevice = device;
 
             uint audioBufferIndex = 0;
@@ -103,7 +103,7 @@ namespace SharpMediaFoundationInterop.Input
                 WAVEHDR* waveHdr = (WAVEHDR*)((byte*)_audioBuffer + audioBufferIndex);
                 waveHdr->lpData = (byte*)_audioBuffer + audioBufferIndex + (uint)sizeof(WAVEHDR);
                 waveHdr->dwBufferLength = samplesPerSecond * channels * bitsPerSample / 8;
-                waveHdr->dwUser = nuint.Zero;
+                waveHdr->dwUser = UIntPtr.Zero;
                 waveHdr->dwFlags = 0;
                 waveHdr->dwLoops = 0;
                 PInvoke.waveInPrepareHeader(this._hDevice, waveHdr, (uint)sizeof(WAVEHDR));
@@ -198,10 +198,10 @@ namespace SharpMediaFoundationInterop.Input
                     Close();
                 }
 
-                if (_audioBuffer != nint.Zero)
+                if (_audioBuffer != IntPtr.Zero)
                 {
                     Marshal.FreeHGlobal(_audioBuffer);
-                    _audioBuffer = nint.Zero;
+                    _audioBuffer = IntPtr.Zero;
                 }
 
                 _disposedValue = true;

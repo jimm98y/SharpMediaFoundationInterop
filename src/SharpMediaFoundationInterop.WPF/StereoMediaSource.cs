@@ -1,6 +1,7 @@
 ﻿using System;
 using SharpMediaFoundationInterop.Codecs;
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
@@ -49,6 +50,10 @@ namespace SharpMediaFoundationInterop.WPF
             Right = right ?? throw new ArgumentNullException(nameof(right));
             _ownsSources = ownsSources;
         }
+
+        // a video, not a picture; nothing to let go of out of sight: a file waits where it was
+        bool IVideoSource.IsStill => false;
+        void IVideoSource.SetSuspended(bool suspended) { }
 
         public bool TrySetOutputFormat(PixelFormat format)
         {
@@ -165,7 +170,7 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 var bytes = new byte[values.Length * 2];
                 for (int i = 0; i < values.Length; i++)
-                    BitConverter.TryWriteBytes(bytes.AsSpan(i * 2), (ushort)(values[i] << (16 - bits)));
+                    BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(i * 2), (ushort)(values[i] << (16 - bits)));
                 return bytes;
             }
 

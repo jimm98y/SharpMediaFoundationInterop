@@ -39,6 +39,10 @@ namespace SharpMediaFoundationInterop.WPF
             !HandsOutDecoded ? _outputFormat
             : info.FrameFormat == VideoFrameFormat.NV12 ? PixelFormat.NV12 : PixelFormat.Yuv;
 
+        // a video, not a picture; nothing to let go of out of sight: a file waits where it was
+        bool IVideoSource.IsStill => false;
+        void IVideoSource.SetSuspended(bool suspended) { }
+
         /// <summary>
         /// NV12, or <see cref="PixelFormat.Yuv"/>, hands frames out as the decoder makes them - NV12, or of the stream's
         /// <see cref="VideoInfo.FrameFormat"/> - not converted on the CPU: for a control that converts them on the GPU.

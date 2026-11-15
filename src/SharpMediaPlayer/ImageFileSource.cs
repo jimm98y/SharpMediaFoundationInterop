@@ -84,6 +84,15 @@ namespace SharpMediaFoundationInterop.WPF
             // the one picture, handed out again at each seek
         }
 
+        // the one picture, on the CPU, of no frames to index; nothing to let go of out of sight
+        public bool TryUseDirect3D(Direct3DDevice device) => false;
+        public void SetSuspended(bool suspended) { }
+        public object GetVideoFrame(out long timestamp) => GetVideoSample(out timestamp);
+        public void ReturnVideoFrame(object frame) => ReturnVideoSample((byte[])frame);
+        public long FrameCount => -1;
+        public long FrameAt(long time) => -1;
+        public long TimeOfFrame(long frame) => -1;
+
         #region Seeking
 
         private readonly object _seekLock = new object();

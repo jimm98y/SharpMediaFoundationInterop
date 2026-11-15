@@ -11,6 +11,7 @@ namespace SharpMediaFoundationInterop.Codecs
     /// </summary>
     public static class MediaCodecs
     {
+#if NETCOREAPP // of .NET Framework and .NET Standard, Windows' alone
         /// <summary>macOS 11 or later, or iOS 14 or later: of VideoToolbox's and AudioToolbox's codecs alike.</summary>
         [SupportedOSPlatformGuard("macos11.0")]
         [SupportedOSPlatformGuard("ios14.0")]
@@ -19,6 +20,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// <summary>Android 8 or later: of MediaCodec, through the NDK. Asked before Linux, which an Android process counts as.</summary>
         [SupportedOSPlatformGuard("android26.0")]
         private static bool IsAndroid => OperatingSystem.IsAndroidVersionAtLeast(26);
+#endif
 
         /// <summary>
         /// Whether there is a decoder of the codec on this system. Of a codec that comes as an extension of the system's -
@@ -27,9 +29,13 @@ namespace SharpMediaFoundationInterop.Codecs
         /// </summary>
         public static bool CanDecode(VideoCodec codec) =>
             OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) ? MediaFoundationDecoder.Supports(codec) :
+#if NETCOREAPP
             IsApple ? VideoToolboxDecoder.Supports(codec) :
             IsAndroid ? AndroidVideoDecoder.Supports(codec) :
             OperatingSystem.IsLinux() && GStreamerVideoDecoder.Supports(codec);
+#else
+            false;
+#endif
 
         /// <summary>
         /// The multiple this system's decoder of the codec rounds a picture's width and height up to: the size of the frames
@@ -37,16 +43,23 @@ namespace SharpMediaFoundationInterop.Codecs
         /// </summary>
         public static uint DecoderAlignment(VideoCodec codec) =>
             OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) ? MediaFoundationDecoder.Alignment(codec) :
+#if NETCOREAPP
             IsApple ? VideoToolboxDecoder.ResMultiple :
             IsAndroid ? AndroidVideoDecoder.ResMultiple :
-            OperatingSystem.IsLinux() ? GStreamerVideoDecoder.ResMultiple : 1;
+            OperatingSystem.IsLinux() ? GStreamerVideoDecoder.ResMultiple :
+#endif
+            1;
 
         /// <summary>Whether there is an encoder of the codec on this system; as of <see cref="CanDecode"/>.</summary>
         public static bool CanEncode(VideoCodec codec) =>
             OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) ? MediaFoundationEncoder.Supports(codec) :
+#if NETCOREAPP
             IsApple ? VideoToolboxEncoder.Supports(codec) :
             IsAndroid ? AndroidVideoEncoder.Supports(codec) :
             OperatingSystem.IsLinux() && GStreamerVideoEncoder.Supports(codec);
+#else
+            false;
+#endif
 
         /// <summary>
         /// A decoder of the codec, to be initialized; on Windows a <see cref="MediaFoundationDecoder"/>, on macOS a
@@ -58,12 +71,14 @@ namespace SharpMediaFoundationInterop.Codecs
                 return new MediaFoundationDecoder(codec, options);
             if (options != null && options.OutputFormat != VideoFrameFormat.NV12)
                 throw new NotSupportedException($"No {codec} decoder of {options.OutputFormat} on this system: {Systems}");
+#if NETCOREAPP
             if (IsApple)
                 return new VideoToolboxDecoder(codec, options);
             if (IsAndroid)
                 return new AndroidVideoDecoder(codec, options);
             if (OperatingSystem.IsLinux())
                 return new GStreamerVideoDecoder(codec, options);
+#endif
 
             throw new PlatformNotSupportedException($"No {codec} decoder on this system: {Systems}");
         }
@@ -76,12 +91,14 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
                 return new MediaFoundationEncoder(codec, options);
+#if NETCOREAPP
             if (IsApple)
                 return new VideoToolboxEncoder(codec, options);
             if (IsAndroid)
                 return new AndroidVideoEncoder(codec, options);
             if (OperatingSystem.IsLinux())
                 return new GStreamerVideoEncoder(codec, options);
+#endif
 
             throw new PlatformNotSupportedException($"No {codec} encoder on this system: {Systems}");
         }
@@ -90,16 +107,24 @@ namespace SharpMediaFoundationInterop.Codecs
         public static bool CanDecode(AudioCodec codec) =>
             codec == AudioCodec.Pcm ? true :
             OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) ? MediaFoundationAudioDecoder.Supports(codec) :
+#if NETCOREAPP
             IsApple ? AudioToolboxDecoder.Supports(codec) :
             IsAndroid ? AndroidAudioDecoder.Supports(codec) :
             OperatingSystem.IsLinux() && GStreamerAudioDecoder.Supports(codec);
+#else
+            false;
+#endif
 
         /// <summary>Whether there is an encoder of the codec on this system; as of the video codecs.</summary>
         public static bool CanEncode(AudioCodec codec) =>
             OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) ? MediaFoundationAudioEncoder.Supports(codec) :
+#if NETCOREAPP
             IsApple ? AudioToolboxEncoder.Supports(codec) :
             IsAndroid ? AndroidAudioEncoder.Supports(codec) :
             OperatingSystem.IsLinux() && GStreamerAudioEncoder.Supports(codec);
+#else
+            false;
+#endif
 
         /// <summary>
         /// A decoder of the codec, to be initialized; of PCM a <see cref="PcmDecoder"/>, of every platform; else on Windows a
@@ -116,12 +141,14 @@ namespace SharpMediaFoundationInterop.Codecs
                 return new OpusMultistreamDecoder(options);
             if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
                 return new MediaFoundationAudioDecoder(codec, options);
+#if NETCOREAPP
             if (IsApple)
                 return new AudioToolboxDecoder(codec, options);
             if (IsAndroid)
                 return new AndroidAudioDecoder(codec, options);
             if (OperatingSystem.IsLinux())
                 return new GStreamerAudioDecoder(codec, options);
+#endif
 
             throw new PlatformNotSupportedException($"No {codec} decoder on this system: {Systems}");
         }
@@ -134,20 +161,24 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
                 return new MediaFoundationAudioEncoder(codec, options);
+#if NETCOREAPP
             if (IsApple)
                 return new AudioToolboxEncoder(codec, options);
             if (IsAndroid)
                 return new AndroidAudioEncoder(codec, options);
             if (OperatingSystem.IsLinux())
                 return new GStreamerAudioEncoder(codec, options);
+#endif
 
             throw new PlatformNotSupportedException($"No {codec} encoder on this system: {Systems}");
         }
 
+#if NETCOREAPP
         /// <summary>iOS 16 or later, or macOS 11 or later: of VideoToolbox's pixel transfer.</summary>
         [SupportedOSPlatformGuard("macos11.0")]
         [SupportedOSPlatformGuard("ios16.0")]
         private static bool HasPixelTransfer => OperatingSystem.IsMacOSVersionAtLeast(11) || OperatingSystem.IsIOSVersionAtLeast(16);
+#endif
 
         /// <summary>
         /// Whether there is a color converter of the one format to the other here: of the system's, or of managed code
@@ -158,9 +189,12 @@ namespace SharpMediaFoundationInterop.Codecs
             (HasNativeConverter(inputFormat, outputFormat, options ?? new ColorConverterOptions()) || ManagedColorConverter.Supports(inputFormat, outputFormat));
 
         private static bool HasNativeConverter(Guid inputFormat, Guid outputFormat, ColorConverterOptions options) =>
-            OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) && ColorConverter.Supports(inputFormat, outputFormat, options) ||
-            HasPixelTransfer && VideoToolboxColorConverter.Supports(inputFormat, outputFormat, options) ||
-            !IsAndroid && OperatingSystem.IsLinux() && GStreamerColorConverter.Supports(inputFormat, outputFormat);
+            OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) && ColorConverter.Supports(inputFormat, outputFormat, options)
+#if NETCOREAPP
+            || HasPixelTransfer && VideoToolboxColorConverter.Supports(inputFormat, outputFormat, options)
+            || !IsAndroid && OperatingSystem.IsLinux() && GStreamerColorConverter.Supports(inputFormat, outputFormat)
+#endif
+            ;
 
         /// <summary>
         /// A color converter of the one format to the other, to be initialized: on Windows a <see cref="ColorConverter"/>, of
@@ -175,10 +209,12 @@ namespace SharpMediaFoundationInterop.Codecs
             ColorFormats.Validate(inputFormat, outputFormat, options);
             if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763) && ColorConverter.Supports(inputFormat, outputFormat, options))
                 return new ColorConverter(inputFormat, outputFormat, options);
+#if NETCOREAPP
             if (HasPixelTransfer && VideoToolboxColorConverter.Supports(inputFormat, outputFormat, options))
                 return new VideoToolboxColorConverter(inputFormat, outputFormat, options);
             if (!IsAndroid && OperatingSystem.IsLinux() && GStreamerColorConverter.Supports(inputFormat, outputFormat))
                 return new GStreamerColorConverter(inputFormat, outputFormat, options);
+#endif
             if (ManagedColorConverter.Supports(inputFormat, outputFormat))
                 return new ManagedColorConverter(inputFormat, outputFormat, options);
 
