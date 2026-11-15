@@ -15,11 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\SharpMP4\src\SharpMP4\SharpMP4.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\SharpMediaFoundationInterop\SharpMediaFoundationInterop.csproj" />
   </ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="SharpMP4" Version="0.4.0" />
+	</ItemGroup>
 
 </Project>
