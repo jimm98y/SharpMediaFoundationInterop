@@ -190,8 +190,11 @@ namespace SharpMediaFoundationInterop.Utils
 
         public static IntPtr CreateNumber(double value) => CFNumberCreate(IntPtr.Zero, kCFNumberFloat64Type, &value);
 
-        /// <summary>kCFBooleanTrue or kCFBooleanFalse: constants, not to be released.</summary>
-        public static IntPtr Boolean(bool value) => Constant(CoreFoundation, value ? "kCFBooleanTrue" : "kCFBooleanFalse");
+        /// <summary>kCFBooleanTrue or kCFBooleanFalse: constants, not to be released. Looked up once: an encoder asks of each frame.</summary>
+        public static IntPtr Boolean(bool value) => value ? CFBooleanTrue : CFBooleanFalse;
+
+        private static readonly IntPtr CFBooleanTrue = Constant(CoreFoundation, "kCFBooleanTrue");
+        private static readonly IntPtr CFBooleanFalse = Constant(CoreFoundation, "kCFBooleanFalse");
 
         public static IntPtr CreateDictionary() =>
             CFDictionaryCreateMutable(IntPtr.Zero, 0, kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks);

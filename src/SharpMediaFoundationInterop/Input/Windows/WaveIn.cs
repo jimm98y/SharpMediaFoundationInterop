@@ -39,7 +39,8 @@ namespace SharpMediaFoundationInterop.Input
             remove => _frameReceived -= value;
         }
 
-        const int NUM_BUF = 3;
+        // of 20 ms each, all queued: what is recorded handed out as it comes, each buffer queued again once it is
+        const int NUM_BUF = 10;
 
         private bool _disposedValue;
 
@@ -102,15 +103,15 @@ namespace SharpMediaFoundationInterop.Input
             {
                 WAVEHDR* waveHdr = (WAVEHDR*)((byte*)_audioBuffer + audioBufferIndex);
                 waveHdr->lpData = (byte*)_audioBuffer + audioBufferIndex + (uint)sizeof(WAVEHDR);
-                waveHdr->dwBufferLength = samplesPerSecond * channels * bitsPerSample / 8;
+                waveHdr->dwBufferLength = samplesPerSecond / 50 * channels * bitsPerSample / 8;
                 waveHdr->dwUser = UIntPtr.Zero;
                 waveHdr->dwFlags = 0;
                 waveHdr->dwLoops = 0;
                 PInvoke.waveInPrepareHeader(this._hDevice, waveHdr, (uint)sizeof(WAVEHDR));
+                PInvoke.waveInAddBuffer(this._hDevice, waveHdr, (uint)sizeof(WAVEHDR));
                 audioBufferIndex = audioBufferIndex + (uint)sizeof(WAVEHDR) + waveHdr->dwBufferLength;
             }
 
-            PInvoke.waveInAddBuffer(this._hDevice, (WAVEHDR*)(_audioBuffer + _audioBufferIndex), (uint)sizeof(WAVEHDR));
             PInvoke.waveInStart(this._hDevice);
         }
 
@@ -119,18 +120,24 @@ namespace SharpMediaFoundationInterop.Input
             if (uMsg == MM_WIM_DATA)
             {
                 WAVEHDR* waveHdr = (WAVEHDR*)(_audioBuffer + _audioBufferIndex);
-                byte[] dest = new byte[waveHdr->dwBufferLength];
+                byte[] dest = _recorded.Rent((int)waveHdr->dwBufferLength);
                 Marshal.Copy((nint)waveHdr->lpData.Value, dest, 0, dest.Length);
+                PInvoke.waveInAddBuffer(_hDevice, waveHdr, (uint)sizeof(WAVEHDR));
                 _audioBufferIndex = (_audioBufferIndex + (uint)sizeof(WAVEHDR) + waveHdr->dwBufferLength) % (NUM_BUF * (waveHdr->dwBufferLength + (uint)sizeof(WAVEHDR)));
 
-                waveHdr = (WAVEHDR*)(_audioBuffer + _audioBufferIndex);
-                PInvoke.waveInAddBuffer(_hDevice, waveHdr, (uint)sizeof(WAVEHDR));
-
-                var args = new WaveInEventArgs(dest);
-                FrameReceived?.Invoke(this, args);
-                _frameReceived?.Invoke(this, args);
+                // the buffer and its arguments, used again for the next: valid while the event is raised
+                if (_args == null)
+                    _args = new WaveInEventArgs(dest);
+                else
+                    _args.Of(dest);
+                FrameReceived?.Invoke(this, _args);
+                _frameReceived?.Invoke(this, _args);
             }
         }
+
+        // what a buffer is copied into, and raised in, of the callback's thread
+        private readonly AudioInputBuffer _recorded = new AudioInputBuffer();
+        private WaveInEventArgs _args;
 
         public void Reset()
         {

@@ -230,7 +230,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             var context = _device.Context;
             context.CopyResource(_staging, Wrapped(eye));
-            byte[] frame = System.Buffers.ArrayPool<byte>.Shared.Rent((int)(width * height * 3 / 2));
+            byte[] frame = SharpMediaFoundationInterop.Utils.FramePool.Shared.Rent((int)(width * height * 3 / 2));
             D3D11_MAPPED_SUBRESOURCE mapped;
             context.Map(_staging, 0, D3D11_MAP.D3D11_MAP_READ, 0, &mapped);
             try

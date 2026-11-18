@@ -1,8 +1,7 @@
 ﻿using System;
 using SharpMediaFoundationInterop.Codecs;
-using System.Buffers;
+using SharpMediaFoundationInterop.Utils;
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -265,9 +264,9 @@ namespace SharpMediaFoundationInterop.WPF
             finally
             {
                 if (leftBytes != null)
-                    ArrayPool<byte>.Shared.Return(leftBytes);
+                    FramePool.Shared.Return(leftBytes);
                 if (rightBytes != null)
-                    ArrayPool<byte>.Shared.Return(rightBytes);
+                    FramePool.Shared.Return(rightBytes);
             }
         }
 
@@ -279,7 +278,7 @@ namespace SharpMediaFoundationInterop.WPF
             int stride = decoded ? (int)VideoFrameFormats.Stride(info.FrameFormat, info.Width) : _planes[0].RowBytes((int)info.OriginalWidth);
             int rows = decoded ? (int)info.Height : (int)info.OriginalHeight;
             int size = decoded ? (int)VideoFrameFormats.FrameSize(info.FrameFormat, info.Width, info.Height) : stride * rows;
-            byte[] frame = ArrayPool<byte>.Shared.Rent(size);
+            byte[] frame = FramePool.Shared.Rent(size);
 
             // each plane, one after another: of 4:2:0, the chroma's after the luma's
             int leftOffset = 0, rightOffset = 0, offset = 0;
@@ -337,7 +336,7 @@ namespace SharpMediaFoundationInterop.WPF
         private long _lastRightRequest;
 
         // The right eye's frames, taken ahead on a thread of their own, each with its time and the seek it is of.
-        private readonly ConcurrentQueue<(object Frame, long Time, long Request)> _rightFrames = new ConcurrentQueue<(object Frame, long Time, long Request)>();
+        private readonly FrameQueue<(object Frame, long Time, long Request)> _rightFrames = new FrameQueue<(object Frame, long Time, long Request)>();
         private const int RightAhead = 3;
         private Thread _rightThread;
         private readonly AutoResetEvent _rightWake = new AutoResetEvent(false);
@@ -497,7 +496,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (frame is GpuVideoFrame gpu)
                 gpu.Release();
             else if (frame is byte[] bytes && bytes.Length > 0)
-                ArrayPool<byte>.Shared.Return(bytes);
+                FramePool.Shared.Return(bytes);
         }
 
         public void ReturnVideoSample(byte[] sample) => ReturnVideoFrame(sample);

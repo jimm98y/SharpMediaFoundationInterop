@@ -23,9 +23,15 @@ namespace SharpMediaFoundationInterop.Input
         }
     }
 
+    // DirectShow's, which a Media Foundation camera's source answers to as well: GetRange, Set and Get after IUnknown's
+    [ComImport, Guid("C6E13370-30AC-11d0-A18C-00A0C9118956"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IAMCameraControl
+    { }
+
     [SupportedOSPlatform("windows10.0.17763.0")]
-    internal class DeviceCapture : IMediaVideoSource
+    internal class DeviceCapture : IMediaVideoSource, ICameraControl
     {
+        private const int CameraControlAuto = 1, CameraControlManual = 2;
         public const uint MF_SOURCE_READER_FIRST_VIDEO_STREAM = 0xFFFFFFFC;
 
         private IMFSourceReader _pReader;
@@ -42,6 +48,13 @@ namespace SharpMediaFoundationInterop.Input
         /// <summary>The camera <see cref="Initialize()"/> opens: the first where it is null.</summary>
         private readonly string _symbolicLink;
 
+        // the largest size asked for, of the camera's: 0 for its largest
+        private readonly uint _maxWidth, _maxHeight;
+
+        // the source's IAMCameraControl, called of its pointer: of any thread, as the source is free-threaded, where an
+        // object of COM's would be marshalled to another apartment, of no proxy of it
+        private nint _control;
+
         static DeviceCapture()
         {
             MediaUtils.Check(PInvoke.MFStartup(PInvoke.MF_API_VERSION, 0));
@@ -54,6 +67,14 @@ namespace SharpMediaFoundationInterop.Input
         public DeviceCapture(string symbolicLink)
         {
             _symbolicLink = symbolicLink;
+        }
+
+        /// <summary>Of the camera, in the largest of its sizes no larger than the one given: of none, its smallest.</summary>
+        public DeviceCapture(string symbolicLink, uint maxWidth, uint maxHeight)
+        {
+            _symbolicLink = symbolicLink;
+            _maxWidth = maxWidth;
+            _maxHeight = maxHeight;
         }
 
         public void Initialize()
@@ -71,18 +92,39 @@ namespace SharpMediaFoundationInterop.Input
 
         public void Initialize(string symbolicLink)
         {
-            IMFMediaSource device = GetCaptureDevice(symbolicLink);
+            try
+            {
+                Initialize(symbolicLink, false);
+            }
+            catch (COMException)
+            {
+                // held by another app: shared of the Frame Server, in the format that app streams
+                Dispose(true);
+                _disposedValue = false;
+                Initialize(symbolicLink, true);
+            }
+        }
+
+        private void Initialize(string symbolicLink, bool shared)
+        {
+            IMFMediaSource device = GetCaptureDevice(symbolicLink, shared);
+            if (!shared && device is IAMCameraControl)
+                _control = Marshal.GetComInterfaceForObject(device, typeof(IAMCameraControl));
             _pReader = CreateSourceReader(device);
 
-            // TODO: make configurable
-            var mediaType = GetBestMediaType(_pReader);
+            IMFMediaType mediaType;
+            if (shared)
+                _pReader.GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, out mediaType);
+            else
+                mediaType = GetBestMediaType(_pReader, _maxWidth, _maxHeight);
 
             mediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out var frameSize);
             Width = (uint)(frameSize >> 32);
             Height = (uint)(frameSize & 0xFFFFFFFF);
             mediaType.GetGUID(PInvoke.MF_MT_SUBTYPE, out var targetFormat);
             OutputFormat = targetFormat;
-            _pReader.SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, mediaType);
+            if (!shared)
+                _pReader.SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, mediaType);
 
             uint sampleSize;
             byte[] sample = null;
@@ -115,11 +157,11 @@ namespace SharpMediaFoundationInterop.Input
             {
                 sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
                 bool ret =  MediaUtils.CopyBuffer(buffer, sampleBytes, out sampleSize);
-                GC.AddMemoryPressure(sampleSize); // samples are large, so to keep the memory usage low we have to tell GC about large amounts of unmanaged memory being allocated
 
+                // released here, not by the GC: no memory pressure to tell it of - added, a frame's megabytes would
+                // bring on a gen2 collection at every frame or two
                 Marshal.ReleaseComObject(sample);
                 Marshal.ReleaseComObject(buffer);
-                GC.RemoveMemoryPressure(sampleSize);
                 return ret;
             }
 
@@ -127,11 +169,11 @@ namespace SharpMediaFoundationInterop.Input
             return false;
         }
 
-        private static unsafe IMFMediaType GetBestMediaType(IMFSourceReader pReader)
+        private static unsafe IMFMediaType GetBestMediaType(IMFSourceReader pReader, uint maxWidth, uint maxHeight)
         {
             IMFMediaType nativeMediaType;
-            IMFMediaType bestMediaType = null;
-            ulong frameSize = 0;
+            IMFMediaType bestMediaType = null, smallestMediaType = null;
+            ulong frameSize = 0, smallestFrameSize = ulong.MaxValue;
             uint dwMediaTypeIndex = 0;
 
             while (true)
@@ -194,6 +236,13 @@ namespace SharpMediaFoundationInterop.Input
                     continue;
 
                 nativeMediaType.GetUINT64(PInvoke.MF_MT_FRAME_SIZE, out ulong currentFrameSize);
+                if (currentFrameSize < smallestFrameSize)
+                {
+                    smallestFrameSize = currentFrameSize;
+                    smallestMediaType = nativeMediaType;
+                }
+                if (maxWidth > 0 && ((currentFrameSize >> 32) > maxWidth || (currentFrameSize & 0xFFFFFFFF) > maxHeight))
+                    continue;
                 if (currentFrameSize > frameSize)
                 {
                     frameSize = currentFrameSize;
@@ -201,8 +250,27 @@ namespace SharpMediaFoundationInterop.Input
                 }
             }
 
-            return bestMediaType;
+            return bestMediaType ?? smallestMediaType;
         }
+
+        public unsafe bool TryGetRange(CameraProperty property, out int min, out int max, out int step, out int defaultValue)
+        {
+            int a = 0, b = 0, c = 0, d = 0, flags = 0;
+            bool got = _control != 0 && ((delegate* unmanaged[Stdcall]<nint, int, int*, int*, int*, int*, int*, int>)(*(void***)_control)[3])(_control, (int)property, &a, &b, &c, &d, &flags) == 0;
+            (min, max, step, defaultValue) = (a, b, c, d);
+            return got;
+        }
+
+        public unsafe bool TryGet(CameraProperty property, out int value, out bool auto)
+        {
+            int v = 0, flags = 0;
+            bool got = _control != 0 && ((delegate* unmanaged[Stdcall]<nint, int, int*, int*, int>)(*(void***)_control)[5])(_control, (int)property, &v, &flags) == 0;
+            (value, auto) = (v, (flags & CameraControlAuto) != 0);
+            return got;
+        }
+
+        public unsafe bool TrySet(CameraProperty property, int value, bool auto = false) =>
+            _control != 0 && ((delegate* unmanaged[Stdcall]<nint, int, int, int, int>)(*(void***)_control)[4])(_control, (int)property, value, auto ? CameraControlAuto : CameraControlManual) == 0;
 
         private static unsafe IMFSourceReader CreateSourceReader(IMFMediaSource device)
         {
@@ -211,7 +279,7 @@ namespace SharpMediaFoundationInterop.Input
             return pReader;
         }
 
-        private static unsafe IMFMediaSource GetCaptureDevice(string symbolicLink)
+        private static unsafe IMFMediaSource GetCaptureDevice(string symbolicLink, bool shared)
         {
             MediaUtils.Check(PInvoke.MFCreateAttributes(out IMFAttributes pConfig, 1));
             pConfig.SetGUID(PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
@@ -234,6 +302,9 @@ namespace SharpMediaFoundationInterop.Input
                     throw new Exception($"Device {symbolicLink} was not found!");
                 }
             }
+            // MF_DEVSOURCE_ATTRIBUTE_FRAMESERVER_SHARE_MODE
+            if (shared)
+                devices[deviceIndex]->SetUINT32(new Guid("44d1a9bc-2999-4238-ae43-0730ceb2ab1b"), 1);
             IUnknown* device = (IUnknown*)devices[deviceIndex]->ActivateObject(typeof(IMFMediaSource).GUID);
             for (deviceIndex = 0; deviceIndex < devicesCount; deviceIndex++)
             {
@@ -272,6 +343,11 @@ namespace SharpMediaFoundationInterop.Input
                 {
                     Marshal.ReleaseComObject(_pReader);
                     _pReader = null;
+                }
+                if (_control != 0)
+                {
+                    Marshal.Release(_control);
+                    _control = 0;
                 }
 
                 _disposedValue = true;

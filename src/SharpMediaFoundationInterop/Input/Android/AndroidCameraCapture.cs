@@ -100,11 +100,11 @@ namespace SharpMediaFoundationInterop.Input
             if (_session == IntPtr.Zero)
                 throw new InvalidOperationException("The capture is to be initialized first.");
 
-            var stopwatch = Stopwatch.StartNew();
+            long start = Stopwatch.GetTimestamp();
             IntPtr image;
             while (AImageReader_acquireLatestImage(_reader, out image) != AMEDIA_OK)
             {
-                if (stopwatch.ElapsedMilliseconds > ReadTimeoutInMilliseconds)
+                if (Stopwatch.GetElapsedTime(start).TotalMilliseconds > ReadTimeoutInMilliseconds)
                     return false;
                 Thread.Sleep(2);
             }

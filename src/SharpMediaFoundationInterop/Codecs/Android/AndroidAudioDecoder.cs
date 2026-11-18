@@ -22,7 +22,9 @@ namespace SharpMediaFoundationInterop.Codecs
 
         private readonly AudioCodec _codec;
         private readonly AudioDecoderOptions _options;
+        /// <summary>The PCM decoded, each of the exact size of its frame: of <see cref="_pool"/>, given back as it is read out.</summary>
         private readonly Queue<byte[]> _decoded = new Queue<byte[]>();
+        private readonly FramePool _pool = new FramePool(16);
         private readonly uint _skipSamples;
         private uint _skipBytes;
         private uint _maxFrames;
@@ -200,12 +202,12 @@ namespace SharpMediaFoundationInterop.Codecs
 
         private bool Queue(ReadOnlySpan<byte> data, long time, uint flags)
         {
-            var stopwatch = Stopwatch.StartNew();
+            long start = Stopwatch.GetTimestamp();
             nint index;
             while ((index = AMediaCodec_dequeueInputBuffer(_codecHandle, 5000)) < 0)
             {
                 Pump();
-                if (stopwatch.ElapsedMilliseconds > 5000)
+                if (Stopwatch.GetElapsedTime(start).TotalMilliseconds > 5000)
                     return false;
             }
             byte* buffer = AMediaCodec_getInputBuffer(_codecHandle, (nuint)index, out nuint capacity);
@@ -246,22 +248,25 @@ namespace SharpMediaFoundationInterop.Codecs
             }
         }
 
-        /// <summary>The decoder's PCM as this hands it out: of the bits of <see cref="BitsPerSample"/>, float of 32.</summary>
+        /// <summary>
+        /// The decoder's PCM as this hands it out: of the bits of <see cref="BitsPerSample"/>, float of 32. In an array of the
+        /// pool, of the exact size, which <see cref="ProcessOutput"/> gives back once it is copied out.
+        /// </summary>
         private byte[] ToOutput(ReadOnlySpan<byte> pcm)
         {
             int outBits = (int)BitsPerSample;
             switch (_encoding)
             {
                 case ENCODING_PCM_FLOAT:
-                    return outBits == 32 ? pcm.ToArray() : outBits == 24 ? FloatTo24(pcm) : FloatTo16(pcm);
+                    return outBits == 32 ? Copy(pcm) : outBits == 24 ? FloatTo24(pcm) : FloatTo16(pcm);
                 case ENCODING_PCM_24BIT_PACKED:
-                    return outBits == 24 ? pcm.ToArray() : throw new NotSupportedException("The decoder hands out 24 bit PCM where other was asked");
+                    return outBits == 24 ? Copy(pcm) : throw new NotSupportedException("The decoder hands out 24 bit PCM where other was asked");
                 default:
                     if (outBits == 16)
-                        return pcm.ToArray();
+                        return Copy(pcm);
                     // 16 bit where more was asked: widened, of no more precision
                     var samples = MemoryMarshal.Cast<byte, short>(pcm);
-                    var result = new byte[samples.Length * outBits / 8];
+                    var result = _pool.Rent(samples.Length * outBits / 8);
                     for (int i = 0; i < samples.Length; i++)
                     {
                         if (outBits == 32)
@@ -280,10 +285,17 @@ namespace SharpMediaFoundationInterop.Codecs
             }
         }
 
-        private static byte[] FloatTo16(ReadOnlySpan<byte> pcm)
+        private byte[] Copy(ReadOnlySpan<byte> pcm)
+        {
+            var result = _pool.Rent(pcm.Length);
+            pcm.CopyTo(result);
+            return result;
+        }
+
+        private byte[] FloatTo16(ReadOnlySpan<byte> pcm)
         {
             var samples = MemoryMarshal.Cast<byte, float>(pcm);
-            var result = new byte[samples.Length * 2];
+            var result = _pool.Rent(samples.Length * 2);
             var output = MemoryMarshal.Cast<byte, short>(result.AsSpan());
             for (int i = 0; i < samples.Length; i++)
                 output[i] = (short)Math.Clamp(MathF.Round(samples[i] * 32768f), -32768f, 32767f);
@@ -291,10 +303,10 @@ namespace SharpMediaFoundationInterop.Codecs
         }
 
         /// <summary>32 bit float to packed 24 bit PCM: exact, of samples that were of 24 bits.</summary>
-        private static byte[] FloatTo24(ReadOnlySpan<byte> pcm)
+        private byte[] FloatTo24(ReadOnlySpan<byte> pcm)
         {
             var samples = MemoryMarshal.Cast<byte, float>(pcm);
-            var result = new byte[samples.Length * 3];
+            var result = _pool.Rent(samples.Length * 3);
             for (int i = 0; i < samples.Length; i++)
             {
                 int value = (int)Math.Clamp(MathF.Round(samples[i] * 8388608f), -8388608f, 8388607f);
@@ -317,8 +329,8 @@ namespace SharpMediaFoundationInterop.Codecs
                 Pump();
                 if (_draining)
                 {
-                    var stopwatch = Stopwatch.StartNew();
-                    while (_decoded.Count == 0 && !_ended && stopwatch.ElapsedMilliseconds < 10000)
+                    long start = Stopwatch.GetTimestamp();
+                    while (_decoded.Count == 0 && !_ended && Stopwatch.GetElapsedTime(start).TotalMilliseconds < 10000)
                     {
                         Thread.Sleep(2);
                         Pump();
@@ -333,10 +345,14 @@ namespace SharpMediaFoundationInterop.Codecs
                 _skipBytes -= skip;
                 length = (uint)pcm.Length - skip;
                 if (length == 0)
+                {
+                    _pool.Return(pcm);
                     continue;
+                }
                 if (buffer == null || buffer.Length < length)
                     buffer = new byte[Math.Max(length, OutputSize)];
                 Buffer.BlockCopy(pcm, (int)skip, buffer, 0, (int)length);
+                _pool.Return(pcm);
                 return true;
             }
         }
@@ -367,7 +383,8 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             ThrowIfNotInitialized();
             AMediaCodec_flush(_codecHandle);
-            _decoded.Clear();
+            while (_decoded.TryDequeue(out var pcm))
+                _pool.Return(pcm);
             _skipBytes = SkipBytes;
         }
 

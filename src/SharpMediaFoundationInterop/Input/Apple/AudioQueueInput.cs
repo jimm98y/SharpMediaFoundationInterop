@@ -20,6 +20,8 @@ namespace SharpMediaFoundationInterop.Input
         private const int BufferCount = 3;
 
         private readonly string _deviceUid;
+        /// <summary>What a buffer recorded is copied into, and raised in: of the queue's callback thread, which raises them one at a time.</summary>
+        private readonly AudioInputBuffer _recorded = new AudioInputBuffer();
         private IntPtr _queue;
         private GCHandle _self;
         private volatile bool _running;
@@ -108,9 +110,10 @@ namespace SharpMediaFoundationInterop.Input
 
                 if (buffer->AudioDataByteSize > 0 && input._running)
                 {
-                    var data = new byte[buffer->AudioDataByteSize];
+                    // into the input's own array and arguments, valid while the event is raised: see IAudioInput.FrameReceived
+                    var data = input._recorded.Rent((int)buffer->AudioDataByteSize);
                     Marshal.Copy((IntPtr)buffer->AudioData, data, 0, data.Length);
-                    input.FrameReceived?.Invoke(input, new AudioInputEventArgs(data));
+                    input.FrameReceived?.Invoke(input, input._recorded.Args);
                 }
 
                 // the buffer goes back to be filled again, while recording

@@ -258,7 +258,7 @@ namespace SharpMediaFoundationInterop.Codecs
         public bool ProcessOutput(ref byte[] buffer, out uint length) => ProcessOutput(ref buffer, out length, out _);
 
         /// <summary>The next unit encoded, and the time of its frame. While draining it waits for one, up to the stream's end.</summary>
-        public bool ProcessOutput(ref byte[] buffer, out uint length, out long timestamp)
+        public unsafe bool ProcessOutput(ref byte[] buffer, out uint length, out long timestamp)
         {
             ThrowIfNotInitialized();
             length = 0;
@@ -268,12 +268,28 @@ namespace SharpMediaFoundationInterop.Codecs
                 return false;
             try
             {
-                byte[] unit = GstFrames.Bytes(sample);
-                int start = SkipDelimiter(unit);
-                int size = unit.Length - start;
-                if (buffer == null || buffer.Length < size)
-                    buffer = new byte[Math.Max(size, OutputSize)];
-                Buffer.BlockCopy(unit, start, buffer, 0, size);
+                // of the sample's buffer straight into the caller's, past its delimiter: no copy of its own in between
+                int size = 0;
+                if (GstFrames.MapBytes(sample, out IntPtr unitBuffer, out var info))
+                {
+                    try
+                    {
+                        var unit = new ReadOnlySpan<byte>(info.Data, (int)info.Size);
+                        int start = SkipDelimiter(unit);
+                        size = unit.Length - start;
+                        if (buffer == null || buffer.Length < size)
+                            buffer = new byte[Math.Max(size, OutputSize)];
+                        unit.Slice(start).CopyTo(buffer);
+                    }
+                    finally
+                    {
+                        Gst.Unmap(unitBuffer, ref info);
+                    }
+                }
+                else if (buffer == null)
+                {
+                    buffer = new byte[OutputSize];
+                }
                 length = (uint)size;
                 timestamp = GstFrames.Time(sample);
                 return true;
@@ -288,7 +304,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// Where an access unit starts past its access unit delimiter: h264parse puts one in front of each it makes whole, and
         /// Media Foundation's encoders hand out none - the parameter sets come first, of a key frame.
         /// </summary>
-        private int SkipDelimiter(byte[] unit)
+        private int SkipDelimiter(ReadOnlySpan<byte> unit)
         {
             if (_codec is not (VideoCodec.H264 or VideoCodec.H265) || unit.Length < 6)
                 return 0;

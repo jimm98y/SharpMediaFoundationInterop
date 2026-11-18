@@ -78,8 +78,7 @@ namespace SharpMediaFoundationInterop.WPF
                     // of the track's own timescale, on the clock of the video's samples: both count from the file's start
                     timestamp = MediaUtils.ToTicks(sample.PTS, _audioTrack.Timescale) + _audioShift;
                     _audioUnits.Clear();
-                    foreach (var unit in _reader.ParseSample(_audioTrack.TrackID, sample.Data))
-                        _audioUnits.Add(unit);
+                    AddUnits(_audioTrack, sample.Data, _audioUnits);
                     return _audioUnits;
                 }
             }
@@ -116,12 +115,86 @@ namespace SharpMediaFoundationInterop.WPF
                         _videoUnits.Add(WithHeaders(sample.Data));
                         return _videoUnits;
                     }
-                    foreach (var unit in _reader.ParseSample(_videoTrack.TrackID, sample.Data))
-                        _videoUnits.Add(unit);
+                    AddUnits(_videoTrack, sample.Data, _videoUnits);
                     return _videoUnits;
                 }
             }
             return null;
+        }
+
+        /// <summary>How a track's samples are cut into the units its decoder takes.</summary>
+        private enum SampleUnits
+        {
+            /// <summary>The sample is the unit: AAC's, Opus's, AV1's, VP9's - of every track that does not cut its own.</summary>
+            Whole,
+
+            /// <summary>NAL units, each after its length: H.264's and H.265's.</summary>
+            LengthPrefixed,
+
+            /// <summary>As the track cuts them, of its own parsing: of a track other than those.</summary>
+            TrackParsed,
+        }
+
+        private static readonly Dictionary<Type, SampleUnits> _sampleUnits = new Dictionary<Type, SampleUnits>();
+
+        /// <summary>
+        /// How the track's samples are cut: by the class that parses them. Its parsing is not called for the tracks known
+        /// here - every sample would allocate an enumerator and a list, or a state machine, of the units.
+        /// </summary>
+        private static SampleUnits SampleUnitsOf(ITrack track)
+        {
+            var type = track.GetType();
+            lock (_sampleUnits)
+            {
+                if (!_sampleUnits.TryGetValue(type, out var units))
+                {
+                    var parser = type.GetMethod(nameof(ITrack.ParseSample), new[] { typeof(byte[]), typeof(int), typeof(int) })?.DeclaringType;
+                    units = parser == typeof(TrackBase) ? SampleUnits.Whole
+                        : parser == typeof(H26XTrackBase) ? SampleUnits.LengthPrefixed
+                        : SampleUnits.TrackParsed;
+                    _sampleUnits[type] = units;
+                }
+                return units;
+            }
+        }
+
+        /// <summary>The units of a sample, as views of it, added to the list.</summary>
+        private void AddUnits(ITrack track, ArraySegment<byte> sample, List<ArraySegment<byte>> units)
+        {
+            switch (SampleUnitsOf(track))
+            {
+                case SampleUnits.Whole:
+                    units.Add(sample);
+                    return;
+
+                case SampleUnits.LengthPrefixed:
+                    {
+                        // as the track's own parsing cuts them: a length longer than what is left is cut to it, and bytes
+                        // left over too few for a length are an error
+                        int lengthSize = ((H26XTrackBase)track).NalLengthSize;
+                        byte[] buffer = sample.Array;
+                        int position = 0, length = sample.Count;
+                        while (position + lengthSize <= length)
+                        {
+                            long unitLength = 0;
+                            for (int i = 0; i < lengthSize; i++)
+                                unitLength = (unitLength << 8) | buffer[sample.Offset + position + i];
+                            position += lengthSize;
+                            if (unitLength > length - position)
+                                unitLength = length - position;
+                            units.Add(new ArraySegment<byte>(buffer, sample.Offset + position, (int)unitLength));
+                            position += (int)unitLength;
+                        }
+                        if (position != length)
+                            throw new InvalidDataException($"A sample of {length} bytes ends {length - position} bytes into a NAL unit's length.");
+                        return;
+                    }
+
+                default:
+                    foreach (var unit in _reader.ParseSample(track.TrackID, sample))
+                        units.Add(unit);
+                    return;
+            }
         }
 
         #region Subtitles

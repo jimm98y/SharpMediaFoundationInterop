@@ -33,8 +33,9 @@ namespace SharpMediaFoundationInterop.Codecs
         private int _pcmStart;
         private int _pcmEnd;
 
-        private readonly Queue<byte[]> _packets = new Queue<byte[]>();
-        private byte[] _packetBuffer;
+        /// <summary>The packets made, each in an array of <see cref="OutputSize"/> with its length: the array back to the pool once read.</summary>
+        private readonly Queue<(byte[] Data, int Length)> _packets = new Queue<(byte[], int)>();
+        private readonly Stack<byte[]> _pool = new Stack<byte[]>();
 
         [StructLayout(LayoutKind.Sequential)]
         private struct InputState
@@ -213,7 +214,6 @@ namespace SharpMediaFoundationInterop.Codecs
             size = sizeof(uint);
             AudioConverterGetProperty(_converter, kAudioConverterPropertyMaximumOutputPacketSize, &size, &maxPacket);
             OutputSize = Math.Max(maxPacket, 1024 * Channels);
-            _packetBuffer = new byte[OutputSize];
         }
 
         public bool ProcessInput(byte[] data, long timestamp) => ProcessInput(new ReadOnlySpan<byte>(data), timestamp);
@@ -240,8 +240,9 @@ namespace SharpMediaFoundationInterop.Codecs
             }
             if (buffer == null || buffer.Length < packet.Length)
                 buffer = new byte[Math.Max(packet.Length, OutputSize)];
-            Buffer.BlockCopy(packet, 0, buffer, 0, packet.Length);
+            Buffer.BlockCopy(packet.Data, 0, buffer, 0, packet.Length);
             length = (uint)packet.Length;
+            _pool.Push(packet.Data);
             return true;
         }
 
@@ -270,7 +271,8 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             ThrowIfNotInitialized();
             AudioConverterReset(_converter);
-            _packets.Clear();
+            while (_packets.TryDequeue(out var packet))
+                _pool.Push(packet.Data);
             _pcmStart = _pcmEnd = 0;
         }
 
@@ -297,7 +299,6 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             uint frameBytes = _input.BytesPerFrame;
             fixed (byte* pcm = _pcm)
-            fixed (byte* output = _packetBuffer)
             {
                 var state = new InputState
                 {
@@ -309,20 +310,28 @@ namespace SharpMediaFoundationInterop.Codecs
                 };
                 while (true)
                 {
+                    // each packet made straight into an array of the pool, queued with its length: not copied out of one
+                    byte[] chunk = _pool.Count > 0 ? _pool.Pop() : new byte[OutputSize];
                     uint packets = 1;
                     var description = new AudioStreamPacketDescription();
-                    var list = new AudioBufferList
+                    int status;
+                    uint size;
+                    fixed (byte* output = chunk)
                     {
-                        NumberBuffers = 1,
-                        Buffer = new AudioBuffer { NumberChannels = _output.ChannelsPerFrame, DataByteSize = (uint)_packetBuffer.Length, Data = output }
-                    };
-                    int status = AudioConverterFillComplexBuffer(_converter, &ProvideInput, (IntPtr)(&state), &packets, &list, &description);
+                        var list = new AudioBufferList
+                        {
+                            NumberBuffers = 1,
+                            Buffer = new AudioBuffer { NumberChannels = _output.ChannelsPerFrame, DataByteSize = (uint)chunk.Length, Data = output }
+                        };
+                        status = AudioConverterFillComplexBuffer(_converter, &ProvideInput, (IntPtr)(&state), &packets, &list, &description);
+                        size = description.DataByteSize != 0 ? description.DataByteSize : list.Buffer.DataByteSize;
+                    }
                     if (packets > 0)
                     {
-                        uint size = description.DataByteSize != 0 ? description.DataByteSize : list.Buffer.DataByteSize;
-                        _packets.Enqueue(_packetBuffer.AsSpan(0, (int)size).ToArray());
+                        _packets.Enqueue((chunk, (int)size));
                         continue;
                     }
+                    _pool.Push(chunk);
                     if (status == NoMoreDataNow && endOfStream)
                     {
                         state.State = 2; // all is in: the end, so the converter hands out what it holds

@@ -1,5 +1,5 @@
 ﻿using SharpMediaFoundationInterop.Input;
-using System.Buffers;
+using SharpMediaFoundationInterop.Utils;
 using System.Windows.Media;
 
 namespace SharpMediaFoundationInterop.WPF
@@ -23,11 +23,11 @@ namespace SharpMediaFoundationInterop.WPF
         {
             // the frame top-down, as the bitmap it is shown in is, straight into the array handed out; and when the screen
             // was captured, in 100 ns units
-            var frame = ArrayPool<byte>.Shared.Rent((int)_device.OutputSize);
+            var frame = FramePool.Shared.Rent((int)_device.OutputSize);
             if (_device.ReadSample(frame, out timestamp))
                 return frame;
 
-            ArrayPool<byte>.Shared.Return(frame);
+            FramePool.Shared.Return(frame);
             return Empty; // the screen has not changed
         }
 
@@ -53,7 +53,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         public void ReturnVideoSample(byte[] decoded)
         {
-            ArrayPool<byte>.Shared.Return(decoded);
+            FramePool.Shared.Return(decoded);
         }
 
         // the screen's frames as captured, on the CPU; nothing to let go of out of sight

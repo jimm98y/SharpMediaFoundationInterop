@@ -116,6 +116,10 @@ namespace SharpMediaFoundationInterop.Codecs
         public static readonly Guid MaxNumRefFrame =
             new Guid("964829ed-94f9-43b4-b74d-ef40944b69a0");
 
+        /// <summary>Each picture handed out as soon as it is encoded, of no reordering nor look-ahead (VT_BOOL).</summary>
+        public static readonly Guid LowLatencyMode =
+            new Guid("9c27891a-ed7a-40e1-88e8-b22727a024ee");
+
         /// <summary>Number of B pictures between reference pictures (UINT32).</summary>
         public static readonly Guid BPictureCount =
             new Guid("8d390aac-dc5c-4200-b57f-814d04bab74c");

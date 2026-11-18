@@ -1,13 +1,12 @@
 ﻿using System;
-using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using SharpMediaFoundationInterop.Codecs;
 using SharpMediaFoundationInterop.Utils;
 using System.Threading;
-using System.Collections.Concurrent;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -346,18 +345,9 @@ namespace SharpMediaFoundationInterop.WPF
         /// The decoded audio frames, of one size for a stream, kept for reuse: a frame handed out is the exact size of its
         /// PCM, which its consumer takes its length from, so ArrayPool's larger arrays would not do.
         /// </summary>
-        private readonly ConcurrentBag<byte[]> _audioPool = new ConcurrentBag<byte[]>();
+        private readonly FramePool _audioPool = new FramePool(16);
 
-        private byte[] RentAudio(int size)
-        {
-            while (_audioPool.TryTake(out var pooled))
-            {
-                if (pooled.Length == size)
-                    return pooled;
-                // a frame of a size the stream no longer decodes to is let go
-            }
-            return new byte[size];
-        }
+        private byte[] RentAudio(int size) => _audioPool.Rent(size);
 
         /// <summary>The time of the access unit decoded last: what one with no time of its own goes in at.</summary>
         private long _lastVideoTime;
@@ -535,7 +525,7 @@ namespace SharpMediaFoundationInterop.WPF
             {
                 // as the decoder made it, of its coded size: the GPU converts it
                 int size = (int)VideoFrameFormats.FrameSize(format, videoInfo.Width, videoInfo.Height);
-                byte[] frame = ArrayPool<byte>.Shared.Rent(size);
+                byte[] frame = FramePool.Shared.Rent(size);
                 Buffer.BlockCopy(decodedFrame, 0, frame, 0, Math.Min(size, decodedFrame.Length));
                 _videoRenderQueue.Enqueue((frame, frameTime));
                 Interlocked.Increment(ref _videoFrames);
@@ -544,7 +534,7 @@ namespace SharpMediaFoundationInterop.WPF
 
             // converted here, of the stream's color, top-down: the picture, the top left of the coded frame, turned as
             // it is shown
-            byte[] picture = ArrayPool<byte>.Shared.Rent(_imageBufferLen);
+            byte[] picture = FramePool.Shared.Rent(_imageBufferLen);
             _color.Convert(decodedFrame, format, (int)VideoFrameFormats.Stride(format, videoInfo.Width), (int)videoInfo.Height,
                 (int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight, picture, (int)videoInfo.ShownWidth, _bytesPerPixel,
                 FramePlacement.Whole((int)videoInfo.OriginalWidth, (int)videoInfo.OriginalHeight, videoInfo.Orientation));
@@ -962,7 +952,7 @@ namespace SharpMediaFoundationInterop.WPF
                 return frame;
             }
 
-            byte[] copy = ArrayPool<byte>.Shared.Rent(_nv12Buffer.Length);
+            byte[] copy = FramePool.Shared.Rent(_nv12Buffer.Length);
             Buffer.BlockCopy(_nv12Buffer, 0, copy, 0, _nv12Buffer.Length);
             return copy;
         }
@@ -984,7 +974,7 @@ namespace SharpMediaFoundationInterop.WPF
             if (frame is GpuVideoFrame gpu)
                 gpu.Release();
             else if (frame is byte[] bytes)
-                ArrayPool<byte>.Shared.Return(bytes);
+                FramePool.Shared.Return(bytes);
         }
 
         /// <summary>Gives a frame of <see cref="GetVideoFrame"/> back.</summary>
@@ -1088,13 +1078,12 @@ namespace SharpMediaFoundationInterop.WPF
 
         public void ReturnVideoSample(byte[] decoded)
         {
-            ArrayPool<byte>.Shared.Return(decoded);
+            FramePool.Shared.Return(decoded);
         }
 
         public void ReturnAudioSample(byte[] decoded)
         {
-            if (decoded != null && decoded.Length > 0)
-                _audioPool.Add(decoded);
+            _audioPool.Return(decoded);
         }
 
         protected virtual void Dispose(bool disposing)

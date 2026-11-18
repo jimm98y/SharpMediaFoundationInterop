@@ -24,8 +24,11 @@ namespace SharpMediaFoundationInterop.Codecs
         private readonly VideoCodec _codec;
         private readonly VideoEncoderOptions _options;
         private readonly List<string> _unapplied = new List<string>();
-        private readonly Queue<(byte[] Data, long Time)> _encoded = new Queue<(byte[], long)>();
+        /// <summary>The units encoded, each in an array of <see cref="_buffers"/> - of its length, at least - with its length and time.</summary>
+        private readonly Queue<(byte[] Data, int Length, long Time)> _encoded = new Queue<(byte[], int, long)>();
         private readonly object _encodedLock = new object();
+        /// <summary>What a unit is copied out of VideoToolbox's into, and made Annex B in: used again, unit after unit.</summary>
+        private readonly UnitBuffers _buffers = new UnitBuffers();
 
         private IntPtr _session;
         private GCHandle _self;
@@ -256,7 +259,7 @@ namespace SharpMediaFoundationInterop.Codecs
         public bool ProcessOutput(ref byte[] buffer, out uint length, out long timestamp)
         {
             ThrowIfNotInitialized();
-            (byte[] Data, long Time) unit;
+            (byte[] Data, int Length, long Time) unit;
             lock (_encodedLock)
             {
                 if (!_encoded.TryDequeue(out unit))
@@ -266,11 +269,12 @@ namespace SharpMediaFoundationInterop.Codecs
                     return false;
                 }
             }
-            if (buffer == null || buffer.Length < unit.Data.Length)
-                buffer = new byte[Math.Max(unit.Data.Length, OutputSize)];
-            Buffer.BlockCopy(unit.Data, 0, buffer, 0, unit.Data.Length);
-            length = (uint)unit.Data.Length;
+            if (buffer == null || buffer.Length < unit.Length)
+                buffer = new byte[Math.Max(unit.Length, OutputSize)];
+            Buffer.BlockCopy(unit.Data, 0, buffer, 0, unit.Length);
+            length = (uint)unit.Length;
             timestamp = unit.Time;
+            _buffers.Return(unit.Data);
             return true;
         }
 
@@ -298,7 +302,10 @@ namespace SharpMediaFoundationInterop.Codecs
             ThrowIfNotInitialized();
             VTCompressionSessionCompleteFrames(_session, CMTime.Invalid);
             lock (_encodedLock)
-                _encoded.Clear();
+            {
+                while (_encoded.TryDequeue(out var unit))
+                    _buffers.Return(unit.Data);
+            }
         }
 
         /// <summary>An access unit of VideoToolbox's: its NAL units, each of its length first, made Annex B - after the parameter sets, of a key frame.</summary>
@@ -320,7 +327,8 @@ namespace SharpMediaFoundationInterop.Codecs
                 if (data == IntPtr.Zero)
                     return;
                 int size = (int)CMBlockBufferGetDataLength(data);
-                var avcc = new byte[size];
+                var buffers = encoder._buffers;
+                byte[] avcc = buffers.Rent(size);
                 fixed (byte* p = avcc)
                     CMBlockBufferCopyDataBytes(data, 0, (nuint)size, p);
 
@@ -328,27 +336,42 @@ namespace SharpMediaFoundationInterop.Codecs
                 {
                     // a ProRes picture is a sample whole, as it is
                     lock (encoder._encodedLock)
-                        encoder._encoded.Enqueue((avcc, CMSampleBufferGetPresentationTimeStamp(sampleBuffer).ToTicks()));
+                        encoder._encoded.Enqueue((avcc, size, CMSampleBufferGetPresentationTimeStamp(sampleBuffer).ToTicks()));
                     return;
                 }
 
-                var unit = new List<byte>(size + 256);
-                if (IsKeyFrame(sampleBuffer))
-                    encoder.AppendParameterSets(CMSampleBufferGetFormatDescription(sampleBuffer), unit);
+                // Annex B: the parameter sets of a key frame, then each NAL unit, its length made a start code - measured
+                // first, then written into one array
+                IntPtr format = IsKeyFrame(sampleBuffer) ? CMSampleBufferGetFormatDescription(sampleBuffer) : IntPtr.Zero;
+                int annexB = encoder.ParameterSetsLength(format);
                 for (int i = 0; i + 4 <= size;)
                 {
                     int length = (avcc[i] << 24) | (avcc[i + 1] << 16) | (avcc[i + 2] << 8) | avcc[i + 3];
                     i += 4;
                     if (length <= 0 || i + length > size)
                         break;
-                    unit.AddRange(StartCode);
-                    unit.AddRange(new ArraySegment<byte>(avcc, i, length));
+                    annexB += StartCode.Length + length;
                     i += length;
                 }
 
+                byte[] unit = buffers.Rent(annexB);
+                int written = encoder.WriteParameterSets(format, unit);
+                for (int i = 0; i + 4 <= size;)
+                {
+                    int length = (avcc[i] << 24) | (avcc[i + 1] << 16) | (avcc[i + 2] << 8) | avcc[i + 3];
+                    i += 4;
+                    if (length <= 0 || i + length > size)
+                        break;
+                    StartCode.CopyTo(unit, written);
+                    Buffer.BlockCopy(avcc, i, unit, written + StartCode.Length, length);
+                    written += StartCode.Length + length;
+                    i += length;
+                }
+                buffers.Return(avcc);
+
                 long time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer).ToTicks();
                 lock (encoder._encodedLock)
-                    encoder._encoded.Enqueue((unit.ToArray(), time));
+                    encoder._encoded.Enqueue((unit, written, time));
             }
             catch (Exception ex)
             {
@@ -367,10 +390,18 @@ namespace SharpMediaFoundationInterop.Codecs
             return notSync == IntPtr.Zero || notSync == Boolean(false);
         }
 
-        private void AppendParameterSets(IntPtr format, List<byte> unit)
+        /// <summary>The bytes the format's parameter sets take, each after a start code: 0 of no format, not a key frame's.</summary>
+        private int ParameterSetsLength(IntPtr format) => ParameterSets(format, null);
+
+        /// <summary>The format's parameter sets, each after a start code, at the start of the unit; how many bytes they took.</summary>
+        private int WriteParameterSets(IntPtr format, byte[] unit) => ParameterSets(format, unit);
+
+        /// <summary>Of each parameter set in turn, as far as the format gives them: written into the unit, or of none, measured.</summary>
+        private int ParameterSets(IntPtr format, byte[] unit)
         {
             if (format == IntPtr.Zero)
-                return;
+                return 0;
+            int written = 0;
             nuint count = 1;
             for (nuint i = 0; i < count; i++)
             {
@@ -380,10 +411,15 @@ namespace SharpMediaFoundationInterop.Codecs
                     ? CMVideoFormatDescriptionGetH264ParameterSetAtIndex(format, i, out set, out size, out count, out _)
                     : CMVideoFormatDescriptionGetHEVCParameterSetAtIndex(format, i, out set, out size, out count, out _);
                 if (status != 0)
-                    return;
-                unit.AddRange(StartCode);
-                unit.AddRange(new ReadOnlySpan<byte>(set, (int)size).ToArray());
+                    break;
+                if (unit != null)
+                {
+                    StartCode.CopyTo(unit, written);
+                    new ReadOnlySpan<byte>(set, (int)size).CopyTo(unit.AsSpan(written + StartCode.Length));
+                }
+                written += StartCode.Length + (int)size;
             }
+            return written;
         }
 
         private void ThrowIfNotInitialized()

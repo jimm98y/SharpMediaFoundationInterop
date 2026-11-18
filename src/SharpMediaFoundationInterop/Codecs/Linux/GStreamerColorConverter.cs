@@ -29,7 +29,13 @@ namespace SharpMediaFoundationInterop.Codecs
             InputFormat = inputFormat;
             OutputFormat = outputFormat;
             OutputSize = ColorFormats.FrameSize(outputFormat, options.Width, options.Height);
+            _inputPlanes = Planes(inputFormat);
+            _outputPlanes = Planes(outputFormat);
         }
+
+        // the planes of a frame in and out, of their formats and the size: made once, not at every frame
+        private readonly (int RowBytes, int Rows)[] _inputPlanes;
+        private readonly (int RowBytes, int Rows)[] _outputPlanes;
 
         /// <summary>Whether GStreamer converts the one format to the other: of the plugins installed, videoconvert's.</summary>
         public static bool Supports(Guid inputFormat, Guid outputFormat) =>
@@ -123,7 +129,7 @@ namespace SharpMediaFoundationInterop.Codecs
             // of the library's rows to GStreamer's: each plane after the one before, of its default stride
             bool flip = ColorFormats.IsRgb(InputFormat) && !_options.TopDown;
             int from = 0, to = 0;
-            foreach (var (rowBytes, rows) in Planes(InputFormat))
+            foreach (var (rowBytes, rows) in _inputPlanes)
             {
                 int stride = DefaultStride(rowBytes);
                 for (int row = 0; row < rows; row++)
@@ -158,7 +164,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 IntPtr frame = Gst.gst_sample_get_buffer(sample);
                 if (frame == IntPtr.Zero)
                     return false;
-                var planes = Planes(OutputFormat);
+                var planes = _outputPlanes;
                 Span<int> strides = stackalloc int[4];
                 Span<long> offsets = stackalloc long[4];
                 if (!Gst.GetVideoLayout(frame, strides, offsets))

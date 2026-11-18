@@ -17,7 +17,19 @@ namespace SharpMediaFoundationInterop.Utils
             IntPtr caps = Gst.gst_sample_get_caps(sample);
             if (caps == IntPtr.Zero)
                 return (0, 0);
-            return (Gst.GetCapsInt(caps, "width") ?? 0, Gst.GetCapsInt(caps, "height") ?? 0);
+            // of every frame: the names as UTF-8 of their own, none converted
+            return (Gst.GetCapsInt(caps, "width\0"u8) ?? 0, Gst.GetCapsInt(caps, "height\0"u8) ?? 0);
+        }
+
+        /// <summary>
+        /// The bytes of the sample's buffer, mapped to be read where they are - not copied: <see cref="Gst.Unmap"/> the buffer
+        /// after. False, the bytes none, where it has no buffer or it does not map.
+        /// </summary>
+        public static bool MapBytes(IntPtr sample, out IntPtr buffer, out Gst.GstMapInfo info)
+        {
+            info = default;
+            buffer = Gst.gst_sample_get_buffer(sample);
+            return buffer != IntPtr.Zero && Gst.Map(buffer, out info);
         }
 
         /// <summary>
@@ -106,7 +118,7 @@ namespace SharpMediaFoundationInterop.Utils
             }
         }
 
-        /// <summary>The bytes of the sample's buffer, copied.</summary>
+        /// <summary>The bytes of the sample's buffer, copied: of a sample read once - its stream's setup - not of every frame, see <see cref="MapBytes"/>.</summary>
         public static byte[] Bytes(IntPtr sample)
         {
             IntPtr buffer = Gst.gst_sample_get_buffer(sample);

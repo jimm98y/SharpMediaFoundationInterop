@@ -167,7 +167,7 @@ namespace SharpMediaFoundationInterop.Codecs
         }
 
         /// <summary>The next packet. While draining it waits for one, up to the stream's end.</summary>
-        public bool ProcessOutput(ref byte[] buffer, out uint length)
+        public unsafe bool ProcessOutput(ref byte[] buffer, out uint length)
         {
             ThrowIfNotInitialized();
             while (true)
@@ -178,10 +178,34 @@ namespace SharpMediaFoundationInterop.Codecs
                     length = 0;
                     return false;
                 }
-                byte[] packet;
+                bool header = false;
+                int size = 0;
                 try
                 {
-                    packet = GstFrames.Bytes(sample);
+                    // of the sample's buffer straight into the caller's: no copy of its own in between
+                    if (GstFrames.MapBytes(sample, out IntPtr packetBuffer, out var info))
+                    {
+                        try
+                        {
+                            var packet = new ReadOnlySpan<byte>(info.Data, (int)info.Size);
+                            header = IsHeader(packet);
+                            if (!header)
+                            {
+                                size = packet.Length;
+                                if (buffer == null || buffer.Length < size)
+                                    buffer = new byte[Math.Max(size, OutputSize)];
+                                packet.CopyTo(buffer);
+                            }
+                        }
+                        finally
+                        {
+                            Gst.Unmap(packetBuffer, ref info);
+                        }
+                    }
+                    else if (buffer == null)
+                    {
+                        buffer = new byte[OutputSize];
+                    }
                     TakeConfig(Gst.gst_sample_get_caps(sample));
                 }
                 finally
@@ -189,34 +213,52 @@ namespace SharpMediaFoundationInterop.Codecs
                     Gst.gst_mini_object_unref(sample);
                 }
 
-                if (IsHeader(packet))
+                if (header)
                     continue;
-                _flac?.AddFrame(packet.Length);
-                if (buffer == null || buffer.Length < packet.Length)
-                    buffer = new byte[Math.Max(packet.Length, OutputSize)];
-                Buffer.BlockCopy(packet, 0, buffer, 0, packet.Length);
-                length = (uint)packet.Length;
+                _flac?.AddFrame(size);
+                length = (uint)size;
                 return true;
             }
         }
 
-        /// <summary>The configuration the encoder's caps carry, where they carry one: of AAC and ALAC, codec_data.</summary>
-        private void TakeConfig(IntPtr caps)
+        /// <summary>
+        /// The configuration the encoder's caps carry, where they carry one: of AAC and ALAC, codec_data. Every packet's caps
+        /// carry it again: it is copied only where it is other than the one kept, not at every packet.
+        /// </summary>
+        private unsafe void TakeConfig(IntPtr caps)
         {
             if (caps == IntPtr.Zero || _codec is not (AudioCodec.AAC or AudioCodec.Alac))
                 return;
-            byte[] data = Gst.GetCapsBuffer(caps, "codec_data");
-            if (data == null)
+            IntPtr data = Gst.GetCapsBufferHandle(caps, "codec_data");
+            if (data == IntPtr.Zero)
                 return;
-            // of ALAC, the 'alac' atom libav makes: the ALACSpecificConfig is its last 24 bytes
-            _config = _codec == AudioCodec.Alac && data.Length > 24 ? data.AsSpan(data.Length - 24).ToArray() : data;
+            if (!Gst.Map(data, out var info))
+            {
+                // as a buffer that does not map is read: of no bytes
+                if (_config == null || _config.Length != 0)
+                    _config = Array.Empty<byte>();
+                return;
+            }
+            try
+            {
+                var bytes = new ReadOnlySpan<byte>(info.Data, (int)info.Size);
+                // of ALAC, the 'alac' atom libav makes: the ALACSpecificConfig is its last 24 bytes
+                if (_codec == AudioCodec.Alac && bytes.Length > 24)
+                    bytes = bytes.Slice(bytes.Length - 24);
+                if (_config == null || !bytes.SequenceEqual(_config))
+                    _config = bytes.ToArray();
+            }
+            finally
+            {
+                Gst.Unmap(data, ref info);
+            }
         }
 
         /// <summary>
         /// Whether a packet is of the stream's header, not of its sound: of FLAC the marker and the metadata blocks - kept, as
         /// <see cref="Config"/> - and of Opus its OpusHead and OpusTags.
         /// </summary>
-        private bool IsHeader(byte[] packet)
+        private bool IsHeader(ReadOnlySpan<byte> packet)
         {
             if (_codec == AudioCodec.Flac && packet.Length >= 4)
             {
@@ -231,7 +273,7 @@ namespace SharpMediaFoundationInterop.Codecs
             }
             if (_codec == AudioCodec.Opus && packet.Length >= 8)
             {
-                var head = packet.AsSpan(0, 8);
+                var head = packet.Slice(0, 8);
                 if (head.SequenceEqual("OpusHead"u8) || head.SequenceEqual("OpusTags"u8))
                     return true;
             }

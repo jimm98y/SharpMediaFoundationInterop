@@ -228,7 +228,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// </summary>
         private void Queue(ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long time, uint flags)
         {
-            var stopwatch = Stopwatch.StartNew();
+            long start = Stopwatch.GetTimestamp();
             while (true)
             {
                 nint index = AMediaCodec_dequeueInputBuffer(_codecHandle, 5000);
@@ -249,7 +249,7 @@ namespace SharpMediaFoundationInterop.Codecs
                     return;
                 }
                 Pump();
-                if (stopwatch.ElapsedMilliseconds > 5000)
+                if (Stopwatch.GetElapsedTime(start).TotalMilliseconds > 5000)
                 {
                     if (Log.WarnEnabled)
                         Log.Warn($"The {_codec} decoder took no input for 5 s: the sample is left out");
@@ -292,12 +292,12 @@ namespace SharpMediaFoundationInterop.Codecs
         /// <summary>Takes the images rendered and not yet read, waiting for each up to the time given.</summary>
         private void TakeImages(TimeSpan wait)
         {
-            var stopwatch = Stopwatch.StartNew();
+            long start = Stopwatch.GetTimestamp();
             while (_rendered > 0)
             {
                 if (AImageReader_acquireNextImage(_reader, out IntPtr image) != AMEDIA_OK)
                 {
-                    if (stopwatch.Elapsed >= wait)
+                    if (Stopwatch.GetElapsedTime(start) >= wait)
                         return;
                     Thread.Sleep(1);
                     continue;
@@ -342,8 +342,8 @@ namespace SharpMediaFoundationInterop.Codecs
             Pump();
             if (_draining)
             {
-                var stopwatch = Stopwatch.StartNew();
-                while (_frames.Count == 0 && (!_ended || _rendered > 0) && stopwatch.ElapsedMilliseconds < 10000)
+                long start = Stopwatch.GetTimestamp();
+                while (_frames.Count == 0 && (!_ended || _rendered > 0) && Stopwatch.GetElapsedTime(start).TotalMilliseconds < 10000)
                 {
                     Thread.Sleep(2);
                     Pump();
