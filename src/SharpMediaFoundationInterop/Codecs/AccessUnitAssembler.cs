@@ -213,6 +213,24 @@ namespace SharpMediaFoundationInterop.Codecs
             }
         }
 
+        // The sequence header read last, as written with its size, and what was made of it.
+        private byte[] _lastSequenceHeader;
+        private byte[] _lastAv1C;
+        private bool _lastReducedStillPictureHeader;
+        private int _lastWidth, _lastHeight;
+
+        /// <summary>Whether the sequence header in <see cref="_obu"/> is, byte for byte, the one read last.</summary>
+        private bool IsLastSequenceHeader()
+        {
+            var last = _lastSequenceHeader;
+            if (last == null || last.Length != _obu.Count)
+                return false;
+            for (int i = 0; i < last.Length; i++)
+                if (last[i] != _obu[i])
+                    return false;
+            return true;
+        }
+
         private void PushObus(ReadOnlySpan<byte> data, long time)
         {
             Obus.Split(data, _obus);
@@ -234,8 +252,17 @@ namespace SharpMediaFoundationInterop.Codecs
                     Obus.WriteWithSize(_obu, data, obu);
                     try
                     {
-                        var av1C = Obus.CreateAv1C(_obu.ToArray(), payload, out _reducedStillPictureHeader, out int width, out int height);
-                        SequenceHeader?.Invoke(av1C, width, height);
+                        // A stream repeats its sequence header, as at each key frame: the one before raised again, of what was
+                        // made of it - not made anew, allocating, of the same bytes - so a handler sees it as it did each time.
+                        if (!IsLastSequenceHeader())
+                        {
+                            // kept only once it is read: one that cannot be is not taken for the one before
+                            var header = _obu.ToArray();
+                            var av1C = Obus.CreateAv1C(header, payload, out bool reduced, out int width, out int height);
+                            (_lastSequenceHeader, _lastAv1C, _lastReducedStillPictureHeader, _lastWidth, _lastHeight) = (header, av1C, reduced, width, height);
+                        }
+                        _reducedStillPictureHeader = _lastReducedStillPictureHeader;
+                        SequenceHeader?.Invoke(_lastAv1C, _lastWidth, _lastHeight);
                     }
                     catch (EndOfStreamException)
                     {

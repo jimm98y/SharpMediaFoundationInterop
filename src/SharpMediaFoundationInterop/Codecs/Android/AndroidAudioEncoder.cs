@@ -23,9 +23,12 @@ namespace SharpMediaFoundationInterop.Codecs
 
         private readonly AudioCodec _codec;
         private readonly AudioEncoderOptions _options;
-        /// <summary>The packets made, each of the exact size: of <see cref="_pool"/>, given back as each is read out.</summary>
-        private readonly Queue<byte[]> _packets = new Queue<byte[]>();
-        private readonly FramePool _pool = new FramePool(16);
+        /// <summary>
+        /// The packets made, each with its length, in an array of <see cref="_pool"/> - of a size of its own each, which an
+        /// exact size would never find again - given back as each is read out.
+        /// </summary>
+        private readonly Queue<(byte[] Data, int Length)> _packets = new Queue<(byte[], int)>();
+        private readonly UnitBuffers _pool = new UnitBuffers(16);
         /// <summary>The PCM converted for the encoder, of the input of a call: grown to the largest, used again.</summary>
         private byte[] _converted = Array.Empty<byte>();
         private IntPtr _codecHandle;
@@ -247,7 +250,7 @@ namespace SharpMediaFoundationInterop.Codecs
                         _flac?.AddFrame(payload.Length);
                         var packet = _pool.Rent(payload.Length);
                         payload.CopyTo(packet);
-                        _packets.Enqueue(packet);
+                        _packets.Enqueue((packet, payload.Length));
                     }
                 }
                 AMediaCodec_releaseOutputBuffer(_codecHandle, (nuint)index, false);
@@ -275,9 +278,9 @@ namespace SharpMediaFoundationInterop.Codecs
             }
             if (buffer == null || buffer.Length < packet.Length)
                 buffer = new byte[Math.Max(packet.Length, OutputSize)];
-            Buffer.BlockCopy(packet, 0, buffer, 0, packet.Length);
+            Buffer.BlockCopy(packet.Data, 0, buffer, 0, packet.Length);
             length = (uint)packet.Length;
-            _pool.Return(packet);
+            _pool.Return(packet.Data);
             return true;
         }
 
@@ -315,7 +318,7 @@ namespace SharpMediaFoundationInterop.Codecs
             ThrowIfNotInitialized();
             AMediaCodec_flush(_codecHandle);
             while (_packets.TryDequeue(out var packet))
-                _pool.Return(packet);
+                _pool.Return(packet.Data);
         }
 
         private void ThrowIfNotInitialized()

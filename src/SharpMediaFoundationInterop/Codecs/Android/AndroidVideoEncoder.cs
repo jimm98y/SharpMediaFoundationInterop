@@ -28,9 +28,12 @@ namespace SharpMediaFoundationInterop.Codecs
         private readonly VideoCodec _codec;
         private readonly VideoEncoderOptions _options;
         private readonly List<string> _unapplied = new List<string>();
-        /// <summary>The units encoded, each of the exact size: of <see cref="_pool"/>, given back as each is read out.</summary>
-        private readonly Queue<(byte[] Unit, long Time)> _units = new Queue<(byte[], long)>();
-        private readonly FramePool _pool = new FramePool(16);
+        /// <summary>
+        /// The units encoded, each with its length and time, in an array of <see cref="_pool"/> - of a size of its own each,
+        /// which an exact size would never find again - given back as each is read out.
+        /// </summary>
+        private readonly Queue<(byte[] Unit, int Length, long Time)> _units = new Queue<(byte[], int, long)>();
+        private readonly UnitBuffers _pool = new UnitBuffers(16);
         private IntPtr _codecHandle;
         private byte[] _config;
         private int _stride, _sliceHeight;
@@ -241,11 +244,12 @@ namespace SharpMediaFoundationInterop.Codecs
                     else
                     {
                         bool key = (info.Flags & BUFFER_FLAG_KEY_FRAME) != 0 && _config != null && _codec != VideoCodec.VP9 && !payload.StartsWith(_config);
-                        var unit = _pool.Rent((key ? _config.Length : 0) + payload.Length);
+                        int unitLength = (key ? _config.Length : 0) + payload.Length;
+                        var unit = _pool.Rent(unitLength);
                         if (key)
                             _config.CopyTo(unit, 0);
                         payload.CopyTo(unit.AsSpan(key ? _config.Length : 0));
-                        _units.Enqueue((unit, info.PresentationTimeUs * 10));
+                        _units.Enqueue((unit, unitLength, info.PresentationTimeUs * 10));
                     }
                 }
                 AMediaCodec_releaseOutputBuffer(_codecHandle, (nuint)index, false);
@@ -272,10 +276,10 @@ namespace SharpMediaFoundationInterop.Codecs
             }
             if (!_units.TryDequeue(out var unit))
                 return false;
-            if (buffer == null || buffer.Length < unit.Unit.Length)
-                buffer = new byte[Math.Max(unit.Unit.Length, OutputSize)];
-            Buffer.BlockCopy(unit.Unit, 0, buffer, 0, unit.Unit.Length);
-            length = (uint)unit.Unit.Length;
+            if (buffer == null || buffer.Length < unit.Length)
+                buffer = new byte[Math.Max(unit.Length, OutputSize)];
+            Buffer.BlockCopy(unit.Unit, 0, buffer, 0, unit.Length);
+            length = (uint)unit.Length;
             timestamp = unit.Time;
             _pool.Return(unit.Unit);
             return true;
