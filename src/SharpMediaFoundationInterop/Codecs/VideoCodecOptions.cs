@@ -204,5 +204,11 @@
         /// Windows' encoders.
         /// </summary>
         public bool LowLatency { get; set; }
+
+        /// <summary>
+        /// Temporal layers - scalable video coding of the frame rate, L1T2 or L1T3 - each frame's layer told of in the stream:
+        /// of H.264, its prefix NAL units. 0 or 1 for none. Of Windows' encoders, those that have them.
+        /// </summary>
+        public uint TemporalLayers { get; set; }
     }
 }

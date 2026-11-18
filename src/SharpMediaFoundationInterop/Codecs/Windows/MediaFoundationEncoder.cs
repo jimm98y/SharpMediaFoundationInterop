@@ -55,6 +55,8 @@ namespace SharpMediaFoundationInterop.Codecs
                 Set(CodecApiProperties.NumWorkerThreads, options.Threads, nameof(options.Threads));
             if (options.LowLatency)
                 Set(CodecApiProperties.LowLatencyMode, true, nameof(options.LowLatency));
+            if (options.TemporalLayers > 1)
+                Set(CodecApiProperties.TemporalLayerCount, options.TemporalLayers, nameof(options.TemporalLayers));
         }
 
         /// <summary>Whether there is an encoder of the codec here; whether it is installed shows as it is initialized.</summary>
