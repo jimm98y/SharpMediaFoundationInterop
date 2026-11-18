@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
@@ -15,12 +15,16 @@ namespace SharpMediaFoundationInterop.Output
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    internal sealed unsafe class AudioQueueOutput : IAudioOutput
+    internal sealed unsafe class AudioQueueOutput : IAudioOutput, IThreadPoolWorkItem
     {
         private readonly string _deviceUid;
         private readonly object _lock = new object();
-        /// <summary>The queue's buffers not playing: AudioQueue's are freed only with the queue, so they are kept for the next.</summary>
-        private readonly ConcurrentBag<IntPtr> _freeBuffers = new ConcurrentBag<IntPtr>();
+        /// <summary>
+        /// The queue's buffers not playing: AudioQueue's are freed only with the queue, so they are kept for the next. Of a
+        /// lock of their own, not <see cref="_lock"/>: the callback gives them back, which the queue's functions called under
+        /// that may wait for.
+        /// </summary>
+        private readonly List<IntPtr> _freeBuffers = new List<IntPtr>();
 
         private IntPtr _queue;
         private GCHandle _self;
@@ -125,7 +129,7 @@ namespace SharpMediaFoundationInterop.Output
                 int status = AudioQueueEnqueueBuffer(_queue, buffer, 0, null);
                 if (status != 0)
                 {
-                    _freeBuffers.Add((IntPtr)buffer);
+                    GiveBack(buffer);
                     throw new InvalidOperationException($"The sound could not be queued: {AppleNative.FourCCString(status)}");
                 }
                 Interlocked.Increment(ref _queuedFrames);
@@ -137,20 +141,32 @@ namespace SharpMediaFoundationInterop.Output
 
         private AudioQueueBuffer* TakeBuffer(uint length)
         {
-            // the first free one large enough; those too small are put back
-            int tries = _freeBuffers.Count;
-            while (tries-- > 0 && _freeBuffers.TryTake(out IntPtr free))
+            // the first free one large enough; those too small stay
+            lock (_freeBuffers)
             {
-                var buffer = (AudioQueueBuffer*)free;
-                if (buffer->AudioDataBytesCapacity >= length)
-                    return buffer;
-                _freeBuffers.Add(free);
+                for (int i = 0; i < _freeBuffers.Count; i++)
+                {
+                    var buffer = (AudioQueueBuffer*)_freeBuffers[i];
+                    if (buffer->AudioDataBytesCapacity >= length)
+                    {
+                        _freeBuffers[i] = _freeBuffers[_freeBuffers.Count - 1];
+                        _freeBuffers.RemoveAt(_freeBuffers.Count - 1);
+                        return buffer;
+                    }
+                }
             }
 
             int status = AudioQueueAllocateBuffer(_queue, Math.Max(length, 16384u), out AudioQueueBuffer* allocated);
             if (status != 0)
                 throw new InvalidOperationException($"No buffer for the sound: {AppleNative.FourCCString(status)}");
             return allocated;
+        }
+
+        /// <summary>A buffer not playing, kept for the next: of any thread, the queue's callback's too.</summary>
+        private void GiveBack(AudioQueueBuffer* buffer)
+        {
+            lock (_freeBuffers)
+                _freeBuffers.Add((IntPtr)buffer);
         }
 
         private void Start()
@@ -209,7 +225,7 @@ namespace SharpMediaFoundationInterop.Output
             {
                 if (GCHandle.FromIntPtr(userData).Target is not AudioQueueOutput output)
                     return;
-                output._freeBuffers.Add((IntPtr)buffer);
+                output.GiveBack(buffer);
 
                 // not of the lock: the queue's functions, called under it, may wait for this callback to return
                 int queued, left;
@@ -220,26 +236,10 @@ namespace SharpMediaFoundationInterop.Output
                 }
                 while (Interlocked.CompareExchange(ref output._queuedFrames, left, queued) != queued);
 
+                // nothing more to play: paused, so its time stands still, though not of the queue's own thread - the output
+                // queued as the work itself, of nothing allocated
                 if (left == 0 && output._running)
-                {
-                    // nothing more to play: paused, so its time stands still, though not of the queue's own thread
-                    ThreadPool.QueueUserWorkItem(static o =>
-                    {
-                        var self = (AudioQueueOutput)o;
-                        lock (self._lock)
-                        {
-                            if (!self._disposed && Volatile.Read(ref self._queuedFrames) == 0 && self._running)
-                            {
-                                AudioQueuePause(self._queue);
-                                self._running = false;
-                                // what it played past the last buffer, before it stopped, was silence
-                                long time = self.QueueTimeBytes();
-                                if (time - self._silentBytes > self._enqueuedBytes)
-                                    self._silentBytes = time - self._enqueuedBytes;
-                            }
-                        }
-                    }, output);
-                }
+                    ThreadPool.UnsafeQueueUserWorkItem(output, preferLocal: false);
 
                 output.OnPlaybackCompleted?.Invoke(output, EventArgs.Empty);
             }
@@ -247,6 +247,23 @@ namespace SharpMediaFoundationInterop.Output
             {
                 if (Log.ErrorEnabled)
                     Log.Error($"The sound output's callback failed: {ex}");
+            }
+        }
+
+        /// <summary>Of the thread pool, where the queue ran out: paused, where nothing came to play since.</summary>
+        void IThreadPoolWorkItem.Execute()
+        {
+            lock (_lock)
+            {
+                if (!_disposed && Volatile.Read(ref _queuedFrames) == 0 && _running)
+                {
+                    AudioQueuePause(_queue);
+                    _running = false;
+                    // what it played past the last buffer, before it stopped, was silence
+                    long time = QueueTimeBytes();
+                    if (time - _silentBytes > _enqueuedBytes)
+                        _silentBytes = time - _enqueuedBytes;
+                }
             }
         }
 

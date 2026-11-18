@@ -316,10 +316,11 @@ namespace SharpMediaFoundationInterop.Codecs
                     // each picture's 'icpf' header says its size and chroma: of 4:2:2, ProRes 422's family, of 4:4:4, 4444's
                     if (SampleDescriptions.ReadProResHeader(data, out int proResWidth, out int proResHeight, out bool chroma444))
                     {
-                        byte[] key = [(byte)(proResWidth >> 8), (byte)proResWidth, (byte)(proResHeight >> 8), (byte)proResHeight, chroma444 ? (byte)1 : (byte)0];
-                        if (_format == IntPtr.Zero || _configAtom == null || !key.AsSpan().SequenceEqual(_configAtom))
+                        // compared as it is, not of a key made of every picture: one is made only as it changes
+                        Span<byte> key = stackalloc byte[] { (byte)(proResWidth >> 8), (byte)proResWidth, (byte)(proResHeight >> 8), (byte)proResHeight, chroma444 ? (byte)1 : (byte)0 };
+                        if (_format == IntPtr.Zero || _configAtom == null || !key.SequenceEqual((ReadOnlySpan<byte>)_configAtom))
                         {
-                            _configAtom = key;
+                            _configAtom = key.ToArray();
                             ReplaceSession(CreateFormat(FourCC(chroma444 ? "ap4h" : "apch"), proResWidth, proResHeight, null));
                         }
                     }
