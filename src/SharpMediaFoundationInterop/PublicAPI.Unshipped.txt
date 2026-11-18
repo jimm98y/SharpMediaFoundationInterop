@@ -1,0 +1,13 @@
+SharpMediaFoundationInterop.Utils.FramePool
+SharpMediaFoundationInterop.Utils.FramePool.Clear() -> void
+SharpMediaFoundationInterop.Utils.FramePool.FramePool(int capacity = 16) -> void
+SharpMediaFoundationInterop.Utils.FramePool.Rent(int size) -> byte[]
+SharpMediaFoundationInterop.Utils.FramePool.Return(byte[] array) -> void
+SharpMediaFoundationInterop.Utils.FrameQueue<T>
+SharpMediaFoundationInterop.Utils.FrameQueue<T>.Count.get -> int
+SharpMediaFoundationInterop.Utils.FrameQueue<T>.Enqueue(T item) -> void
+SharpMediaFoundationInterop.Utils.FrameQueue<T>.FrameQueue(int capacity = 8) -> void
+SharpMediaFoundationInterop.Utils.FrameQueue<T>.IsEmpty.get -> bool
+SharpMediaFoundationInterop.Utils.FrameQueue<T>.TryDequeue(out T item) -> bool
+SharpMediaFoundationInterop.Utils.FrameQueue<T>.TryPeek(out T item) -> bool
+static SharpMediaFoundationInterop.Utils.FramePool.Shared.get -> SharpMediaFoundationInterop.Utils.FramePool

@@ -41,12 +41,10 @@ namespace SharpMediaFoundationInterop.Codecs
         private protected bool ProcessInput(IMFTransform transform, ReadOnlySpan<byte> prefix, ReadOnlySpan<byte> data, long sampleDuration, long timestamp)
         {
             bool ret = false;
-            int length = prefix.Length + data.Length;
             IMFSample sample = MediaUtils.CreateSample(prefix, data, sampleDuration, timestamp);
 
-            // samples are large, so to keep the memory usage low we have to tell GC about large amounts of unmanaged memory being allocated
-            GC.AddMemoryPressure(length); // approximate size
-
+            // released here, not by the GC: no memory pressure to tell it of - added, a frame's megabytes would bring on a
+            // gen2 collection at every frame or two
             try
             {
                 ret = Input(0, transform, sample);
@@ -54,7 +52,6 @@ namespace SharpMediaFoundationInterop.Codecs
             finally
             {
                 Marshal.ReleaseComObject(sample);
-                GC.RemoveMemoryPressure(length);
             }
 
             return ret;

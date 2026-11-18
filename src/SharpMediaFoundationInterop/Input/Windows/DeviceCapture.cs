@@ -115,11 +115,11 @@ namespace SharpMediaFoundationInterop.Input
             {
                 sample.ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
                 bool ret =  MediaUtils.CopyBuffer(buffer, sampleBytes, out sampleSize);
-                GC.AddMemoryPressure(sampleSize); // samples are large, so to keep the memory usage low we have to tell GC about large amounts of unmanaged memory being allocated
 
+                // released here, not by the GC: no memory pressure to tell it of - added, a frame's megabytes would
+                // bring on a gen2 collection at every frame or two
                 Marshal.ReleaseComObject(sample);
                 Marshal.ReleaseComObject(buffer);
-                GC.RemoveMemoryPressure(sampleSize);
                 return ret;
             }
 

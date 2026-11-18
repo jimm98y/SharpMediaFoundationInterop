@@ -1,6 +1,6 @@
 ﻿using SharpMediaFoundationInterop.Output;
 using System;
-using System.Collections.Concurrent;
+using SharpMediaFoundationInterop.Utils;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -118,7 +118,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// Decoded frames waiting to be shown, each with its time - -1 to be shown as it comes - the number of the seek it is
         /// of, which a later seek leaves it behind, and when it was queued, on the clock's stopwatch.
         /// </summary>
-        private ConcurrentQueue<(object Frame, long Timestamp, long Request, long Queued)> _videoOut = new ConcurrentQueue<(object Frame, long Timestamp, long Request, long Queued)>();
+        private FrameQueue<(object Frame, long Timestamp, long Request, long Queued)> _videoOut = new FrameQueue<(object Frame, long Timestamp, long Request, long Queued)>();
 
         private bool _disposedValue;
 
@@ -704,7 +704,6 @@ namespace SharpMediaFoundationInterop.WPF
             Loaded += VideoControl_Loaded;
             Unloaded += VideoControl_Unloaded;
             IsVisibleChanged += VideoControl_IsVisibleChanged;
-            CompositionTarget.Rendering += CompositionTarget_Rendering;
 
             _hideTimer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher);
             _soundClock = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Normal, SoundClock_Tick, Dispatcher);
@@ -779,8 +778,31 @@ namespace SharpMediaFoundationInterop.WPF
             _closingWindows.Remove(window);
             if (e.Cancel || Window.GetWindow(this) != window)
                 return;
-            CompositionTarget.Rendering -= CompositionTarget_Rendering;
+            _closed = true;
+            HookRendering(false);
             StopThreads();
+        }
+
+        /// <summary>Whether the window the control was in has closed: it draws nothing more.</summary>
+        private bool _closed;
+
+        private bool _renderingHooked;
+
+        /// <summary>
+        /// Draws at each frame WPF renders, or stops: in sight, and not of a closed window, it does. WPF renders the whole
+        /// window at every refresh of the screen while any handler of <see cref="CompositionTarget.Rendering"/> is there,
+        /// and allocates as it does: a control out of sight - on another tab - has nothing to draw.
+        /// </summary>
+        private void HookRendering(bool hook)
+        {
+            hook &= !_closed;
+            if (hook == _renderingHooked)
+                return;
+            _renderingHooked = hook;
+            if (hook)
+                CompositionTarget.Rendering += CompositionTarget_Rendering;
+            else
+                CompositionTarget.Rendering -= CompositionTarget_Rendering;
         }
 
         public override void OnApplyTemplate()
@@ -1062,6 +1084,7 @@ namespace SharpMediaFoundationInterop.WPF
         /// <summary>Runs the clock and the sound, or stops them where they are, as <see cref="IsHalted"/> says.</summary>
         private void ApplyRunning()
         {
+            HookRendering(!_hidden);
             Wake();
             if (IsHalted)
                 _stopwatch.Stop();
@@ -1085,7 +1108,8 @@ namespace SharpMediaFoundationInterop.WPF
                 if (Interlocked.Read(ref _request) != request)
                     return; // sought elsewhere since
 
-                if (_isLooping && _rate > 0)
+                // a picture is shown and held: repeated, it would be handed out and drawn again at every frame
+                if (_isLooping && _rate > 0 && !IsStill)
                 {
                     Interlocked.Exchange(ref _endedRequest, -1);
                     SeekTo(SeekableSource?.StartTime ?? 0, _rate);
@@ -1327,11 +1351,19 @@ namespace SharpMediaFoundationInterop.WPF
                 && Interlocked.Read(ref _endedRequest) == Interlocked.Read(ref _request))
                 Position = Duration;
 
+            // The thumb moved as it moves a pixel at least, or comes to either end: not of every frame, each of which would
+            // box the value, and lay the bar out again - and the window's layout with it, which allocates as it goes.
             if (_seekSlider != null && !_dragging)
             {
-                _updatingSlider = true;
-                _seekSlider.Value = Math.Min(_seekSlider.Maximum, Position.Ticks);
-                _updatingSlider = false;
+                double value = Math.Min(_seekSlider.Maximum, Position.Ticks);
+                double current = _seekSlider.Value;
+                double perPixel = (_seekSlider.Maximum - _seekSlider.Minimum) / Math.Max(1, _seekSlider.ActualWidth);
+                if (value != current && (Math.Abs(value - current) >= perPixel || value == _seekSlider.Maximum || value == _seekSlider.Minimum))
+                {
+                    _updatingSlider = true;
+                    _seekSlider.Value = value;
+                    _updatingSlider = false;
+                }
             }
 
             // of frames: the frame shown, of how many, where they are known

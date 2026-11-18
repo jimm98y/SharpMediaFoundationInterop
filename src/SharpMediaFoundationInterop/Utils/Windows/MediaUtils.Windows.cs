@@ -54,8 +54,18 @@ namespace SharpMediaFoundationInterop.Utils
                 buffer.Unlock();
             }
 
-            Check(PInvoke.MFCreateSample(out IMFSample sample));
-            sample.AddBuffer(buffer);
+            IMFSample sample;
+            try
+            {
+                Check(PInvoke.MFCreateSample(out sample));
+                sample.AddBuffer(buffer);
+            }
+            finally
+            {
+                // the sample holds the buffer: ours let go of now, not when the GC gets to it - of a frame of video, megabytes
+                // of native memory each, which nothing else tells the GC of
+                Marshal.ReleaseComObject(buffer);
+            }
             if (sampleDuration > 0) // not known where the frame rate is not
                 sample.SetSampleDuration(sampleDuration);
             sample.SetSampleTime(timestamp); // timestamp is required

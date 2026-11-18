@@ -1,7 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
+using SharpMediaFoundationInterop.Utils;
+#if NET8_0_OR_GREATER
+using System.Runtime.Intrinsics;
+#endif
 
 namespace SharpMediaFoundationInterop.Codecs
 {
@@ -454,29 +460,34 @@ namespace SharpMediaFoundationInterop.Codecs
                 if (IsSrgb)
                     return null;
                 lock (_tableLock)
-                {
-                    if (_table != null)
-                        return _table;
-                    const int n = TableSize;
-                    var table = new ushort[n * n * n * 4];
-                    Parallel.For(0, n, z =>
-                    {
-                        for (int yy = 0; yy < n; yy++)
-                        {
-                            for (int xx = 0; xx < n; xx++)
-                            {
-                                Display(xx / (n - 1.0), yy / (n - 1.0), z / (n - 1.0), out double r, out double g, out double b);
-                                int at = ((z * n + yy) * n + xx) * 4;
-                                table[at] = (ushort)(r * 65535 + 0.5);
-                                table[at + 1] = (ushort)(g * 65535 + 0.5);
-                                table[at + 2] = (ushort)(b * 65535 + 0.5);
-                                table[at + 3] = 65535;
-                            }
-                        }
-                    });
-                    return _table = table;
-                }
+                    return _table ??= MakeTable();
             }
+        }
+
+        /// <summary>
+        /// The table, made: apart from <see cref="Table"/>, which every frame converted reads - the lambda's closure, of the
+        /// table it fills, would be allocated at each read, made or not, were it there.
+        /// </summary>
+        private ushort[] MakeTable()
+        {
+            const int n = TableSize;
+            var table = new ushort[n * n * n * 4];
+            Parallel.For(0, n, z =>
+            {
+                for (int yy = 0; yy < n; yy++)
+                {
+                    for (int xx = 0; xx < n; xx++)
+                    {
+                        Display(xx / (n - 1.0), yy / (n - 1.0), z / (n - 1.0), out double r, out double g, out double b);
+                        int at = ((z * n + yy) * n + xx) * 4;
+                        table[at] = (ushort)(r * 65535 + 0.5);
+                        table[at + 1] = (ushort)(g * 65535 + 0.5);
+                        table[at + 2] = (ushort)(b * 65535 + 0.5);
+                        table[at + 3] = 65535;
+                    }
+                }
+            });
+            return table;
         }
 
         /// <summary>The table looked up between its steps, of the three values, into a pixel's B, G and R.</summary>
@@ -535,35 +546,87 @@ namespace SharpMediaFoundationInterop.Codecs
             int shiftX = (a < 0 ? p.PictureWidth - 1 : 0) + (c < 0 ? p.PictureHeight - 1 : 0) + p.TargetX;
             int shiftY = (b < 0 ? p.PictureWidth - 1 : 0) + (d < 0 ? p.PictureHeight - 1 : 0) + p.TargetY;
             int targetRows = target.Length / (targetWidth * bytesPerPixel);
-            (int X, int Y) Shown(int x, int y) => (a * (p.Left + x) + c * (p.Top + y) + shiftX, b * (p.Left + x) + d * (p.Top + y) + shiftY);
-            foreach (var (x, y) in new[] { (x0, y0), (x1 - 1, y0), (x0, y1 - 1), (x1 - 1, y1 - 1) })
-            {
-                var (sx, sy) = Shown(x, y);
-                if (sx < 0 || sx >= targetWidth || sy < 0 || sy >= targetRows)
-                    throw new ArgumentException("The frame placed falls outside the target.", nameof(placement));
-            }
+            var rows = t_convertRows ??= new ConvertRows();
+            rows.A = a; rows.B = b; rows.C = c; rows.D = d;
+            rows.Left = p.Left; rows.Top = p.Top; rows.ShiftX = shiftX; rows.ShiftY = shiftY;
+            if (!rows.IsInside(x0, y0, targetWidth, targetRows) || !rows.IsInside(x1 - 1, y0, targetWidth, targetRows)
+                || !rows.IsInside(x0, y1 - 1, targetWidth, targetRows) || !rows.IsInside(x1 - 1, y1 - 1, targetWidth, targetRows))
+                throw new ArgumentException("The frame placed falls outside the target.", nameof(placement));
 
             // each pixel on from the one before it, along a row of the frame: the matrix, x' = A x + C y and y' = B x + D y
-            int step = (b * targetWidth + a) * bytesPerPixel;
             int mode = IsSrgb ? 0 : exact ? 2 : 1;
-            var table = mode == 1 ? Table : null;
-            int columns = x1 - x0;
-            int shift = 16 - BitDepth;
-            int neutral = 1 << (BitDepth - 1);
-            int chroma = stride * planeHeight;
-            Parallel.For(y0, y1, () => new int[columns * 3], (row, _, codes) =>
+            rows.Color = this;
+            rows.Frame = frame;
+            rows.Target = target;
+            rows.Table = mode == 1 ? Table : null;
+            rows.Format = format;
+            rows.Stride = stride;
+            rows.Chroma = stride * planeHeight;
+            rows.X0 = x0;
+            rows.Columns = x1 - x0;
+            rows.Shift = 16 - BitDepth;
+            rows.Neutral = 1 << (BitDepth - 1);
+            rows.TargetWidth = targetWidth;
+            rows.BytesPerPixel = bytesPerPixel;
+            rows.Step = (b * targetWidth + a) * bytesPerPixel;
+            rows.Mode = mode;
+            try
             {
-                var (sx, sy) = Shown(x0, row);
-                fixed (byte* source = frame)
-                fixed (byte* output = target)
+                ParallelRows.For(y0, y1, rows);
+            }
+            finally
+            {
+                // not kept alive by the thread's work object between frames
+                rows.Color = null;
+                rows.Frame = null;
+                rows.Target = null;
+                rows.Table = null;
+            }
+        }
+
+        /// <summary>The work of <see cref="Convert"/> of the calling thread: one, used for every frame it converts.</summary>
+        [ThreadStatic]
+        private static ConvertRows t_convertRows;
+
+        /// <summary>The rows of a frame converted, each of whatever thread takes it, into the target where they are shown.</summary>
+        private sealed class ConvertRows : RowWork
+        {
+            public VideoColor Color;
+            public byte[] Frame, Target;
+            public ushort[] Table;
+            public VideoFrameFormat Format;
+            public int Stride, Chroma, X0, Columns, Shift, Neutral, TargetWidth, BytesPerPixel, Step, Mode;
+            // where a pixel of the frame is shown: x' = A (Left + x) + C (Top + y) + ShiftX, and y' of B, D and ShiftY
+            public int A, B, C, D, Left, Top, ShiftX, ShiftY;
+
+            /// <summary>The codes of a row, of the thread converting it: grown to the widest row it has converted.</summary>
+            [ThreadStatic]
+            private static int[] t_codes;
+
+            public bool IsInside(int x, int y, int width, int rows)
+            {
+                int sx = A * (Left + x) + C * (Top + y) + ShiftX, sy = B * (Left + x) + D * (Top + y) + ShiftY;
+                return sx >= 0 && sx < width && sy >= 0 && sy < rows;
+            }
+
+            protected internal override unsafe void Run(int from, int to)
+            {
+                var codes = t_codes;
+                if (codes == null || codes.Length < Columns * 3)
+                    t_codes = codes = new int[Columns * 3];
+                fixed (byte* source = Frame)
+                fixed (byte* output = Target)
                 fixed (int* samples = codes)
-                fixed (ushort* lookUp = table)
+                fixed (ushort* lookUp = Table)
                 {
-                    ReadRow(source, format, stride, chroma, row, x0, columns, shift, neutral, samples);
-                    WriteRow(samples, columns, output + ((long)sy * targetWidth + sx) * bytesPerPixel, step, bytesPerPixel, mode, lookUp);
+                    for (int row = from; row < to; row++)
+                    {
+                        int sx = A * (Left + X0) + C * (Top + row) + ShiftX, sy = B * (Left + X0) + D * (Top + row) + ShiftY;
+                        ReadRow(source, Format, Stride, Chroma, row, X0, Columns, Shift, Neutral, samples);
+                        Color.WriteRow(samples, Columns, output + ((long)sy * TargetWidth + sx) * BytesPerPixel, Step, BytesPerPixel, Mode, lookUp);
+                    }
                 }
-                return codes;
-            }, _ => { });
+            }
         }
 
         /// <summary>
@@ -657,6 +720,13 @@ namespace SharpMediaFoundationInterop.Codecs
         /// </summary>
         private unsafe void WriteRow(int* codes, int count, byte* at, int step, int bytesPerPixel, int mode, ushort* table)
         {
+#if NET8_0_OR_GREATER
+            if (mode != 2 && Vector128.IsHardwareAccelerated)
+            {
+                WriteRowVector(codes, count, at, step, bytesPerPixel, mode, table);
+                return;
+            }
+#endif
             int* ys = codes, cbs = codes + count, crs = codes + 2 * count;
             float[] y0 = _ofY[0], y1 = _ofY[1], y2 = _ofY[2];
             float[] cb0 = _ofCb[0], cb1 = _ofCb[1], cb2 = _ofCb[2];
@@ -686,6 +756,108 @@ namespace SharpMediaFoundationInterop.Codecs
         }
 
         private static byte ToByte(float value) => (byte)Math.Clamp((int)(value * 255f + 0.5f), 0, 255);
+
+#if NET8_0_OR_GREATER
+        /// <summary>
+        /// <see cref="_ofY"/>, <see cref="_ofCb"/> and <see cref="_ofCr"/> of each code as one vector: the three values the
+        /// code adds, and a 0 - of Y's codes, then Cb's, then Cr's. Made once, as the first row is written.
+        /// </summary>
+        private float[] _codeVectors;
+
+        private float[] CodeVectors
+        {
+            get
+            {
+                var vectors = Volatile.Read(ref _codeVectors);
+                if (vectors != null)
+                    return vectors;
+                int codes = _ofY[0].Length;
+                vectors = new float[3 * codes * 4];
+                var tables = new[] { _ofY, _ofCb, _ofCr };
+                for (int component = 0; component < 3; component++)
+                    for (int code = 0; code < codes; code++)
+                        for (int k = 0; k < 3; k++)
+                            vectors[(component * codes + code) * 4 + k] = tables[component][k][code];
+                Interlocked.CompareExchange(ref _codeVectors, vectors, null);
+                return _codeVectors;
+            }
+        }
+
+        /// <summary>
+        /// <see cref="WriteRow"/> of sRGB as it is, or of the table, on the CPU's vectors: the three values of a pixel at
+        /// once, and of the table its four channels. Each lane does what the scalar code does, in its order - the same sums,
+        /// the same products, none fused - so the pixels are the same, to the bit.
+        /// </summary>
+        private unsafe void WriteRowVector(int* codes, int count, byte* at, int step, int bytesPerPixel, int mode, ushort* table)
+        {
+            int* ys = codes, cbs = codes + count, crs = codes + 2 * count;
+            var vectors = CodeVectors;
+            int codeCount = _ofY[0].Length;
+            var half = Vector128.Create(0.5f);
+            var max = Vector128.Create(255);
+            fixed (float* ofY = vectors)
+            {
+                float* ofCb = ofY + codeCount * 4, ofCr = ofY + codeCount * 8;
+                for (int i = 0; i < count; i++, at += step)
+                {
+                    int y = ys[i], cb = cbs[i], cr = crs[i];
+                    // of more bits than the stream's - a frame of another format than it says: what the scalar code's arrays refuse
+                    if ((uint)(y | cb | cr) >= (uint)codeCount)
+                        throw new IndexOutOfRangeException($"A code of {Math.Max(y, Math.Max(cb, cr))} is of more than the stream's {BitDepth} bits.");
+                    var t = Vector128.Load(ofY + y * 4) + Vector128.Load(ofCb + cb * 4) + Vector128.Load(ofCr + cr * 4);
+                    if (mode == 0)
+                    {
+                        var bytes = Vector128.Min(Vector128.Max(Vector128.ConvertToInt32(t * 255f + half), Vector128<int>.Zero), max);
+                        (at[0], at[1], at[2]) = ((byte)bytes.GetElement(2), (byte)bytes.GetElement(1), (byte)bytes.GetElement(0));
+                    }
+                    else
+                    {
+                        LookUpVector(table, t, at);
+                    }
+                    if (bytesPerPixel == 4)
+                        at[3] = 255;
+                }
+            }
+        }
+
+        /// <summary><see cref="LookUp"/> of the three values as a vector, its corners' four channels at once.</summary>
+        private static unsafe void LookUpVector(ushort* table, Vector128<float> t, byte* pixel)
+        {
+            const int n = TableSize;
+            var p = Vector128.Min(Vector128.Max(t, Vector128<float>.Zero), Vector128<float>.One) * (float)(n - 1);
+            var cell = Vector128.Min(Vector128.ConvertToInt32(p), Vector128.Create(n - 2));
+            var f = p - Vector128.ConvertToSingle(cell);
+            ushort* corner = table + ((cell.GetElement(2) * n + cell.GetElement(1)) * n + cell.GetElement(0)) * 4;
+            const int dy = n * 4, dz = n * n * 4;
+            var fx = Vector128.Create(f.GetElement(0));
+            var fy = Vector128.Create(f.GetElement(1));
+            var fz = Vector128.Create(f.GetElement(2));
+
+            // each load two corners along x, RGBA and RGBA: the near one widened from the lower half, the far from the upper
+            var v00 = Vector128.Load(corner);
+            var v10 = Vector128.Load(corner + dy);
+            var v01 = Vector128.Load(corner + dz);
+            var v11 = Vector128.Load(corner + dz + dy);
+            var c00 = Along(v00, fx);
+            var c10 = Along(v10, fx);
+            var c01 = Along(v01, fx);
+            var c11 = Along(v11, fx);
+            var c0 = c00 + (c10 - c00) * fy;
+            var c1 = c01 + (c11 - c01) * fy;
+            var rgb = Vector128.ConvertToInt32((c0 + (c1 - c0) * fz) * (255f / 65535) + Vector128.Create(0.5f));
+            // BGR: the table's R first
+            (pixel[0], pixel[1], pixel[2]) = ((byte)rgb.GetElement(2), (byte)rgb.GetElement(1), (byte)rgb.GetElement(0));
+        }
+
+        /// <summary>Between the two corners of a load, of x: the near one's channels, and on towards the far one's.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static Vector128<float> Along(Vector128<ushort> corners, Vector128<float> fx)
+        {
+            var near = Vector128.ConvertToSingle(Vector128.WidenLower(corners));
+            var far = Vector128.ConvertToSingle(Vector128.WidenUpper(corners));
+            return near + (far - near) * fx;
+        }
+#endif
 
         #endregion
 

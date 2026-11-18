@@ -1,7 +1,6 @@
 ﻿using SharpMediaFoundationInterop.Codecs;
 using SharpMediaFoundationInterop.Input;
 using SharpMediaFoundationInterop.Utils;
-using System.Buffers;
 
 namespace SharpMediaFoundationInterop.WPF
 {
@@ -40,7 +39,7 @@ namespace SharpMediaFoundationInterop.WPF
                 {
                     if (_converter.ProcessOutput(ref _rgbBuffer, out _))
                     {
-                        var decoded = ArrayPool<byte>.Shared.Rent(_imageBufferLen);
+                        var decoded = FramePool.Shared.Rent(_imageBufferLen);
 
                         BitmapUtils.CopyBitmap(
                             _rgbBuffer,
@@ -91,7 +90,7 @@ namespace SharpMediaFoundationInterop.WPF
 
         public void ReturnVideoSample(byte[] decoded)
         {
-            ArrayPool<byte>.Shared.Return(decoded);
+            FramePool.Shared.Return(decoded);
         }
 
         // the camera's frames as it gives them, on the CPU
