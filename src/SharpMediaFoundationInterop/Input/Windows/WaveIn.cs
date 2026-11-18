@@ -119,18 +119,26 @@ namespace SharpMediaFoundationInterop.Input
             if (uMsg == MM_WIM_DATA)
             {
                 WAVEHDR* waveHdr = (WAVEHDR*)(_audioBuffer + _audioBufferIndex);
-                byte[] dest = new byte[waveHdr->dwBufferLength];
+                byte[] dest = _recorded.Rent((int)waveHdr->dwBufferLength);
                 Marshal.Copy((nint)waveHdr->lpData.Value, dest, 0, dest.Length);
                 _audioBufferIndex = (_audioBufferIndex + (uint)sizeof(WAVEHDR) + waveHdr->dwBufferLength) % (NUM_BUF * (waveHdr->dwBufferLength + (uint)sizeof(WAVEHDR)));
 
                 waveHdr = (WAVEHDR*)(_audioBuffer + _audioBufferIndex);
                 PInvoke.waveInAddBuffer(_hDevice, waveHdr, (uint)sizeof(WAVEHDR));
 
-                var args = new WaveInEventArgs(dest);
-                FrameReceived?.Invoke(this, args);
-                _frameReceived?.Invoke(this, args);
+                // the buffer and its arguments, used again for the next: valid while the event is raised
+                if (_args == null)
+                    _args = new WaveInEventArgs(dest);
+                else
+                    _args.Of(dest);
+                FrameReceived?.Invoke(this, _args);
+                _frameReceived?.Invoke(this, _args);
             }
         }
+
+        // what a buffer is copied into, and raised in, of the callback's thread
+        private readonly AudioInputBuffer _recorded = new AudioInputBuffer();
+        private WaveInEventArgs _args;
 
         public void Reset()
         {
