@@ -146,7 +146,7 @@ namespace SharpMediaFoundationInterop.Codecs
         /// The next sound out, past what is to be skipped: that is moved off the front of the buffer, and an output that is
         /// all of it is passed over for the next. The buffer is made larger where it is too small.
         /// </summary>
-        public bool ProcessOutput(ref byte[] buffer, out uint length)
+        public unsafe bool ProcessOutput(ref byte[] buffer, out uint length)
         {
             ThrowIfNotInitialized();
             while (true)
@@ -157,25 +157,37 @@ namespace SharpMediaFoundationInterop.Codecs
                     length = 0;
                     return false;
                 }
-                byte[] pcm;
                 try
                 {
-                    pcm = GstFrames.Bytes(sample);
+                    // of the sample's buffer straight into the caller's, past what is skipped: no copy of its own in between
+                    length = 0;
+                    if (GstFrames.MapBytes(sample, out IntPtr pcmBuffer, out var info))
+                    {
+                        try
+                        {
+                            var pcm = new ReadOnlySpan<byte>(info.Data, (int)info.Size);
+                            uint skip = Math.Min(_skipBytes, (uint)pcm.Length);
+                            _skipBytes -= skip;
+                            length = (uint)pcm.Length - skip;
+                            if (length > 0)
+                            {
+                                if (buffer == null || buffer.Length < length)
+                                    buffer = new byte[Math.Max(length, OutputSize)];
+                                pcm.Slice((int)skip).CopyTo(buffer);
+                            }
+                        }
+                        finally
+                        {
+                            Gst.Unmap(pcmBuffer, ref info);
+                        }
+                    }
                 }
                 finally
                 {
                     Gst.gst_mini_object_unref(sample);
                 }
-
-                uint skip = Math.Min(_skipBytes, (uint)pcm.Length);
-                _skipBytes -= skip;
-                length = (uint)pcm.Length - skip;
-                if (length == 0)
-                    continue;
-                if (buffer == null || buffer.Length < length)
-                    buffer = new byte[Math.Max(length, OutputSize)];
-                Buffer.BlockCopy(pcm, (int)skip, buffer, 0, (int)length);
-                return true;
+                if (length > 0)
+                    return true;
             }
         }
 

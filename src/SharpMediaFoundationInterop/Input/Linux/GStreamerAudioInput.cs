@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Runtime.Versioning;
 using System.Threading;
 using SharpMediaFoundationInterop.Utils;
@@ -60,36 +59,54 @@ namespace SharpMediaFoundationInterop.Input
             _reader.Start();
         }
 
-        /// <summary>The recorded sound, gathered into buffers of a second, each raised as it is full.</summary>
-        private void Read()
+        /// <summary>
+        /// The recorded sound, gathered into buffers of a second, each raised as it is full: of one array, filled again for the
+        /// next once raised, and one arguments - see <see cref="IAudioInput.FrameReceived"/>.
+        /// </summary>
+        private unsafe void Read()
         {
             int second = (int)(SampleRate * Channels * BitsPerSample / 8);
-            var gathered = new MemoryStream(second * 2);
+            var recorded = new AudioInputBuffer();
+            byte[] data = recorded.Rent(second);
+            int filled = 0;
+            var wait = TimeSpan.FromMilliseconds(100);
             try
             {
                 while (_running)
                 {
-                    IntPtr sample = _pipeline.Pull(TimeSpan.FromMilliseconds(100));
+                    IntPtr sample = _pipeline.Pull(wait);
                     if (sample == IntPtr.Zero)
                         continue;
                     try
                     {
-                        gathered.Write(GstFrames.Bytes(sample));
+                        if (second > 0 && GstFrames.MapBytes(sample, out IntPtr buffer, out var info))
+                        {
+                            try
+                            {
+                                // of the sample's buffer straight into the second's, raised each time it is full
+                                var bytes = new ReadOnlySpan<byte>(info.Data, (int)info.Size);
+                                while (!bytes.IsEmpty && _running)
+                                {
+                                    int count = Math.Min(bytes.Length, second - filled);
+                                    bytes.Slice(0, count).CopyTo(data.AsSpan(filled));
+                                    filled += count;
+                                    bytes = bytes.Slice(count);
+                                    if (filled == second)
+                                    {
+                                        filled = 0;
+                                        FrameReceived?.Invoke(this, recorded.Args);
+                                    }
+                                }
+                            }
+                            finally
+                            {
+                                Gst.Unmap(buffer, ref info);
+                            }
+                        }
                     }
                     finally
                     {
                         Gst.gst_mini_object_unref(sample);
-                    }
-
-                    while (gathered.Length >= second && _running)
-                    {
-                        var data = new byte[second];
-                        var all = gathered.GetBuffer();
-                        Buffer.BlockCopy(all, 0, data, 0, second);
-                        int rest = (int)gathered.Length - second;
-                        Buffer.BlockCopy(all, second, all, 0, rest);
-                        gathered.SetLength(rest);
-                        FrameReceived?.Invoke(this, new AudioInputEventArgs(data));
                     }
                 }
             }

@@ -348,17 +348,42 @@ namespace SharpMediaFoundationInterop.Utils
             return value;
         }
 
-        /// <summary>The bytes of a buffer field of the first structure of the caps - codec_data, say; null where it has none.</summary>
-        public static byte[] GetCapsBuffer(IntPtr caps, string field)
+        /// <summary>
+        /// <see cref="GetCapsInt(IntPtr, string)"/> of a field named in UTF-8, ending in a 0 - <c>"width\0"u8</c>: of a frame's
+        /// caps, read at every frame, no name converted for it.
+        /// </summary>
+        public static int? GetCapsInt(IntPtr caps, ReadOnlySpan<byte> fieldZ)
         {
             IntPtr structure = gst_caps_get_structure(caps, 0);
             if (structure == IntPtr.Zero)
                 return null;
-            IntPtr value = gst_structure_get_value(structure, field);
-            if (value == IntPtr.Zero)
-                return null;
-            IntPtr buffer = g_value_get_boxed(value);
+            int value;
+            fixed (byte* field = fieldZ)
+            {
+                if (gst_structure_get_int(structure, field, out value) == 0)
+                    return null;
+            }
+            return value;
+        }
+
+        /// <summary>The bytes of a buffer field of the first structure of the caps - codec_data, say; null where it has none.</summary>
+        public static byte[] GetCapsBuffer(IntPtr caps, string field)
+        {
+            IntPtr buffer = GetCapsBufferHandle(caps, field);
             return buffer == IntPtr.Zero ? null : ToArray(buffer);
+        }
+
+        /// <summary>
+        /// The GstBuffer of a buffer field of the first structure of the caps, not copied - the caps' own, valid while they
+        /// are; zero where it has none.
+        /// </summary>
+        public static IntPtr GetCapsBufferHandle(IntPtr caps, string field)
+        {
+            IntPtr structure = gst_caps_get_structure(caps, 0);
+            if (structure == IntPtr.Zero)
+                return IntPtr.Zero;
+            IntPtr value = gst_structure_get_value(structure, field);
+            return value == IntPtr.Zero ? IntPtr.Zero : g_value_get_boxed(value);
         }
 
         public static string ToHex(ReadOnlySpan<byte> bytes) => Convert.ToHexString(bytes).ToLowerInvariant();
@@ -511,6 +536,7 @@ namespace SharpMediaFoundationInterop.Utils
         [DllImport(LibGst)] private static extern uint gst_caps_get_size(IntPtr caps);
         [DllImport(LibGst)] private static extern IntPtr gst_caps_get_structure(IntPtr caps, uint index);
         [DllImport(LibGst)] private static extern int gst_structure_get_int(IntPtr structure, [MarshalAs(UnmanagedType.LPUTF8Str)] string field, out int value);
+        [DllImport(LibGst)] private static extern int gst_structure_get_int(IntPtr structure, byte* field, out int value);
         [DllImport(LibGst)] private static extern IntPtr gst_structure_get_value(IntPtr structure, [MarshalAs(UnmanagedType.LPUTF8Str)] string field);
         [DllImport(LibGst)] private static extern IntPtr gst_structure_get_string(IntPtr structure, [MarshalAs(UnmanagedType.LPUTF8Str)] string field);
         [DllImport(LibGst)] private static extern IntPtr gst_structure_get_name(IntPtr structure);
