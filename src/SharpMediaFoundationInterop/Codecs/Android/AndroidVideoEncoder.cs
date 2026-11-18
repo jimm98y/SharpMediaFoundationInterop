@@ -28,7 +28,9 @@ namespace SharpMediaFoundationInterop.Codecs
         private readonly VideoCodec _codec;
         private readonly VideoEncoderOptions _options;
         private readonly List<string> _unapplied = new List<string>();
+        /// <summary>The units encoded, each of the exact size: of <see cref="_pool"/>, given back as each is read out.</summary>
         private readonly Queue<(byte[] Unit, long Time)> _units = new Queue<(byte[], long)>();
+        private readonly FramePool _pool = new FramePool(16);
         private IntPtr _codecHandle;
         private byte[] _config;
         private int _stride, _sliceHeight;
@@ -184,12 +186,12 @@ namespace SharpMediaFoundationInterop.Codecs
             if (data.Length < OutputSize)
                 throw new ArgumentException($"An NV12 frame of {Width}x{Height} is of {OutputSize} bytes", nameof(data));
 
-            var stopwatch = Stopwatch.StartNew();
+            long start = Stopwatch.GetTimestamp();
             nint index;
             while ((index = AMediaCodec_dequeueInputBuffer(_codecHandle, 5000)) < 0)
             {
                 Pump();
-                if (stopwatch.ElapsedMilliseconds > 5000)
+                if (Stopwatch.GetElapsedTime(start).TotalMilliseconds > 5000)
                     return false;
             }
             byte* buffer = AMediaCodec_getInputBuffer(_codecHandle, (nuint)index, out nuint capacity);
@@ -239,7 +241,7 @@ namespace SharpMediaFoundationInterop.Codecs
                     else
                     {
                         bool key = (info.Flags & BUFFER_FLAG_KEY_FRAME) != 0 && _config != null && _codec != VideoCodec.VP9 && !payload.StartsWith(_config);
-                        var unit = new byte[(key ? _config.Length : 0) + payload.Length];
+                        var unit = _pool.Rent((key ? _config.Length : 0) + payload.Length);
                         if (key)
                             _config.CopyTo(unit, 0);
                         payload.CopyTo(unit.AsSpan(key ? _config.Length : 0));
@@ -261,8 +263,8 @@ namespace SharpMediaFoundationInterop.Codecs
             Pump();
             if (_draining)
             {
-                var stopwatch = Stopwatch.StartNew();
-                while (_units.Count == 0 && !_ended && stopwatch.ElapsedMilliseconds < 10000)
+                long start = Stopwatch.GetTimestamp();
+                while (_units.Count == 0 && !_ended && Stopwatch.GetElapsedTime(start).TotalMilliseconds < 10000)
                 {
                     Thread.Sleep(2);
                     Pump();
@@ -275,6 +277,7 @@ namespace SharpMediaFoundationInterop.Codecs
             Buffer.BlockCopy(unit.Unit, 0, buffer, 0, unit.Unit.Length);
             length = (uint)unit.Unit.Length;
             timestamp = unit.Time;
+            _pool.Return(unit.Unit);
             return true;
         }
 
@@ -290,9 +293,9 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             ThrowIfNotInitialized();
             _draining = true;
-            var stopwatch = Stopwatch.StartNew();
+            long start = Stopwatch.GetTimestamp();
             nint index;
-            while ((index = AMediaCodec_dequeueInputBuffer(_codecHandle, 5000)) < 0 && stopwatch.ElapsedMilliseconds < 5000)
+            while ((index = AMediaCodec_dequeueInputBuffer(_codecHandle, 5000)) < 0 && Stopwatch.GetElapsedTime(start).TotalMilliseconds < 5000)
                 Pump();
             if (index >= 0)
                 AMediaCodec_queueInputBuffer(_codecHandle, (nuint)index, 0, 0, 0, BUFFER_FLAG_END_OF_STREAM);
@@ -311,7 +314,8 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             ThrowIfNotInitialized();
             AMediaCodec_flush(_codecHandle);
-            _units.Clear();
+            while (_units.TryDequeue(out var unit))
+                _pool.Return(unit.Unit);
         }
 
         private void ThrowIfNotInitialized()

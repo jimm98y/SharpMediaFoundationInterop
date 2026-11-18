@@ -16,7 +16,12 @@ namespace SharpMediaFoundationInterop.Output
     internal sealed unsafe class AAudioOutput : IAudioOutput
     {
         private readonly object _lock = new object();
+        /// <summary>
+        /// The buffers queued and not yet written: copies, the caller's own being theirs again once queued - of
+        /// <see cref="_pool"/>, of the exact size, given back as each is written.
+        /// </summary>
         private readonly Queue<byte[]> _pending = new Queue<byte[]>();
+        private readonly FramePool _pool = new FramePool(16);
         /// <summary>The end of each buffer queued and not yet played, in frames written.</summary>
         private readonly Queue<long> _queued = new Queue<long>();
         private readonly AutoResetEvent _available = new AutoResetEvent(false);
@@ -101,7 +106,9 @@ namespace SharpMediaFoundationInterop.Output
                     if (read > _writtenFrames)
                         _silentFrames += read - _writtenFrames;
                 }
-                _pending.Enqueue(data.AsSpan(0, (int)length).ToArray());
+                var copy = _pool.Rent((int)length);
+                Buffer.BlockCopy(data, 0, copy, 0, (int)length);
+                _pending.Enqueue(copy);
                 _enqueuedFrames += length / FrameBytes;
                 _queued.Enqueue(_enqueuedFrames);
             }
@@ -134,6 +141,7 @@ namespace SharpMediaFoundationInterop.Output
                             _writtenFrames += written;
                     }
                 }
+                _pool.Return(buffer);
             }
         }
 
@@ -166,7 +174,8 @@ namespace SharpMediaFoundationInterop.Output
             {
                 PauseAndWait(_stream);
                 AAudioStream_requestFlush(_stream);
-                _pending.Clear();
+                while (_pending.TryDequeue(out var pending))
+                    _pool.Return(pending);
                 _queued.Clear();
                 _readBase = AAudioStream_getFramesRead(_stream);
                 _enqueuedFrames = _writtenFrames = _silentFrames = 0;

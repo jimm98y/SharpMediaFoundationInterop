@@ -46,12 +46,16 @@ namespace SharpMediaFoundationInterop.Input
             _reader.Start();
         }
 
-        /// <summary>Reads the stream, a second at a time, raising each second as it is full.</summary>
+        /// <summary>
+        /// Reads the stream, a second at a time, raising each second as it is full: of one array and one arguments, filled
+        /// again for the next second - see <see cref="IAudioInput.FrameReceived"/>.
+        /// </summary>
         private void Read()
         {
             int frameBytes = (int)(Channels * BitsPerSample / 8);
             int frames = (int)SampleRate;
-            var second = new byte[frames * frameBytes];
+            var recorded = new AudioInputBuffer();
+            var second = recorded.Rent(frames * frameBytes);
             int filled = 0;
             while (_running)
             {
@@ -67,9 +71,8 @@ namespace SharpMediaFoundationInterop.Input
                 filled += read;
                 if (filled == frames && _running)
                 {
-                    FrameReceived?.Invoke(this, new AudioInputEventArgs(second));
-                    second = new byte[frames * frameBytes];
-                    filled = 0;
+                    FrameReceived?.Invoke(this, recorded.Args);
+                    filled = 0; // the next second read over this one
                 }
             }
         }

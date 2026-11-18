@@ -23,7 +23,11 @@ namespace SharpMediaFoundationInterop.Codecs
 
         private readonly AudioCodec _codec;
         private readonly AudioEncoderOptions _options;
+        /// <summary>The packets made, each of the exact size: of <see cref="_pool"/>, given back as each is read out.</summary>
         private readonly Queue<byte[]> _packets = new Queue<byte[]>();
+        private readonly FramePool _pool = new FramePool(16);
+        /// <summary>The PCM converted for the encoder, of the input of a call: grown to the largest, used again.</summary>
+        private byte[] _converted = Array.Empty<byte>();
         private IntPtr _codecHandle;
         private byte[] _config;
         private FlacMetadata _flac;
@@ -151,22 +155,22 @@ namespace SharpMediaFoundationInterop.Codecs
             if (data.IsEmpty)
                 return false;
             _flac?.AddInput(data);
-            byte[] pcm = Convert(data);
+            ReadOnlySpan<byte> pcm = Convert(data);
             int frameBytes = (int)Channels * (_floatIn ? 4 : 2);
             int offset = 0;
             while (offset < pcm.Length)
             {
-                var stopwatch = Stopwatch.StartNew();
+                long start = Stopwatch.GetTimestamp();
                 nint index;
                 while ((index = AMediaCodec_dequeueInputBuffer(_codecHandle, 5000)) < 0)
                 {
                     Pump();
-                    if (stopwatch.ElapsedMilliseconds > 5000)
+                    if (Stopwatch.GetElapsedTime(start).TotalMilliseconds > 5000)
                         return false;
                 }
                 byte* buffer = AMediaCodec_getInputBuffer(_codecHandle, (nuint)index, out nuint capacity);
                 int length = Math.Min(pcm.Length - offset, (int)capacity / frameBytes * frameBytes);
-                pcm.AsSpan(offset, length).CopyTo(new Span<byte>(buffer, length));
+                pcm.Slice(offset, length).CopyTo(new Span<byte>(buffer, length));
                 long timeUs = _samplesIn * 1_000_000 / SampleRate;
                 AMediaCodec_queueInputBuffer(_codecHandle, (nuint)index, 0, (nuint)length, (ulong)timeUs, 0);
                 _samplesIn += length / frameBytes;
@@ -176,14 +180,17 @@ namespace SharpMediaFoundationInterop.Codecs
             return true;
         }
 
-        /// <summary>The PCM as the encoder takes it: 24 bit as float, float as 16 bit; 16 bit as it is.</summary>
-        private byte[] Convert(ReadOnlySpan<byte> data)
+        /// <summary>
+        /// The PCM as the encoder takes it: 24 bit as float, float as 16 bit, into a buffer used again at each call; 16 bit
+        /// as it is, not copied.
+        /// </summary>
+        private ReadOnlySpan<byte> Convert(ReadOnlySpan<byte> data)
         {
             if (_floatIn)
             {
                 int count = data.Length / 3;
-                var result = new byte[count * 4];
-                var samples = MemoryMarshal.Cast<byte, float>(result.AsSpan());
+                var result = Converted(count * 4);
+                var samples = MemoryMarshal.Cast<byte, float>(result);
                 for (int i = 0; i < count; i++)
                     samples[i] = ((data[i * 3] | (data[i * 3 + 1] << 8) | ((sbyte)data[i * 3 + 2] << 16))) / 8388608f;
                 return result;
@@ -191,13 +198,21 @@ namespace SharpMediaFoundationInterop.Codecs
             if (BitsPerSample == 32)
             {
                 var floats = MemoryMarshal.Cast<byte, float>(data);
-                var result = new byte[floats.Length * 2];
-                var samples = MemoryMarshal.Cast<byte, short>(result.AsSpan());
+                var result = Converted(floats.Length * 2);
+                var samples = MemoryMarshal.Cast<byte, short>(result);
                 for (int i = 0; i < floats.Length; i++)
                     samples[i] = (short)Math.Clamp(MathF.Round(floats[i] * 32767f), -32768f, 32767f);
                 return result;
             }
-            return data.ToArray();
+            return data;
+        }
+
+        /// <summary>So many bytes of the buffer converted PCM goes in, grown where it is too small.</summary>
+        private Span<byte> Converted(int length)
+        {
+            if (_converted.Length < length)
+                _converted = new byte[length];
+            return _converted.AsSpan(0, length);
         }
 
         /// <summary>
@@ -230,7 +245,9 @@ namespace SharpMediaFoundationInterop.Codecs
                     else
                     {
                         _flac?.AddFrame(payload.Length);
-                        _packets.Enqueue(payload.ToArray());
+                        var packet = _pool.Rent(payload.Length);
+                        payload.CopyTo(packet);
+                        _packets.Enqueue(packet);
                     }
                 }
                 AMediaCodec_releaseOutputBuffer(_codecHandle, (nuint)index, false);
@@ -244,8 +261,8 @@ namespace SharpMediaFoundationInterop.Codecs
             Pump();
             if (_draining)
             {
-                var stopwatch = Stopwatch.StartNew();
-                while (_packets.Count == 0 && !_ended && stopwatch.ElapsedMilliseconds < 10000)
+                long start = Stopwatch.GetTimestamp();
+                while (_packets.Count == 0 && !_ended && Stopwatch.GetElapsedTime(start).TotalMilliseconds < 10000)
                 {
                     Thread.Sleep(2);
                     Pump();
@@ -260,6 +277,7 @@ namespace SharpMediaFoundationInterop.Codecs
                 buffer = new byte[Math.Max(packet.Length, OutputSize)];
             Buffer.BlockCopy(packet, 0, buffer, 0, packet.Length);
             length = (uint)packet.Length;
+            _pool.Return(packet);
             return true;
         }
 
@@ -276,9 +294,9 @@ namespace SharpMediaFoundationInterop.Codecs
             ThrowIfNotInitialized();
             _draining = true;
             _flac?.End();
-            var stopwatch = Stopwatch.StartNew();
+            long start = Stopwatch.GetTimestamp();
             nint index;
-            while ((index = AMediaCodec_dequeueInputBuffer(_codecHandle, 5000)) < 0 && stopwatch.ElapsedMilliseconds < 5000)
+            while ((index = AMediaCodec_dequeueInputBuffer(_codecHandle, 5000)) < 0 && Stopwatch.GetElapsedTime(start).TotalMilliseconds < 5000)
                 Pump();
             if (index >= 0)
                 AMediaCodec_queueInputBuffer(_codecHandle, (nuint)index, 0, 0, (ulong)(_samplesIn * 1_000_000 / SampleRate), BUFFER_FLAG_END_OF_STREAM);
@@ -296,7 +314,8 @@ namespace SharpMediaFoundationInterop.Codecs
         {
             ThrowIfNotInitialized();
             AMediaCodec_flush(_codecHandle);
-            _packets.Clear();
+            while (_packets.TryDequeue(out var packet))
+                _pool.Return(packet);
         }
 
         private void ThrowIfNotInitialized()
