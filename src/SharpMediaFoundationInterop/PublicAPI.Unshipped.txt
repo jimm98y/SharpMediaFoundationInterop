@@ -11,3 +11,5 @@ SharpMediaFoundationInterop.Utils.FrameQueue<T>.IsEmpty.get -> bool
 SharpMediaFoundationInterop.Utils.FrameQueue<T>.TryDequeue(out T item) -> bool
 SharpMediaFoundationInterop.Utils.FrameQueue<T>.TryPeek(out T item) -> bool
 static SharpMediaFoundationInterop.Utils.FramePool.Shared.get -> SharpMediaFoundationInterop.Utils.FramePool
+SharpMediaFoundationInterop.Codecs.VideoEncoderOptions.LowLatency.get -> bool
+SharpMediaFoundationInterop.Codecs.VideoEncoderOptions.LowLatency.set -> void

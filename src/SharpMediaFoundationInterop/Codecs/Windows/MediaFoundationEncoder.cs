@@ -53,6 +53,8 @@ namespace SharpMediaFoundationInterop.Codecs
                 Set(CodecApiProperties.GopSize, options.KeyFrameInterval, nameof(options.KeyFrameInterval));
             if (options.Threads > 0)
                 Set(CodecApiProperties.NumWorkerThreads, options.Threads, nameof(options.Threads));
+            if (options.LowLatency)
+                Set(CodecApiProperties.LowLatencyMode, true, nameof(options.LowLatency));
         }
 
         /// <summary>Whether there is an encoder of the codec here; whether it is installed shows as it is initialized.</summary>

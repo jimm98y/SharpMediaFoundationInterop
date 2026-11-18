@@ -198,5 +198,11 @@
         /// this trades speed against memory.
         /// </summary>
         public uint Threads { get; set; }
+
+        /// <summary>
+        /// Each picture handed out as soon as it is encoded, of no B pictures nor look-ahead: of a call, not a file. Of
+        /// Windows' encoders.
+        /// </summary>
+        public bool LowLatency { get; set; }
     }
 }
