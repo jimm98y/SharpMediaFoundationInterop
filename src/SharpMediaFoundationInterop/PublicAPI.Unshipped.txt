@@ -13,3 +13,16 @@ SharpMediaFoundationInterop.Utils.FrameQueue<T>.TryPeek(out T item) -> bool
 static SharpMediaFoundationInterop.Utils.FramePool.Shared.get -> SharpMediaFoundationInterop.Utils.FramePool
 SharpMediaFoundationInterop.Codecs.VideoEncoderOptions.LowLatency.get -> bool
 SharpMediaFoundationInterop.Codecs.VideoEncoderOptions.LowLatency.set -> void
+SharpMediaFoundationInterop.Input.CameraProperty
+SharpMediaFoundationInterop.Input.CameraProperty.Exposure = 4 -> SharpMediaFoundationInterop.Input.CameraProperty
+SharpMediaFoundationInterop.Input.CameraProperty.Focus = 6 -> SharpMediaFoundationInterop.Input.CameraProperty
+SharpMediaFoundationInterop.Input.CameraProperty.Iris = 5 -> SharpMediaFoundationInterop.Input.CameraProperty
+SharpMediaFoundationInterop.Input.CameraProperty.Pan = 0 -> SharpMediaFoundationInterop.Input.CameraProperty
+SharpMediaFoundationInterop.Input.CameraProperty.Roll = 2 -> SharpMediaFoundationInterop.Input.CameraProperty
+SharpMediaFoundationInterop.Input.CameraProperty.Tilt = 1 -> SharpMediaFoundationInterop.Input.CameraProperty
+SharpMediaFoundationInterop.Input.CameraProperty.Zoom = 3 -> SharpMediaFoundationInterop.Input.CameraProperty
+SharpMediaFoundationInterop.Input.ICameraControl
+SharpMediaFoundationInterop.Input.ICameraControl.TryGet(SharpMediaFoundationInterop.Input.CameraProperty property, out int value, out bool auto) -> bool
+SharpMediaFoundationInterop.Input.ICameraControl.TryGetRange(SharpMediaFoundationInterop.Input.CameraProperty property, out int min, out int max, out int step, out int defaultValue) -> bool
+SharpMediaFoundationInterop.Input.ICameraControl.TrySet(SharpMediaFoundationInterop.Input.CameraProperty property, int value, bool auto = false) -> bool
+static SharpMediaFoundationInterop.MediaDevices.CreateCameraCapture(SharpMediaFoundationInterop.MediaDevice device, uint maxWidth, uint maxHeight) -> SharpMediaFoundationInterop.Input.IMediaVideoSource
