@@ -18,23 +18,24 @@ namespace SharpMediaFoundationInterop.Input
 
     /// <summary>
     /// What a camera can be told to do, as DirectShow's IAMCameraControl has it. Its values are of the platform's units, so a
-    /// value is best had of <see cref="ICameraControl.TryGetRange"/> - a slider of its range works the same everywhere.
+    /// value is best had of <see cref="ICameraControl.TryGetRange"/> - a slider of its range works the same everywhere. A USB
+    /// camera on macOS is controlled as on Linux, of the USB Video Class, in its units: "UVC" below.
     /// </summary>
     public enum CameraProperty
     {
-        /// <summary>Degrees on Windows, arc seconds on Linux; of no camera on Android, iOS and macOS.</summary>
+        /// <summary>Degrees on Windows, arc seconds on Linux and UVC; of no camera on Android and iOS.</summary>
         Pan,
         /// <summary>As <see cref="Pan"/>.</summary>
         Tilt,
-        /// <summary>Degrees, on Windows alone.</summary>
+        /// <summary>Degrees, on Windows and UVC.</summary>
         Roll,
-        /// <summary>The camera's own units on Windows and Linux; the zoom's ratio times 100 on Android, iOS and macOS.</summary>
+        /// <summary>The camera's own units on Windows, Linux and UVC; the zoom's ratio times 100 on Android and iOS.</summary>
         Zoom,
-        /// <summary>A power of 2 in seconds on Windows, 100 µs on Linux, microseconds on Android, iOS and macOS.</summary>
+        /// <summary>A power of 2 in seconds on Windows, 100 µs on Linux and UVC, microseconds on Android and iOS.</summary>
         Exposure,
-        /// <summary>The camera's own units, on Windows and Linux.</summary>
+        /// <summary>The camera's own units, on Windows, Linux and UVC.</summary>
         Iris,
-        /// <summary>The camera's own units on Windows and Linux, diopters times 100 on Android, the lens' position of 0 to 1000 on iOS and macOS.</summary>
+        /// <summary>The camera's own units on Windows, Linux and UVC, diopters times 100 on Android, the lens' position of 0 to 1000 on iOS.</summary>
         Focus
     }
 

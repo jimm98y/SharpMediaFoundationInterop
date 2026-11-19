@@ -16,7 +16,8 @@ namespace SharpMediaFoundationInterop.Input
     /// highest frame rate, its frames handed out as NV12. The first time, the system asks the user whether the app may use
     /// the camera - on iOS of the app's NSCameraUsageDescription, which its Info.plist must have; <see cref="Initialize"/>
     /// waits for them, and throws <see cref="UnauthorizedAccessException"/> where they say no. Its zoom, exposure and focus
-    /// are AVFoundation's, of a camera that has them: an iPhone's, most of all.
+    /// are AVFoundation's, of a camera that has them: an iPhone's, most of all. Of a USB camera on a Mac, which AVFoundation
+    /// does not control, its pan, tilt, roll, zoom, exposure, focus and iris are of USB Video Class requests.
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
@@ -38,6 +39,7 @@ namespace SharpMediaFoundationInterop.Input
 
         private IntPtr _session;
         private IntPtr _input;
+        private UvcCameraControl _uvc;
         private IntPtr _output;
         private IntPtr _delegate;
         private IntPtr _queue;
@@ -115,6 +117,8 @@ namespace SharpMediaFoundationInterop.Input
             if (input == IntPtr.Zero)
                 throw new InvalidOperationException($"The camera cannot be opened: {GetError(error)}");
             _input = objc_retain(input);
+            if (OperatingSystem.IsMacOS())
+                _uvc = UvcCameraControl.Open(GetString(Send(device, "uniqueID")));
 
             _session = New("AVCaptureSession");
             SendVoid(_session, "beginConfiguration");
@@ -346,6 +350,8 @@ namespace SharpMediaFoundationInterop.Input
 
         public bool TryGetRange(CameraProperty property, out int min, out int max, out int step, out int defaultValue)
         {
+            if (_uvc != null && _uvc.TryGetRange(property, out min, out max, out step, out defaultValue))
+                return true;
             (min, max, step, defaultValue) = (0, 0, 1, 0);
             using var pool = AutoreleasePool.Create();
             IntPtr device = Device;
@@ -381,6 +387,8 @@ namespace SharpMediaFoundationInterop.Input
 
         public bool TryGet(CameraProperty property, out int value, out bool auto)
         {
+            if (_uvc != null && _uvc.TryGetRange(property, out _, out _, out _, out _))
+                return _uvc.TryGet(property, out value, out auto);
             (value, auto) = (0, false);
             if (!TryGetRange(property, out _, out _, out _, out _))
                 return false;
@@ -405,6 +413,8 @@ namespace SharpMediaFoundationInterop.Input
 
         public bool TrySet(CameraProperty property, int value, bool auto = false)
         {
+            if (_uvc != null && _uvc.TryGetRange(property, out _, out _, out _, out _))
+                return _uvc.TrySet(property, value, auto);
             if (!TryGetRange(property, out int min, out int max, out _, out _))
                 return false;
             value = Math.Clamp(value, min, max);
@@ -478,6 +488,8 @@ namespace SharpMediaFoundationInterop.Input
                 objc_release(_delegate);
                 _delegate = IntPtr.Zero;
             }
+            _uvc?.Dispose();
+            _uvc = null;
             if (_input != IntPtr.Zero)
             {
                 objc_release(_input);
