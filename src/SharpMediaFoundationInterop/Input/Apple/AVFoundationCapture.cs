@@ -15,11 +15,12 @@ namespace SharpMediaFoundationInterop.Input
     /// Captures a camera on macOS and iOS, of AVFoundation: an AVCaptureSession of the camera's widest format, at its
     /// highest frame rate, its frames handed out as NV12. The first time, the system asks the user whether the app may use
     /// the camera - on iOS of the app's NSCameraUsageDescription, which its Info.plist must have; <see cref="Initialize"/>
-    /// waits for them, and throws <see cref="UnauthorizedAccessException"/> where they say no.
+    /// waits for them, and throws <see cref="UnauthorizedAccessException"/> where they say no. Its zoom, exposure and focus
+    /// are AVFoundation's, of a camera that has them: an iPhone's, most of all.
     /// </summary>
     [SupportedOSPlatform("macos11.0")]
     [SupportedOSPlatform("ios14.0")]
-    internal sealed unsafe class AVFoundationCapture : IMediaVideoSource
+    internal sealed unsafe class AVFoundationCapture : IMediaVideoSource, ICameraControl
     {
         /// <summary>How long <see cref="ReadSample"/> waits for a frame before it gives up and returns false.</summary>
         public int ReadTimeoutInMilliseconds { get; set; } = 2000;
@@ -334,6 +335,121 @@ namespace SharpMediaFoundationInterop.Input
             {
                 if (Log.ErrorEnabled)
                     Log.Error($"A camera frame could not be taken: {ex}");
+            }
+        }
+
+        // AVCaptureExposureMode and AVCaptureFocusMode
+        private const int Locked = 0, ContinuousAuto = 2, CustomExposure = 3;
+
+        /// <summary>The camera of the session, while it is open; zero after.</summary>
+        private IntPtr Device => _input == IntPtr.Zero ? IntPtr.Zero : Send(_input, "device");
+
+        public bool TryGetRange(CameraProperty property, out int min, out int max, out int step, out int defaultValue)
+        {
+            (min, max, step, defaultValue) = (0, 0, 1, 0);
+            using var pool = AutoreleasePool.Create();
+            IntPtr device = Device;
+            switch (property)
+            {
+                case CameraProperty.Zoom:
+                    // the ratio, times 100: of iOS, not macOS
+                    if (!RespondsTo(device, "videoZoomFactor"))
+                        return false;
+                    double low = RespondsTo(device, "minAvailableVideoZoomFactor") ? SendDouble(device, "minAvailableVideoZoomFactor") : 1;
+                    double high = RespondsTo(device, "maxAvailableVideoZoomFactor") ? SendDouble(device, "maxAvailableVideoZoomFactor") : SendDouble(Send(device, "activeFormat"), "videoMaxZoomFactor");
+                    (min, max, defaultValue) = ((int)Math.Round(low * 100), (int)Math.Round(high * 100), (int)Math.Round(Math.Max(low, 1) * 100));
+                    return max > min;
+                case CameraProperty.Exposure:
+                    // in microseconds, of the active format's shortest to its longest
+                    if (!RespondsTo(device, "setExposureModeCustomWithDuration:ISO:completionHandler:") || !SendBool(device, "isExposureModeSupported:", (IntPtr)CustomExposure))
+                        return false;
+                    IntPtr format = Send(device, "activeFormat");
+                    min = (int)Math.Max(1, SendCMTime(format, "minExposureDuration").ToTicks() / 10);
+                    max = (int)Math.Min(int.MaxValue, SendCMTime(format, "maxExposureDuration").ToTicks() / 10);
+                    defaultValue = Math.Clamp(1000000 / 60, min, max);
+                    return max > min;
+                case CameraProperty.Focus:
+                    // the lens' position, of 0 - the nearest - to 1000, the farthest
+                    if (!RespondsTo(device, "setFocusModeLockedWithLensPosition:completionHandler:") || !SendBool(device, "isLockingFocusWithCustomLensPositionSupported"))
+                        return false;
+                    (max, defaultValue) = (1000, 1000);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        public bool TryGet(CameraProperty property, out int value, out bool auto)
+        {
+            (value, auto) = (0, false);
+            if (!TryGetRange(property, out _, out _, out _, out _))
+                return false;
+            using var pool = AutoreleasePool.Create();
+            IntPtr device = Device;
+            switch (property)
+            {
+                case CameraProperty.Zoom:
+                    value = (int)Math.Round(SendDouble(device, "videoZoomFactor") * 100);
+                    return true;
+                case CameraProperty.Exposure:
+                    value = (int)Math.Min(int.MaxValue, SendCMTime(device, "exposureDuration").ToTicks() / 10);
+                    auto = SendNInt(device, "exposureMode") is not (Locked or CustomExposure);
+                    return true;
+                case CameraProperty.Focus:
+                    value = (int)Math.Round(SendFloat(device, "lensPosition") * 1000);
+                    auto = SendNInt(device, "focusMode") != Locked;
+                    return true;
+            }
+            return false;
+        }
+
+        public bool TrySet(CameraProperty property, int value, bool auto = false)
+        {
+            if (!TryGetRange(property, out int min, out int max, out _, out _))
+                return false;
+            value = Math.Clamp(value, min, max);
+            using var pool = AutoreleasePool.Create();
+            IntPtr device = Device;
+            IntPtr error = IntPtr.Zero;
+            if (!SendBool(device, "lockForConfiguration:", &error))
+                return false;
+            try
+            {
+                switch (property)
+                {
+                    case CameraProperty.Zoom:
+                        if (auto)
+                            return false;
+                        SendVoid(device, "setVideoZoomFactor:", value / 100.0);
+                        return true;
+                    case CameraProperty.Exposure:
+                        if (auto)
+                        {
+                            if (!SendBool(device, "isExposureModeSupported:", (IntPtr)ContinuousAuto))
+                                return false;
+                            SendVoid(device, "setExposureMode:", (IntPtr)ContinuousAuto);
+                            return true;
+                        }
+                        // the sensitivity as it is: AVCaptureISOCurrent
+                        float iso = NativeLibrary.TryGetExport(AVFoundation, "AVCaptureISOCurrent", out IntPtr current) ? *(float*)current : 0;
+                        SendVoid(device, "setExposureModeCustomWithDuration:ISO:completionHandler:", CMTime.FromTicks(value * 10L), iso, IntPtr.Zero);
+                        return true;
+                    case CameraProperty.Focus:
+                        if (auto)
+                        {
+                            if (!SendBool(device, "isFocusModeSupported:", (IntPtr)ContinuousAuto))
+                                return false;
+                            SendVoid(device, "setFocusMode:", (IntPtr)ContinuousAuto);
+                            return true;
+                        }
+                        SendVoid(device, "setFocusModeLockedWithLensPosition:completionHandler:", value / 1000f, IntPtr.Zero);
+                        return true;
+                }
+                return false;
+            }
+            finally
+            {
+                SendVoid(device, "unlockForConfiguration");
             }
         }
 

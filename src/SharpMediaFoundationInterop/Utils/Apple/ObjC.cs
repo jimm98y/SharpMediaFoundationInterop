@@ -149,6 +149,22 @@ namespace SharpMediaFoundationInterop.Utils
         public static void SendVoid(IntPtr receiver, string selector, CMTime a) =>
             ((delegate* unmanaged<IntPtr, IntPtr, CMTime, void>)MsgSend)(receiver, Sel(selector), a);
 
+        public static void SendVoid(IntPtr receiver, string selector, double a) =>
+            ((delegate* unmanaged<IntPtr, IntPtr, double, void>)MsgSend)(receiver, Sel(selector), a);
+
+        public static void SendVoid(IntPtr receiver, string selector, float a, IntPtr b) =>
+            ((delegate* unmanaged<IntPtr, IntPtr, float, IntPtr, void>)MsgSend)(receiver, Sel(selector), a, b);
+
+        public static void SendVoid(IntPtr receiver, string selector, CMTime a, float b, IntPtr c) =>
+            ((delegate* unmanaged<IntPtr, IntPtr, CMTime, float, IntPtr, void>)MsgSend)(receiver, Sel(selector), a, b, c);
+
+        public static float SendFloat(IntPtr receiver, string selector) =>
+            ((delegate* unmanaged<IntPtr, IntPtr, float>)MsgSend)(receiver, Sel(selector));
+
+        /// <summary>Whether the object takes the message: of a method a version, or a platform, has not.</summary>
+        public static bool RespondsTo(IntPtr receiver, string selector) =>
+            receiver != IntPtr.Zero && SendBool(receiver, "respondsToSelector:", Sel(selector));
+
         public static CMTime SendCMTime(IntPtr receiver, string selector)
         {
             // a struct of 24 bytes is returned through memory: of objc_msgSend_stret on Intel, of objc_msgSend on Apple's chips
