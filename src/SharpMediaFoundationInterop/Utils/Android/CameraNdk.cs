@@ -17,6 +17,20 @@ namespace SharpMediaFoundationInterop.Utils
         private const uint ACAMERA_LENS_FACING = 0x80005;
         private const uint ACAMERA_SCALER_AVAILABLE_STREAM_CONFIGURATIONS = 0xD000A;
 
+        // of NdkCameraMetadataTags.h: a section's start, of its number << 16, and the tag's index in it
+        public const uint ACAMERA_CONTROL_AE_MODE = 0x10003;
+        public const uint ACAMERA_CONTROL_AF_MODE = 0x10007;
+        public const uint ACAMERA_CONTROL_AE_AVAILABLE_MODES = 0x10013;
+        public const uint ACAMERA_CONTROL_AF_AVAILABLE_MODES = 0x10017;
+        public const uint ACAMERA_CONTROL_ZOOM_RATIO_RANGE = 0x1002E;
+        public const uint ACAMERA_CONTROL_ZOOM_RATIO = 0x1002F;
+        public const uint ACAMERA_LENS_FOCUS_DISTANCE = 0x80003;
+        public const uint ACAMERA_LENS_INFO_MINIMUM_FOCUS_DISTANCE = 0x90005;
+        public const uint ACAMERA_SENSOR_EXPOSURE_TIME = 0xE0000;
+        public const uint ACAMERA_SENSOR_INFO_EXPOSURE_TIME_RANGE = 0xF0003;
+        public const byte ACAMERA_CONTROL_AE_MODE_OFF = 0, ACAMERA_CONTROL_AE_MODE_ON = 1;
+        public const byte ACAMERA_CONTROL_AF_MODE_OFF = 0, ACAMERA_CONTROL_AF_MODE_AUTO = 1, ACAMERA_CONTROL_AF_MODE_CONTINUOUS_VIDEO = 3;
+
         [StructLayout(LayoutKind.Sequential)]
         private struct ACameraIdList
         {
@@ -72,6 +86,28 @@ namespace SharpMediaFoundationInterop.Utils
         [DllImport(Lib)] public static extern int ACameraDevice_createCaptureSession(IntPtr device, IntPtr outputs, SessionStateCallbacks* callbacks, out IntPtr session);
         [DllImport(Lib)] public static extern int ACameraCaptureSession_setRepeatingRequest(IntPtr session, IntPtr callbacks, int numRequests, IntPtr* requests, IntPtr captureSequenceId);
         [DllImport(Lib)] public static extern int ACameraCaptureSession_stopRepeating(IntPtr session);
+        [DllImport(Lib)] public static extern int ACaptureRequest_setEntry_u8(IntPtr request, uint tag, uint count, byte* data);
+        [DllImport(Lib)] public static extern int ACaptureRequest_setEntry_i64(IntPtr request, uint tag, uint count, long* data);
+        [DllImport(Lib)] public static extern int ACaptureRequest_setEntry_float(IntPtr request, uint tag, uint count, float* data);
+        [DllImport(Lib)] private static extern int ACaptureRequest_getConstEntry(IntPtr request, uint tag, out ACameraMetadataConstEntry entry);
+
+        /// <summary>The camera's characteristics, to be freed with <see cref="FreeMetadata"/>; zero where they cannot be had.</summary>
+        public static IntPtr Characteristics(IntPtr manager, string id) =>
+            ACameraManager_getCameraCharacteristics(manager, id, out IntPtr metadata) == ACAMERA_OK ? metadata : IntPtr.Zero;
+
+        public static void FreeMetadata(IntPtr metadata)
+        {
+            if (metadata != IntPtr.Zero)
+                ACameraMetadata_free(metadata);
+        }
+
+        /// <summary>An entry of characteristics: its values, of the type the tag has; empty where there is none.</summary>
+        public static ReadOnlySpan<T> Entry<T>(IntPtr metadata, uint tag) where T : unmanaged =>
+            metadata != IntPtr.Zero && ACameraMetadata_getConstEntry(metadata, tag, out var entry) == ACAMERA_OK ? new ReadOnlySpan<T>(entry.Data, (int)entry.Count) : default;
+
+        /// <summary>An entry of a capture request: its values, of the type the tag has; empty where it has none.</summary>
+        public static ReadOnlySpan<T> RequestEntry<T>(IntPtr request, uint tag) where T : unmanaged =>
+            request != IntPtr.Zero && ACaptureRequest_getConstEntry(request, tag, out var entry) == ACAMERA_OK ? new ReadOnlySpan<T>(entry.Data, (int)entry.Count) : default;
         [DllImport(Lib)] public static extern void ACameraCaptureSession_close(IntPtr session);
 
         private static bool? _available;
