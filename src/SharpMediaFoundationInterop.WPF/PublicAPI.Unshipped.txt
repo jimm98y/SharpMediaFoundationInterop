@@ -1,0 +1,17 @@
+SharpMediaFoundationInterop.WPF.PushVideoSource
+SharpMediaFoundationInterop.WPF.PushVideoSource.Dispose() -> void
+SharpMediaFoundationInterop.WPF.PushVideoSource.GetVideoFrame(out long timestamp) -> object
+SharpMediaFoundationInterop.WPF.PushVideoSource.GetVideoSample(out long timestamp) -> byte[]
+SharpMediaFoundationInterop.WPF.PushVideoSource.Height.get -> int
+SharpMediaFoundationInterop.WPF.PushVideoSource.InitializeAsync() -> System.Threading.Tasks.Task
+SharpMediaFoundationInterop.WPF.PushVideoSource.IsStill.get -> bool
+SharpMediaFoundationInterop.WPF.PushVideoSource.Push(System.ReadOnlySpan<byte> bgra, int stride) -> void
+SharpMediaFoundationInterop.WPF.PushVideoSource.PushVideoSource(int width, int height) -> void
+SharpMediaFoundationInterop.WPF.PushVideoSource.ReturnVideoFrame(object frame) -> void
+SharpMediaFoundationInterop.WPF.PushVideoSource.ReturnVideoSample(byte[] sample) -> void
+SharpMediaFoundationInterop.WPF.PushVideoSource.SetSuspended(bool suspended) -> void
+SharpMediaFoundationInterop.WPF.PushVideoSource.Snapshot() -> System.Windows.Media.Imaging.BitmapSource
+SharpMediaFoundationInterop.WPF.PushVideoSource.TrySetOutputFormat(SharpMediaFoundationInterop.WPF.PixelFormat format) -> bool
+SharpMediaFoundationInterop.WPF.PushVideoSource.TryUseDirect3D(SharpMediaFoundationInterop.WPF.Direct3DDevice device) -> bool
+SharpMediaFoundationInterop.WPF.PushVideoSource.VideoInfo.get -> SharpMediaFoundationInterop.WPF.VideoInfo
+SharpMediaFoundationInterop.WPF.PushVideoSource.Width.get -> int

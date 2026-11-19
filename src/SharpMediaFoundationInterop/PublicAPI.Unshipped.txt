@@ -28,3 +28,5 @@ SharpMediaFoundationInterop.Input.ICameraControl.TrySet(SharpMediaFoundationInte
 static SharpMediaFoundationInterop.MediaDevices.CreateCameraCapture(SharpMediaFoundationInterop.MediaDevice device, uint maxWidth, uint maxHeight) -> SharpMediaFoundationInterop.Input.IMediaVideoSource
 SharpMediaFoundationInterop.Codecs.VideoEncoderOptions.TemporalLayers.get -> uint
 SharpMediaFoundationInterop.Codecs.VideoEncoderOptions.TemporalLayers.set -> void
+static SharpMediaFoundationInterop.Codecs.PcmDecoder.CompressALaw(short sample) -> byte
+static SharpMediaFoundationInterop.Codecs.PcmDecoder.CompressMuLaw(short sample) -> byte

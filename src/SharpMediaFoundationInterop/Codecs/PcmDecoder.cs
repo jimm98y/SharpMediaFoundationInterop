@@ -62,6 +62,25 @@ namespace SharpMediaFoundationInterop.Codecs
             return (short)((u & 0x80) != 0 ? 0x84 - value : value - 0x84);
         }
 
+        /// <summary>A 16 bit sample compressed to A-law's byte (ITU-T G.711): what <see cref="ExpandALaw"/> expands.</summary>
+        public static byte CompressALaw(short sample)
+        {
+            int sign = sample >= 0 ? 0x80 : 0, magnitude = Math.Min(Math.Abs((int)sample), 32767) >> 3, segment = 0;
+            for (int m = magnitude >> 5; m > 0 && segment < 7; m >>= 1)
+                segment++;
+            int step = segment == 0 ? magnitude >> 1 : (magnitude >> segment) & 0x0F;
+            return (byte)((sign | (segment << 4) | step) ^ 0x55);
+        }
+
+        /// <summary>A 16 bit sample compressed to mu-law's byte (ITU-T G.711): what <see cref="ExpandMuLaw"/> expands.</summary>
+        public static byte CompressMuLaw(short sample)
+        {
+            int sign = sample < 0 ? 0x80 : 0, magnitude = Math.Min(Math.Abs((int)sample), 32635) + 0x84, segment = 7;
+            for (int mask = 0x4000; (magnitude & mask) == 0 && segment > 0; mask >>= 1)
+                segment--;
+            return (byte)~(sign | (segment << 4) | ((magnitude >> (segment + 3)) & 0x0F));
+        }
+
         public uint Channels { get; }
         public uint SampleRate { get; }
 
