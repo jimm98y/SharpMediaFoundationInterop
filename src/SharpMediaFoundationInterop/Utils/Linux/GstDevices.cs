@@ -32,9 +32,13 @@ namespace SharpMediaFoundationInterop.Utils
         public static IntPtr? CreateElement(string deviceClass, string id) => CreateElement(deviceClass, id, out _);
 
         /// <summary>As <see cref="CreateElement(string, string)"/>, and the device's caps, the caller's to unref.</summary>
-        public static IntPtr? CreateElement(string deviceClass, string id, out IntPtr caps)
+        public static IntPtr? CreateElement(string deviceClass, string id, out IntPtr caps) => CreateElement(deviceClass, id, out caps, out _);
+
+        /// <summary>As <see cref="CreateElement(string, string, out IntPtr)"/>, and the V4L2 node of the device, or null of one not V4L2's.</summary>
+        public static IntPtr? CreateElement(string deviceClass, string id, out IntPtr caps, out string v4l2Path)
         {
             caps = IntPtr.Zero;
+            v4l2Path = null;
             var devices = Gst.GetDevices(deviceClass);
             try
             {
@@ -46,6 +50,7 @@ namespace SharpMediaFoundationInterop.Utils
                     if (element == IntPtr.Zero)
                         return null;
                     caps = Gst.GetDeviceCaps(device.Handle);
+                    v4l2Path = Gst.V4l2Path(device.Handle);
                     return element;
                 }
                 return null;

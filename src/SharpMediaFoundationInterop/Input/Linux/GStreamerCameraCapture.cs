@@ -9,16 +9,18 @@ namespace SharpMediaFoundationInterop.Input
     /// <summary>
     /// Captures a camera on Linux, of GStreamer: the device's source - PipeWire's or V4L2's, of the device monitor - in its
     /// widest format of raw pictures, as Windows' camera capture chooses, or of JPEG where it has no raw one that wide, its
-    /// frames handed out as NV12. The first frame is waited for as it is initialized, which tells the size.
+    /// frames handed out as NV12. The first frame is waited for as it is initialized, which tells the size. Of a V4L2
+    /// camera, its pan, tilt, zoom, exposure, focus and iris, of V4L2's controls.
     /// </summary>
     [SupportedOSPlatform("linux")]
-    internal sealed class GStreamerCameraCapture : IMediaVideoSource
+    internal sealed class GStreamerCameraCapture : IMediaVideoSource, ICameraControl
     {
         /// <summary>How long <see cref="ReadSample"/> waits for a frame before it gives up and returns false.</summary>
         public int ReadTimeoutInMilliseconds { get; set; } = 2000;
 
         private readonly string _deviceId;
         private GstAppPipeline _pipeline;
+        private V4l2CameraControl _controls;
         private IntPtr _first;
         private long _firstTime = -1;
         private bool _disposed;
@@ -42,7 +44,7 @@ namespace SharpMediaFoundationInterop.Input
             if (_pipeline != null)
                 return;
 
-            IntPtr source = GstDevices.CreateElement("Video/Source", _deviceId, out IntPtr caps)
+            IntPtr source = GstDevices.CreateElement("Video/Source", _deviceId, out IntPtr caps, out string v4l2Path)
                 ?? throw new InvalidOperationException(_deviceId == null ? "There is no camera" : $"There is no camera {_deviceId}");
             string format = caps == IntPtr.Zero ? null : BestFormat(caps);
             if (caps != IntPtr.Zero)
@@ -57,6 +59,7 @@ namespace SharpMediaFoundationInterop.Input
                 $"{decode} ! videoconvert ! video/x-raw,format=NV12 ! appsink name=sink drop=true max-buffers=2 sync=false",
                 IntPtr.Zero);
             _pipeline.Play();
+            _controls = V4l2CameraControl.Open(v4l2Path);
 
             // the first frame tells the size the camera gives
             _first = _pipeline.Pull(TimeSpan.FromSeconds(10));
@@ -117,6 +120,20 @@ namespace SharpMediaFoundationInterop.Input
             }
         }
 
+        public bool TryGetRange(CameraProperty property, out int min, out int max, out int step, out int defaultValue)
+        {
+            (min, max, step, defaultValue) = (0, 0, 0, 0);
+            return _controls != null && _controls.TryGetRange(property, out min, out max, out step, out defaultValue);
+        }
+
+        public bool TryGet(CameraProperty property, out int value, out bool auto)
+        {
+            (value, auto) = (0, false);
+            return _controls != null && _controls.TryGet(property, out value, out auto);
+        }
+
+        public bool TrySet(CameraProperty property, int value, bool auto = false) => _controls != null && _controls.TrySet(property, value, auto);
+
         public void Dispose()
         {
             if (_disposed)
@@ -126,6 +143,8 @@ namespace SharpMediaFoundationInterop.Input
                 Gst.gst_mini_object_unref(_first);
             _pipeline?.Dispose();
             _pipeline = null;
+            _controls?.Dispose();
+            _controls = null;
         }
     }
 }

@@ -430,14 +430,20 @@ namespace SharpMediaFoundationInterop.Utils
             return result;
         }
 
-        private static string DeviceId(IntPtr device)
+        private static string DeviceId(IntPtr device) => DeviceProperty(device, "node.name", "device.name", "api.v4l2.path", "device.path", "object.path");
+
+        /// <summary>The V4L2 node a camera is of - /dev/videoN, PipeWire's or V4L2's own - or null of one that is not V4L2's.</summary>
+        public static string V4l2Path(IntPtr device) => DeviceProperty(device, "api.v4l2.path", "device.path") is string path && path.StartsWith("/dev/video", StringComparison.Ordinal) ? path : null;
+
+        /// <summary>The first of the device's properties of the names given that it has; null of none.</summary>
+        private static string DeviceProperty(IntPtr device, params string[] fields)
         {
             IntPtr properties = gst_device_get_properties(device);
             if (properties == IntPtr.Zero)
                 return null;
             try
             {
-                foreach (var field in new[] { "node.name", "device.name", "api.v4l2.path", "device.path", "object.path" })
+                foreach (var field in fields)
                 {
                     IntPtr value = gst_structure_get_string(properties, field);
                     if (value != IntPtr.Zero)

@@ -230,7 +230,7 @@ namespace SharpMediaFoundationInterop
         /// <summary>
         /// Captures the camera given in the largest of its sizes no larger than <paramref name="maxWidth"/> by
         /// <paramref name="maxHeight"/> - of none, its smallest; of 0, its largest - on Windows; elsewhere in the format it gives
-        /// best. On Windows it is an <see cref="ICameraControl"/> too.
+        /// best. It is an <see cref="ICameraControl"/> too.
         /// </summary>
         public static IMediaVideoSource CreateCameraCapture(MediaDevice device, uint maxWidth, uint maxHeight)
         {
